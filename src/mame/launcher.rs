@@ -6,8 +6,8 @@ pub fn launch_game(rom_name: &str, config: &AppConfig) -> Result<Child, Box<dyn 
         let mut cmd = Command::new(&mame.path);
 
         // Add ROM paths
-        if !config.rom_dirs.is_empty() {
-            let rom_paths = config.rom_dirs.iter()
+        if !config.rom_paths.is_empty() {
+            let rom_paths = config.rom_paths.iter()
             .map(|p| p.to_string_lossy())
             .collect::<Vec<_>>()
             .join(";");

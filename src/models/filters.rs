@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FilterSettings {
     pub search_text: String,
+    pub search_mode: SearchMode,  // New field for search mode
+    pub category: Option<super::FilterCategory>,
     pub year_from: String,
     pub year_to: String,
     pub manufacturer: String,
@@ -13,6 +15,21 @@ pub struct FilterSettings {
     pub hide_casino: bool,
     pub show_favorites_only: bool,
     pub status_filter: StatusFilter,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum SearchMode {
+    GameTitle,
+    Manufacturer,
+    RomFileName,
+    Year,
+    Status,
+}
+
+impl Default for SearchMode {
+    fn default() -> Self {
+        SearchMode::GameTitle
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -33,6 +50,8 @@ impl Default for FilterSettings {
     fn default() -> Self {
         Self {
             search_text: String::new(),
+            search_mode: SearchMode::default(),
+            category: Some(super::FilterCategory::All),
             year_from: String::new(),
             year_to: String::new(),
             manufacturer: String::new(),

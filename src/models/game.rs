@@ -1,72 +1,107 @@
+// src/models/game.rs
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+// Remove unused import: use std::collections::HashMap;
 
+/// Represents a single game/ROM in the MAME system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Game {
-    pub name: String,
-    pub description: String,
-    pub manufacturer: String,
-    pub year: String,
-    pub driver: String,
-    pub status: RomStatus,
-    pub parent: Option<String>,
-    pub category: String,
-    pub play_count: u32,
-    pub is_clone: bool,
-    pub is_device: bool,
-    pub is_bios: bool,
-    pub controls: String,
+    pub name: String,           // ROM filename without extension
+    pub description: String,    // Human-readable game name
+    pub manufacturer: String,   // Company that made the game
+    pub year: String,          // Year of release
+    pub driver: String,        // MAME driver used
+    pub status: RomStatus,     // Current status of this ROM
+    pub parent: Option<String>, // Parent ROM name if this is a clone
+    pub category: String,      // Game category/genre
+    pub play_count: u32,       // How many times played
+    pub is_clone: bool,        // Whether this is a clone ROM
+    pub is_device: bool,       // Whether this is a device ROM
+    pub is_bios: bool,         // Whether this is a BIOS ROM
+    pub controls: String,      // Control scheme description
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// Represents the status of a ROM file
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RomStatus {
-    Available,
-    Missing,
-    Incorrect,
-    Working,
-    Imperfect,
-    NotWorking,
+    Unknown,        // Status hasn't been determined yet
+    Available,      // ROM file is present and correct
+    Missing,        // ROM file is not found
+    Incorrect,      // ROM file exists but has wrong checksum
+    NotWorking,     // ROM is present but game doesn't work
+    Preliminary,    // Early driver, not fully working
 }
 
 impl RomStatus {
+    /// Convert the status to a display icon
+    /// This provides a visual indicator in the game list
     pub fn to_icon(&self) -> &'static str {
         match self {
-            RomStatus::Available | RomStatus::Working => "✅",
-            RomStatus::Imperfect => "⚠️",
-            RomStatus::Missing | RomStatus::NotWorking => "❌",
-            RomStatus::Incorrect => "⚠️",
+            RomStatus::Unknown => "❓",      // Question mark for unknown
+            RomStatus::Available => "✅",     // Checkmark for good ROMs
+            RomStatus::Missing => "❌",       // X for missing ROMs
+            RomStatus::Incorrect => "⚠️",     // Warning for bad ROMs
+            RomStatus::NotWorking => "🚫",    // Prohibited sign for non-working
+            RomStatus::Preliminary => "🔧",   // Wrench for in-development
         }
     }
 
-    pub fn to_color(&self) -> egui::Color32 {
+    /// Get a human-readable description of the status
+    pub fn description(&self) -> &'static str {
         match self {
-            RomStatus::Available | RomStatus::Working => egui::Color32::from_rgb(0, 255, 0),
-            RomStatus::Imperfect => egui::Color32::from_rgb(255, 200, 0),
-            RomStatus::Missing | RomStatus::NotWorking => egui::Color32::from_rgb(255, 0, 0),
-            RomStatus::Incorrect => egui::Color32::from_rgb(255, 150, 0),
+            RomStatus::Unknown => "Status unknown",
+            RomStatus::Available => "ROM available and verified",
+            RomStatus::Missing => "ROM file not found",
+            RomStatus::Incorrect => "ROM file has incorrect checksum",
+            RomStatus::NotWorking => "Game is not working in MAME",
+            RomStatus::Preliminary => "Preliminary driver, may have issues",
         }
+    }
+
+    /// Check if the game is playable with this status
+    pub fn is_playable(&self) -> bool {
+        matches!(self, RomStatus::Available | RomStatus::Preliminary)
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GameStats {
-    pub play_count: u32,
-    pub last_played: Option<String>,
-    pub total_play_time: u32,
-}
-
-impl Default for GameStats {
+impl Default for RomStatus {
     fn default() -> Self {
-        Self {
-            play_count: 0,
-            last_played: None,
-            total_play_time: 0,
-        }
+        RomStatus::Unknown  // Default to unknown status
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct IconInfo {
-    pub loaded: bool,
-    pub last_accessed: std::time::Instant,
+impl Game {
+    /// Create a new game with minimal information
+    /// This is useful when parsing game lists before full verification
+    pub fn new(name: String, description: String) -> Self {
+        Self {
+            name,
+            description,
+            manufacturer: String::new(),
+            year: String::new(),
+            driver: String::new(),
+            status: RomStatus::Unknown,
+            parent: None,
+            category: String::new(),
+            play_count: 0,
+            is_clone: false,
+            is_device: false,
+            is_bios: false,
+            controls: String::new(),
+        }
+    }
+
+    /// Check if this game should be shown based on its properties
+    /// Devices and BIOS ROMs are typically hidden from normal game lists
+    pub fn is_game(&self) -> bool {
+        !self.is_device && !self.is_bios
+    }
+
+    /// Get a display name that includes clone information
+    pub fn full_name(&self) -> String {
+        if let Some(parent) = &self.parent {
+            format!("{} (clone of {})", self.description, parent)
+        } else {
+            self.description.clone()
+        }
+    }
 }
