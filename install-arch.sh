@@ -83,7 +83,7 @@ cargo --version
 # Clone the repository if not already present
 if [ ! -d "mame-frontend" ]; then
     print_status "Cloning MAME Frontend repository..."
-    git clone https://github.com/yourusername/mame-frontend.git
+    git clone https://github.com/firesand/MAMEUIx.git
     cd mame-frontend
 else
     print_status "Repository already exists. Updating..."
