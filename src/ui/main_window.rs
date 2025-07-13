@@ -848,13 +848,13 @@ impl MameApp {
 
     fn show_about_dialog(&mut self, ctx: &egui::Context) {
         let mut should_close = false;
-        egui::Window::new("About MAME Frontend")
+        egui::Window::new("About MAMEUIx")
             .open(&mut self.show_about_dialog)
             .resizable(false)
             .collapsible(false)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.heading("MAME Frontend");
+                    ui.heading("MAMEUIx");
                     ui.label("A modern, fast, and user-friendly frontend for MAME");
                     ui.label("Written in Rust using the egui framework");
                     ui.add_space(10.0);
@@ -1163,7 +1163,7 @@ impl eframe::App for MameApp {
                                 });
                             } else if self.games.is_empty() && self.loading_stage == LoadingStage::Idle {
                                 ui.centered_and_justified(|ui| {
-                                    ui.heading("Welcome to MAME Frontend");
+                                    ui.heading("Welcome to MAMEUIx");
                                     ui.add_space(10.0);
                                     ui.label("To get started:");
                                     ui.label("1. Configure your MAME executable");

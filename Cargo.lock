@@ -2149,7 +2149,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mame-frontend"
+name = "mameuix"
 version = "0.1.0"
 dependencies = [
  "anyhow",

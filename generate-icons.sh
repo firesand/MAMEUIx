@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Icon Generation Script for MAME Frontend
+# Icon Generation Script for MAMEUIx
 # This script generates different icon sizes from the SVG source
 
 set -e
@@ -28,11 +28,12 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-print_status "Generating MAME Frontend icons..."
+print_status "Generating MAMEUIx icons..."
 
 # Check if we have the source SVG
-if [ ! -f "assets/mame-frontend-icon.svg" ]; then
-    print_error "Source SVG icon not found: assets/mame-frontend-icon.svg"
+if [ ! -f "assets/mameuix-icon.svg" ]; then
+    print_error "Source SVG icon not found: assets/mameuix-icon.svg"
+    print_status "Please create assets/mameuix-icon.svg first"
     exit 1
 fi
 
@@ -50,15 +51,15 @@ if command -v convert &> /dev/null; then
     print_status "Using ImageMagick to generate icons..."
     
     # Generate different sizes
-    convert assets/mame-frontend-icon.svg -resize 16x16 assets/icons/16x16/mame-frontend.png
-    convert assets/mame-frontend-icon.svg -resize 32x32 assets/icons/32x32/mame-frontend.png
-    convert assets/mame-frontend-icon.svg -resize 48x48 assets/icons/48x48/mame-frontend.png
-    convert assets/mame-frontend-icon.svg -resize 64x64 assets/icons/64x64/mame-frontend.png
-    convert assets/mame-frontend-icon.svg -resize 128x128 assets/icons/128x128/mame-frontend.png
-    convert assets/mame-frontend-icon.svg -resize 256x256 assets/icons/256x256/mame-frontend.png
+    convert assets/mameuix-icon.svg -resize 16x16 assets/icons/16x16/mameuix.png
+    convert assets/mameuix-icon.svg -resize 32x32 assets/icons/32x32/mameuix.png
+    convert assets/mameuix-icon.svg -resize 48x48 assets/icons/48x48/mameuix.png
+    convert assets/mameuix-icon.svg -resize 64x64 assets/icons/64x64/mameuix.png
+    convert assets/mameuix-icon.svg -resize 128x128 assets/icons/128x128/mameuix.png
+    convert assets/mameuix-icon.svg -resize 256x256 assets/icons/256x256/mameuix.png
     
     # Copy SVG to scalable directory
-    cp assets/mame-frontend-icon.svg assets/icons/scalable/mame-frontend.svg
+    cp assets/mameuix-icon.svg assets/icons/scalable/mameuix.svg
     
     print_success "Icons generated successfully!"
     
@@ -66,15 +67,15 @@ elif command -v rsvg-convert &> /dev/null; then
     print_status "Using rsvg-convert to generate icons..."
     
     # Generate different sizes
-    rsvg-convert -w 16 -h 16 assets/mame-frontend-icon.svg -o assets/icons/16x16/mame-frontend.png
-    rsvg-convert -w 32 -h 32 assets/mame-frontend-icon.svg -o assets/icons/32x32/mame-frontend.png
-    rsvg-convert -w 48 -h 48 assets/mame-frontend-icon.svg -o assets/icons/48x48/mame-frontend.png
-    rsvg-convert -w 64 -h 64 assets/mame-frontend-icon.svg -o assets/icons/64x64/mame-frontend.png
-    rsvg-convert -w 128 -h 128 assets/mame-frontend-icon.svg -o assets/icons/128x128/mame-frontend.png
-    rsvg-convert -w 256 -h 256 assets/mame-frontend-icon.svg -o assets/icons/256x256/mame-frontend.png
+    rsvg-convert -w 16 -h 16 assets/mameuix-icon.svg -o assets/icons/16x16/mameuix.png
+    rsvg-convert -w 32 -h 32 assets/mameuix-icon.svg -o assets/icons/32x32/mameuix.png
+    rsvg-convert -w 48 -h 48 assets/mameuix-icon.svg -o assets/icons/48x48/mameuix.png
+    rsvg-convert -w 64 -h 64 assets/mameuix-icon.svg -o assets/icons/64x64/mameuix.png
+    rsvg-convert -w 128 -h 128 assets/mameuix-icon.svg -o assets/icons/128x128/mameuix.png
+    rsvg-convert -w 256 -h 256 assets/mameuix-icon.svg -o assets/icons/256x256/mameuix.png
     
     # Copy SVG to scalable directory
-    cp assets/mame-frontend-icon.svg assets/icons/scalable/mame-frontend.svg
+    cp assets/mameuix-icon.svg assets/icons/scalable/mameuix.svg
     
     print_success "Icons generated successfully!"
     
@@ -83,12 +84,12 @@ else
     print_status "Copying existing icons..."
     
     # Just copy the existing files
-    if [ -f "assets/mame-frontend-icon.png" ]; then
-        cp assets/mame-frontend-icon.png assets/icons/256x256/mame-frontend.png
+    if [ -f "assets/mameuix-icon.png" ]; then
+        cp assets/mameuix-icon.png assets/icons/256x256/mameuix.png
         print_success "Copied existing PNG icon"
     fi
     
-    cp assets/mame-frontend-icon.svg assets/icons/scalable/mame-frontend.svg
+    cp assets/mameuix-icon.svg assets/icons/scalable/mameuix.svg
     print_success "Copied SVG icon"
     
     print_warning "To generate all icon sizes, install ImageMagick or librsvg2-bin:"

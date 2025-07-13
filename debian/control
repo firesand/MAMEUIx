@@ -1,18 +1,18 @@
-Source: mame-frontend
+Source: mameuix
 Section: games
 Priority: optional
-Maintainer: MAME Frontend Team <mame-frontend@example.com>
+Maintainer: MAMEUIx Team <mameuix@example.com>
 Build-Depends: debhelper (>= 13), rustc, cargo, pkg-config, libssl-dev, libgtk-3-dev, libwebkit2gtk-4.0-dev
 Standards-Version: 4.6.2
-Homepage: https://github.com/yourusername/mame-frontend
-Vcs-Browser: https://github.com/yourusername/mame-frontend
-Vcs-Git: https://github.com/yourusername/mame-frontend.git
+Homepage: https://github.com/firesand/MAMEUIx
+Vcs-Browser: https://github.com/firesand/MAMEUIx
+Vcs-Git: https://github.com/firesand/MAMEUIx.git
 
-Package: mame-frontend
+Package: mameuix
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, mame (>= 0.200)
 Description: Modern GUI frontend for MAME arcade emulator
- MAME Frontend is a modern, fast, and user-friendly graphical interface
+ MAMEUIx is a modern, fast, and user-friendly graphical interface
  for the MAME arcade emulator. It provides an intuitive way to browse,
  search, and launch arcade games with features like:
  .

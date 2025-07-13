@@ -26,28 +26,28 @@ echo "Building version: $VERSION"
 echo "Creating source tarball..."
 tar --exclude='.git' --exclude='target' --exclude='*.deb' --exclude='*.rpm' \
     --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \
-    --exclude='*.changes' --exclude='*.dsc' -czf mame-frontend-$VERSION.tar.gz .
+    --exclude='*.changes' --exclude='*.dsc' -czf mameuix-$VERSION.tar.gz .
 
 # Create RPM build directory structure
 RPM_BUILD_DIR="$HOME/rpmbuild"
 mkdir -p "$RPM_BUILD_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # Copy files to RPM build directories
-cp mame-frontend-$VERSION.tar.gz "$RPM_BUILD_DIR/SOURCES/"
-cp mame-frontend.spec "$RPM_BUILD_DIR/SPECS/"
+cp mameuix-$VERSION.tar.gz "$RPM_BUILD_DIR/SOURCES/"
+cp mameuix.spec "$RPM_BUILD_DIR/SPECS/"
 
 # Copy man page
-cp debian/mame-frontend.1 .
+cp debian/mameuix.1 .
 
 # Build the RPM
 echo "Building RPM package..."
-rpmbuild -ba "$RPM_BUILD_DIR/SPECS/mame-frontend.spec"
+rpmbuild -ba "$RPM_BUILD_DIR/SPECS/mameuix.spec"
 
 # Copy built packages to current directory
 echo "Copying built packages..."
-cp "$RPM_BUILD_DIR/RPMS/x86_64/mame-frontend-$VERSION"*.rpm .
-cp "$RPM_BUILD_DIR/SRPMS/mame-frontend-$VERSION"*.src.rpm .
+cp "$RPM_BUILD_DIR/RPMS/x86_64/mameuix-$VERSION"*.rpm .
+cp "$RPM_BUILD_DIR/SRPMS/mameuix-$VERSION"*.src.rpm .
 
 echo "RPM package built successfully!"
 echo "Package files:"
-ls -la mame-frontend-$VERSION*.rpm 
+ls -la mameuix-$VERSION*.rpm 

@@ -8,22 +8,22 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	# Install the binary
-	install -D -m 755 target/release/mame-frontend debian/mame-frontend/usr/bin/mame-frontend
+	install -D -m 755 target/release/mameuix debian/mameuix/usr/bin/mameuix
 	
 	# Install desktop file
-	install -D -m 644 mame-frontend.desktop debian/mame-frontend/usr/share/applications/mame-frontend.desktop
+	install -D -m 644 mameuix.desktop debian/mameuix/usr/share/applications/mameuix.desktop
 	
 	# Install icons
-	install -D -m 644 assets/icons/16x16/mame-frontend-icon.png debian/mame-frontend/usr/share/icons/hicolor/16x16/apps/mame-frontend.png
-	install -D -m 644 assets/icons/32x32/mame-frontend-icon.png debian/mame-frontend/usr/share/icons/hicolor/32x32/apps/mame-frontend.png
-	install -D -m 644 assets/icons/48x48/mame-frontend-icon.png debian/mame-frontend/usr/share/icons/hicolor/48x48/apps/mame-frontend.png
-	install -D -m 644 assets/icons/64x64/mame-frontend-icon.png debian/mame-frontend/usr/share/icons/hicolor/64x64/apps/mame-frontend.png
-	install -D -m 644 assets/icons/128x128/mame-frontend-icon.png debian/mame-frontend/usr/share/icons/hicolor/128x128/apps/mame-frontend.png
-	install -D -m 644 assets/icons/256x256/mame-frontend-icon.png debian/mame-frontend/usr/share/icons/hicolor/256x256/apps/mame-frontend.png
-	install -D -m 644 assets/icons/scalable/mame-frontend-icon.svg debian/mame-frontend/usr/share/icons/hicolor/scalable/apps/mame-frontend.svg
+	install -D -m 644 assets/icons/16x16/mameuix-icon.png debian/mameuix/usr/share/icons/hicolor/16x16/apps/mameuix.png
+	install -D -m 644 assets/icons/32x32/mameuix-icon.png debian/mameuix/usr/share/icons/hicolor/32x32/apps/mameuix.png
+	install -D -m 644 assets/icons/48x48/mameuix-icon.png debian/mameuix/usr/share/icons/hicolor/48x48/apps/mameuix.png
+	install -D -m 644 assets/icons/64x64/mameuix-icon.png debian/mameuix/usr/share/icons/hicolor/64x64/apps/mameuix.png
+	install -D -m 644 assets/icons/128x128/mameuix-icon.png debian/mameuix/usr/share/icons/hicolor/128x128/apps/mameuix.png
+	install -D -m 644 assets/icons/256x256/mameuix-icon.png debian/mameuix/usr/share/icons/hicolor/256x256/apps/mameuix.png
+	install -D -m 644 assets/icons/scalable/mameuix-icon.svg debian/mameuix/usr/share/icons/hicolor/scalable/apps/mameuix.svg
 	
 	# Install man page
-	install -D -m 644 debian/mame-frontend.1 debian/mame-frontend/usr/share/man/man1/mame-frontend.1
+	install -D -m 644 debian/mameuix.1 debian/mameuix/usr/share/man/man1/mameuix.1
 
 override_dh_strip:
-	dh_strip --dbg-package=mame-frontend-dbg 
+	dh_strip --dbg-package=mameuix-dbg 

@@ -75,17 +75,17 @@ build_deb() {
     
     # Clean previous builds
     rm -rf target/
-    rm -f ../mame-frontend_*.deb ../mame-frontend_*.dsc ../mame-frontend_*.tar.gz \
-          ../mame-frontend_*.buildinfo ../mame-frontend_*.changes 2>/dev/null || true
+    rm -f ../mameuix_*.deb ../mameuix_*.dsc ../mameuix_*.tar.gz \
+          ../mameuix_*.buildinfo ../mameuix_*.changes 2>/dev/null || true
     
     # Copy man page
-    cp debian/mame-frontend.1 .
+    cp debian/mameuix.1 .
     
     # Build the package
     debuild -b -us -uc
     
     print_success "Debian package built successfully!"
-    ls -la ../mame-frontend_*.deb 2>/dev/null || print_warning "No .deb files found"
+    ls -la ../mameuix_*.deb 2>/dev/null || print_warning "No .deb files found"
 }
 
 # Function to build RPM package
@@ -105,26 +105,26 @@ build_rpm() {
     # Create source tarball
     tar --exclude='.git' --exclude='target' --exclude='*.deb' --exclude='*.rpm' \
         --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \
-        --exclude='*.changes' --exclude='*.dsc' -czf mame-frontend-$VERSION.tar.gz .
+        --exclude='*.changes' --exclude='*.dsc' -czf mameuix-$VERSION.tar.gz .
     
     # Create RPM build directory structure
     RPM_BUILD_DIR="$HOME/rpmbuild"
     mkdir -p "$RPM_BUILD_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
     
     # Copy files
-    cp mame-frontend-$VERSION.tar.gz "$RPM_BUILD_DIR/SOURCES/"
-    cp mame-frontend.spec "$RPM_BUILD_DIR/SPECS/"
-    cp debian/mame-frontend.1 .
+    cp mameuix-$VERSION.tar.gz "$RPM_BUILD_DIR/SOURCES/"
+    cp mameuix.spec "$RPM_BUILD_DIR/SPECS/"
+    cp debian/mameuix.1 .
     
     # Build the RPM
-    rpmbuild -ba "$RPM_BUILD_DIR/SPECS/mame-frontend.spec"
+    rpmbuild -ba "$RPM_BUILD_DIR/SPECS/mameuix.spec"
     
     # Copy built packages
-    cp "$RPM_BUILD_DIR/RPMS/x86_64/mame-frontend-$VERSION"*.rpm . 2>/dev/null || true
-    cp "$RPM_BUILD_DIR/SRPMS/mame-frontend-$VERSION"*.src.rpm . 2>/dev/null || true
+    cp "$RPM_BUILD_DIR/RPMS/x86_64/mameuix-$VERSION"*.rpm . 2>/dev/null || true
+    cp "$RPM_BUILD_DIR/SRPMS/mameuix-$VERSION"*.src.rpm . 2>/dev/null || true
     
     print_success "RPM package built successfully!"
-    ls -la mame-frontend-$VERSION*.rpm 2>/dev/null || print_warning "No .rpm files found"
+    ls -la mameuix-$VERSION*.rpm 2>/dev/null || print_warning "No .rpm files found"
 }
 
 # Function to build Arch package
@@ -142,21 +142,21 @@ build_arch() {
     # Create source tarball
     tar --exclude='.git' --exclude='target' --exclude='*.deb' --exclude='*.rpm' \
         --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \
-        --exclude='*.changes' --exclude='*.dsc' -czf mame-frontend-$VERSION.tar.gz .
+        --exclude='*.changes' --exclude='*.dsc' -czf mameuix-$VERSION.tar.gz .
     
     # Copy man page
-    cp debian/mame-frontend.1 .
+    cp debian/mameuix.1 .
     
     # Build the package
     makepkg -f
     
     print_success "Arch Linux package built successfully!"
-    ls -la mame-frontend-$VERSION*.pkg.tar.zst 2>/dev/null || print_warning "No .pkg.tar.zst files found"
+    ls -la mameuix-$VERSION*.pkg.tar.zst 2>/dev/null || print_warning "No .pkg.tar.zst files found"
 }
 
 # Main script
 main() {
-    print_status "MAME Frontend Package Builder"
+    print_status "MAMEUIx Package Builder"
     print_status "============================="
     
     # Check if we're in the right directory
@@ -215,7 +215,7 @@ main() {
                     BUILD_ARCH=true
                     ;;
                 "--help"|"-h"|"help")
-                    print_status "MAME Frontend Package Builder"
+                    print_status "MAMEUIx Package Builder"
                     print_status "Usage: $0 [package_type]"
                     print_status ""
                     print_status "Package types:"

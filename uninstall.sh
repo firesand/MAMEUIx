@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MAME Frontend Uninstall Script
+# MAMEUIx Uninstall Script
 # This script removes the MAME frontend installation
 
 set -e
@@ -42,7 +42,7 @@ confirm() {
     esac
 }
 
-print_status "MAME Frontend Uninstaller"
+print_status "MAMEUIx Uninstaller"
 echo "=============================="
 echo ""
 
@@ -54,20 +54,20 @@ fi
 
 # Find the installation directory
 INSTALL_DIR=""
-if [ -L ~/.local/bin/mame-frontend ]; then
-    INSTALL_DIR=$(readlink -f ~/.local/bin/mame-frontend)
+if [ -L ~/.local/bin/mameuix ]; then
+    INSTALL_DIR=$(readlink -f ~/.local/bin/mameuix)
     INSTALL_DIR=$(dirname "$INSTALL_DIR")
     print_status "Found installation at: $INSTALL_DIR"
-elif [ -d ~/mame-frontend ]; then
-    INSTALL_DIR=~/mame-frontend
+elif [ -d ~/mameuix ]; then
+    INSTALL_DIR=~/mameuix
     print_status "Found installation at: $INSTALL_DIR"
 else
-    print_warning "Could not find MAME Frontend installation"
+    print_warning "Could not find MAMEUIx installation"
     print_status "Checking common locations..."
     
     # Check common build directories
-    for dir in ~/mame-frontend ~/Downloads/mame-frontend ~/src/mame-frontend; do
-        if [ -d "$dir" ] && [ -f "$dir/target/release/mame-frontend" ]; then
+    for dir in ~/mameuix ~/Downloads/mameuix ~/src/mameuix; do
+        if [ -d "$dir" ] && [ -f "$dir/target/release/mameuix" ]; then
             INSTALL_DIR="$dir"
             print_status "Found installation at: $INSTALL_DIR"
             break
@@ -76,21 +76,21 @@ else
 fi
 
 if [ -z "$INSTALL_DIR" ]; then
-    print_error "MAME Frontend installation not found"
+    print_error "MAMEUIx installation not found"
     print_status "Please manually remove the installation directory"
     exit 1
 fi
 
 # Confirm uninstallation
-if ! confirm "Do you want to uninstall MAME Frontend from $INSTALL_DIR?"; then
+if ! confirm "Are you sure you want to uninstall MAMEUIx?"; then
     print_status "Uninstallation cancelled"
     exit 0
 fi
 
 # Remove desktop entry
-if [ -f ~/.local/share/applications/mame-frontend.desktop ]; then
+if [ -f ~/.local/share/applications/mameuix.desktop ]; then
     print_status "Removing desktop entry..."
-    rm ~/.local/share/applications/mame-frontend.desktop
+    rm ~/.local/share/applications/mameuix.desktop
     print_success "Desktop entry removed"
 fi
 
@@ -98,39 +98,44 @@ fi
 print_status "Removing application icons..."
 
 # Remove all icon sizes
-for size in scalable 16x16 32x32 48x48 64x64 128x128 256x256; do
-    if [ -f ~/.local/share/icons/hicolor/$size/apps/mame-frontend.png ]; then
-        rm ~/.local/share/icons/hicolor/$size/apps/mame-frontend.png
-        print_success "$size PNG icon removed"
+for size in 16x16 32x32 48x48 64x64 128x128 256x256; do
+    if [ -f ~/.local/share/icons/hicolor/$size/apps/mameuix.png ]; then
+        rm ~/.local/share/icons/hicolor/$size/apps/mameuix.png
+        print_success "$size icon removed"
     fi
-    if [ -f ~/.local/share/icons/hicolor/$size/apps/mame-frontend.svg ]; then
-        rm ~/.local/share/icons/hicolor/$size/apps/mame-frontend.svg
+    if [ -f ~/.local/share/icons/hicolor/$size/apps/mameuix.svg ]; then
+        rm ~/.local/share/icons/hicolor/$size/apps/mameuix.svg
         print_success "$size SVG icon removed"
     fi
 done
 
 # Remove symlink
-if [ -L ~/.local/bin/mame-frontend ]; then
-    print_status "Removing command-line symlink..."
-    rm ~/.local/bin/mame-frontend
+if [ -L ~/.local/bin/mameuix ]; then
+    print_status "Removing symlink..."
+    rm ~/.local/bin/mameuix
     print_success "Symlink removed"
 fi
 
 # Remove installation directory
 if [ -d "$INSTALL_DIR" ]; then
-    if confirm "Do you want to remove the entire installation directory ($INSTALL_DIR)?"; then
+    if confirm "Remove installation directory ($INSTALL_DIR)?"; then
         print_status "Removing installation directory..."
         rm -rf "$INSTALL_DIR"
         print_success "Installation directory removed"
     else
-        print_status "Keeping installation directory"
+        print_status "Installation directory preserved"
     fi
 fi
 
+# Ask about configuration files
+print_status "Configuration files are stored in:"
+echo "  ~/.config/mameuix"
+echo "  ~/.local/share/mameuix"
+
 # Check for configuration files
 CONFIG_DIRS=(
-    ~/.config/mame-frontend
-    ~/.local/share/mame-frontend
+    ~/.config/mameuix
+    ~/.local/share/mameuix
 )
 
 for config_dir in "${CONFIG_DIRS[@]}"; do

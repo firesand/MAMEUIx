@@ -16,7 +16,7 @@ fn main() -> Result<()> {
     };
 
     eframe::run_native(
-        "MAME Frontend",
+        "MAMEUIx",
         options,
         Box::new(|cc| Ok(Box::new(ui::MameApp::new(cc)))),
     ).map_err(|e| anyhow::anyhow!("Failed to run app: {}", e))

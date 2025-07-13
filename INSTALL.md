@@ -1,6 +1,6 @@
-# MAME Frontend Installation Guide
+# MAMEUIx Installation Guide
 
-This guide provides installation instructions for the MAME Frontend on various Linux distributions.
+This guide provides installation instructions for the MAMEUIx on various Linux distributions.
 
 ## Quick Installation
 
@@ -154,8 +154,8 @@ source ~/.cargo/env
 ### 3. Clone and Build
 
 ```bash
-git clone https://github.com/yourusername/mame-frontend.git
-cd mame-frontend
+git clone https://github.com/yourusername/mameuix.git
+cd mameuix
 cargo build --release
 ```
 
@@ -167,19 +167,19 @@ mkdir -p ~/.local/share/icons/hicolor/scalable/apps
 mkdir -p ~/.local/share/icons/hicolor/256x256/apps
 
 # Copy icons
-cp assets/mame-frontend-icon.svg ~/.local/share/icons/hicolor/scalable/apps/mame-frontend.svg
-cp assets/mame-frontend-icon.png ~/.local/share/icons/hicolor/256x256/apps/mame-frontend.png
+cp assets/mameuix-icon.svg ~/.local/share/icons/hicolor/scalable/apps/mameuix.svg
+cp assets/mameuix-icon.png ~/.local/share/icons/hicolor/256x256/apps/mameuix.png
 
 # Create desktop entry
 mkdir -p ~/.local/share/applications
-cat > ~/.local/share/applications/mame-frontend.desktop << EOF
+cat > ~/.local/share/applications/mameuix.desktop << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=MAME Frontend
+Name=MAMEUIx
 Comment=Modern frontend for MAME arcade emulator
-Exec=$PWD/target/release/mame-frontend
-Icon=mame-frontend
+Exec=$PWD/target/release/mameuix
+Icon=mameuix
 Terminal=false
 Categories=Game;Emulator;
 Keywords=mame;arcade;emulator;game;
@@ -188,8 +188,8 @@ EOF
 
 # Create symlink
 mkdir -p ~/.local/bin
-ln -sf "$PWD/target/release/mame-frontend" ~/.local/bin/mame-frontend
-chmod +x target/release/mame-frontend
+ln -sf "$PWD/target/release/mameuix" ~/.local/bin/mameuix
+chmod +x target/release/mameuix
 ```
 
 ## Troubleshooting
@@ -221,7 +221,7 @@ chmod +x target/release/mame-frontend
 
 If you encounter issues:
 
-1. **Check the logs**: Run with debug output: `RUST_LOG=debug ./target/release/mame-frontend`
+1. **Check the logs**: Run with debug output: `RUST_LOG=debug ./target/release/mameuix`
 2. **Verify dependencies**: Ensure all system packages are installed
 3. **Check Rust version**: `rustc --version` (should be 1.70+)
 4. **Report issues**: Create an issue on GitHub with your distribution and error details
@@ -255,21 +255,21 @@ The script will:
 
 ### Manual Uninstallation
 
-To remove the MAME Frontend manually:
+To remove the MAMEUIx manually:
 
 ```bash
 # Remove the binary
-rm ~/.local/bin/mame-frontend
+rm ~/.local/bin/mameuix
 
 # Remove desktop entry
-rm ~/.local/share/applications/mame-frontend.desktop
+rm ~/.local/share/applications/mameuix.desktop
 
 # Remove application icons
-rm ~/.local/share/icons/hicolor/scalable/apps/mame-frontend.svg
-rm ~/.local/share/icons/hicolor/256x256/apps/mame-frontend.png
+rm ~/.local/share/icons/hicolor/scalable/apps/mameuix.svg
+rm ~/.local/share/icons/hicolor/256x256/apps/mameuix.png
 
 # Remove the build directory (optional)
-rm -rf ~/mame-frontend
+rm -rf ~/mameuix
 
 # Note: System dependencies and MAME are not removed
 # Use your package manager if you want to remove them

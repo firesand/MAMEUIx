@@ -1,10 +1,10 @@
-# MAME Frontend Packaging Guide
+# MAMEUIx Packaging Guide
 
-This document provides detailed information about building and distributing MAME Frontend packages for different Linux distributions.
+This document provides detailed information about building and distributing MAMEUIx packages for different Linux distributions.
 
 ## Overview
 
-MAME Frontend supports three main Linux package formats:
+MAMEUIx supports three main Linux package formats:
 - **Debian (.deb)**: For Ubuntu, Debian, Linux Mint, Pop!_OS, etc.
 - **RPM (.rpm)**: For Fedora, RHEL, CentOS, Rocky Linux, AlmaLinux, etc.
 - **Arch (.pkg.tar.zst)**: For Arch Linux, Manjaro, EndeavourOS, etc.
@@ -39,11 +39,11 @@ sudo yum install rpm-build
 ## Package Structure
 
 ### Files Included in Packages
-- **Binary**: `/usr/bin/mame-frontend`
-- **Desktop File**: `/usr/share/applications/mame-frontend.desktop`
+- **Binary**: `/usr/bin/mameuix`
+- **Desktop File**: `/usr/share/applications/mameuix.desktop`
 - **Icons**: Multiple sizes in `/usr/share/icons/hicolor/`
-- **Man Page**: `/usr/share/man/man1/mame-frontend.1`
-- **Documentation**: `/usr/share/doc/mame-frontend/`
+- **Man Page**: `/usr/share/man/man1/mameuix.1`
+- **Documentation**: `/usr/share/doc/mameuix/`
 
 ### Dependencies
 - **Runtime**: `mame >= 0.200`, `gtk3`, `webkit2gtk`
@@ -71,19 +71,19 @@ Use the universal package builder:
 ```bash
 ./build-deb.sh
 ```
-**Output**: `../mame-frontend_0.1.1_amd64.deb`
+**Output**: `../mameuix_0.1.1_amd64.deb`
 
 #### RPM Package
 ```bash
 ./build-rpm.sh
 ```
-**Output**: `mame-frontend-0.1.1-1.x86_64.rpm`
+**Output**: `mameuix-0.1.1-1.x86_64.rpm`
 
 #### Arch Package
 ```bash
 ./build-arch.sh
 ```
-**Output**: `mame-frontend-0.1.1-1-x86_64.pkg.tar.zst`
+**Output**: `mameuix-0.1.1-1-x86_64.pkg.tar.zst`
 
 ## Package Configuration Files
 
@@ -103,7 +103,7 @@ Debhelper compatibility level.
 
 ### RPM Package Files
 
-#### `mame-frontend.spec`
+#### `mameuix.spec`
 Complete RPM specification including build, install, and file lists.
 
 ### Arch Package Files
@@ -115,20 +115,20 @@ Package build instructions and metadata.
 
 ### Debian/Ubuntu
 ```bash
-sudo dpkg -i mame-frontend_*.deb
+sudo dpkg -i mameuix_*.deb
 sudo apt-get install -f  # Install missing dependencies
 ```
 
 ### Red Hat/Fedora
 ```bash
-sudo dnf install mame-frontend-*.rpm
+sudo dnf install mameuix-*.rpm
 # or
-sudo yum install mame-frontend-*.rpm
+sudo yum install mameuix-*.rpm
 ```
 
 ### Arch Linux
 ```bash
-sudo pacman -U mame-frontend-*.pkg.tar.zst
+sudo pacman -U mameuix-*.pkg.tar.zst
 ```
 
 ## Package Management
@@ -136,21 +136,21 @@ sudo pacman -U mame-frontend-*.pkg.tar.zst
 ### Updating Packages
 ```bash
 # Remove old version
-sudo apt remove mame-frontend          # Debian/Ubuntu
-sudo dnf remove mame-frontend          # Red Hat/Fedora
-sudo pacman -R mame-frontend           # Arch Linux
+sudo apt remove mameuix          # Debian/Ubuntu
+sudo dnf remove mameuix          # Red Hat/Fedora
+sudo pacman -R mameuix           # Arch Linux
 
 # Install new version
-sudo dpkg -i mame-frontend_*.deb       # Debian/Ubuntu
-sudo dnf install mame-frontend-*.rpm   # Red Hat/Fedora
-sudo pacman -U mame-frontend-*.pkg.tar.zst  # Arch Linux
+sudo dpkg -i mameuix_*.deb       # Debian/Ubuntu
+sudo dnf install mameuix-*.rpm   # Red Hat/Fedora
+sudo pacman -U mameuix-*.pkg.tar.zst  # Arch Linux
 ```
 
 ### Uninstalling
 ```bash
-sudo apt remove mame-frontend          # Debian/Ubuntu
-sudo dnf remove mame-frontend          # Red Hat/Fedora
-sudo pacman -R mame-frontend           # Arch Linux
+sudo apt remove mameuix          # Debian/Ubuntu
+sudo dnf remove mameuix          # Red Hat/Fedora
+sudo pacman -R mameuix           # Arch Linux
 ```
 
 ## Distribution-Specific Notes
@@ -215,8 +215,8 @@ sudo pacman -S mame
 #### Permission Issues
 ```bash
 # Ensure proper ownership
-sudo chown root:root mame-frontend_*.deb
-sudo chmod 644 mame-frontend_*.deb
+sudo chown root:root mameuix_*.deb
+sudo chmod 644 mameuix_*.deb
 ```
 
 ## Version Management
@@ -225,9 +225,9 @@ sudo chmod 644 mame-frontend_*.deb
 1. Update `Cargo.toml` version field
 2. Update package files:
    - `debian/changelog`
-   - `mame-frontend.spec`
+   - `mameuix.spec`
    - `PKGBUILD`
-3. Update `debian/mame-frontend.1` man page if needed
+3. Update `debian/mameuix.1` man page if needed
 
 ### Release Process
 1. Update version numbers

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Test script for MAME Frontend installation scripts
+# Test script for MAMEUIx installation scripts
 # This script validates the installation scripts without running them
 
 set -e
@@ -28,7 +28,7 @@ print_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-echo "MAME Frontend Installation Scripts Test"
+echo "MAMEUIx Installation Scripts Test"
 echo "======================================="
 echo ""
 
@@ -109,10 +109,10 @@ fi
 # Test 7: Check if assets and icons exist
 print_status "Checking if assets and icons exist..."
 
-if [ -f "assets/mame-frontend-icon.svg" ]; then
-    print_success "Found SVG icon"
+if [ -f "assets/mameuix-icon.svg" ]; then
+    print_success "✓ SVG icon found"
 else
-    print_warning "SVG icon not found"
+    print_warning "⚠ SVG icon not found: assets/mameuix-icon.svg"
 fi
 
 if [ -d "assets/icons" ]; then
@@ -124,10 +124,10 @@ fi
 # Test 8: Check if desktop file exists
 print_status "Checking if desktop file exists..."
 
-if [ -f "mame-frontend.desktop" ]; then
-    print_success "Found desktop file"
+if [ -f "mameuix.desktop" ]; then
+    print_success "✓ Desktop file found"
 else
-    print_error "Desktop file not found"
+    print_warning "⚠ Desktop file not found: mameuix.desktop"
 fi
 
 # Test 9: Check if icon generation script exists

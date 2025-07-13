@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Universal MAME Frontend Installation Script
+# Universal MAMEUIx Installation Script
 # This script detects your Linux distribution and runs the appropriate installation script
 
 set -e  # Exit on any error
@@ -74,7 +74,7 @@ get_install_script() {
 
 # Main installation function
 main() {
-    print_status "MAME Frontend Universal Installer"
+    print_status "MAMEUIx Universal Installer"
     echo "========================================"
     echo ""
     

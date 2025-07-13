@@ -1,4 +1,4 @@
-# MAME Frontend
+# MAMEUIx
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
@@ -71,7 +71,7 @@ We also provide native packages for easy installation:
 ./build-deb.sh
 
 # Install the package
-sudo dpkg -i ../mame-frontend_*.deb
+sudo dpkg -i ../mameuix_*.deb
 sudo apt-get install -f  # Install dependencies if needed
 ```
 
@@ -81,7 +81,7 @@ sudo apt-get install -f  # Install dependencies if needed
 ./build-rpm.sh
 
 # Install the package
-sudo dnf install mame-frontend-*.rpm
+sudo dnf install mameuix-*.rpm
 ```
 
 #### Arch Linux (.pkg.tar.zst)
@@ -90,7 +90,7 @@ sudo dnf install mame-frontend-*.rpm
 ./build-arch.sh
 
 # Install the package
-sudo pacman -U mame-frontend-*.pkg.tar.zst
+sudo pacman -U mameuix-*.pkg.tar.zst
 ```
 
 #### Universal Package Builder
@@ -118,8 +118,8 @@ sudo pacman -U mame-frontend-*.pkg.tar.zst
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd mame-frontend
+   git clone https://github.com/firesand/MAMEUIx.git
+   cd MAMEUIx
    ```
 
 2. **Build the project**:

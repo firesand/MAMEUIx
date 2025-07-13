@@ -1,4 +1,4 @@
-mame-frontend (0.1.1-1) unstable; urgency=medium
+mameuix (0.1.1-1) unstable; urgency=medium
 
   * Initial release
   * Modern GUI frontend for MAME arcade emulator
@@ -12,4 +12,4 @@ mame-frontend (0.1.1-1) unstable; urgency=medium
     - Persistent column widths
     - Enhanced preferences dialog
 
- -- MAME Frontend Team <mame-frontend@example.com>  $(date -R) 
+ -- MAMEUIx Team <mameuix@example.com>  $(date -R) 

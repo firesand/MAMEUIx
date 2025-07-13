@@ -25,10 +25,10 @@ echo "Building version: $VERSION"
 echo "Creating source tarball..."
 tar --exclude='.git' --exclude='target' --exclude='*.deb' --exclude='*.rpm' \
     --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \
-    --exclude='*.changes' --exclude='*.dsc' -czf mame-frontend-$VERSION.tar.gz .
+    --exclude='*.changes' --exclude='*.dsc' -czf mameuix-$VERSION.tar.gz .
 
 # Copy man page
-cp debian/mame-frontend.1 .
+cp debian/mameuix.1 .
 
 # Build the package
 echo "Building Arch package..."
@@ -36,4 +36,4 @@ makepkg -f
 
 echo "Arch Linux package built successfully!"
 echo "Package files:"
-ls -la mame-frontend-$VERSION*.pkg.tar.zst 
+ls -la mameuix-$VERSION*.pkg.tar.zst 

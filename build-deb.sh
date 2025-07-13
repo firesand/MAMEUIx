@@ -27,14 +27,15 @@ fi
 # Clean previous builds
 echo "Cleaning previous builds..."
 rm -rf target/
-rm -f ../mame-frontend_*.deb
-rm -f ../mame-frontend_*.dsc
-rm -f ../mame-frontend_*.tar.gz
-rm -f ../mame-frontend_*.buildinfo
-rm -f ../mame-frontend_*.changes
+# Clean up any existing packages
+rm -f ../mameuix_*.deb
+rm -f ../mameuix_*.dsc
+rm -f ../mameuix_*.tar.gz
+rm -f ../mameuix_*.buildinfo
+rm -f ../mameuix_*.changes
 
-# Copy man page to debian directory
-cp debian/mame-frontend.1 .
+# Copy man page
+cp debian/mameuix.1 .
 
 # Build the package
 echo "Building package..."
@@ -42,4 +43,4 @@ debuild -b -us -uc
 
 echo "Debian package built successfully!"
 echo "Package files:"
-ls -la ../mame-frontend_* 
+ls -la ../mameuix_* 

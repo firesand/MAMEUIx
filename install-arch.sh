@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MAME Frontend Installation Script for Arch Linux
+# MAMEUIx Installation Script for Arch Linux
 # This script installs Rust, system dependencies, and builds the MAME frontend
 
 set -e  # Exit on any error
@@ -35,7 +35,7 @@ if [[ $EUID -eq 0 ]]; then
    exit 1
 fi
 
-print_status "Starting MAME Frontend installation for Arch Linux..."
+print_status "Starting MAMEUIx installation for Arch Linux..."
 
 # Update package list
 print_status "Updating package list..."
@@ -61,18 +61,27 @@ sudo pacman -S --needed --noconfirm \
     cmake \
     git
 
-# Install MAME
-print_status "Installing MAME..."
-sudo pacman -S --needed --noconfirm mame
-
-# Check if Rust is already installed
+# Rust installation
 if command -v rustc &> /dev/null; then
-    print_status "Rust is already installed. Updating..."
-    rustup update
+    echo "[INFO] Rust is already installed. Skipping update."
+    # rustup update  # Skipped for system Rust
 else
-    print_status "Installing Rust..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source ~/.cargo/env
+    echo "[INFO] Installing Rust..."
+    sudo pacman -S --needed --noconfirm rust
+fi
+
+# MAME installation
+if command -v mame &> /dev/null; then
+    MAME_VERSION=$(mame --version | head -n1 | grep -oE '[0-9]+(\.[0-9]+)*' | head -n1)
+    REQUIRED_VERSION=0.200
+    if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$MAME_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]; then
+        echo "[WARNING] MAME version ($MAME_VERSION) is older than required ($REQUIRED_VERSION). Some features may not work."
+    else
+        echo "[INFO] MAME is already installed (version $MAME_VERSION)."
+    fi
+else
+    echo "[INFO] Installing MAME..."
+    sudo pacman -S --needed --noconfirm mame
 fi
 
 # Verify Rust installation
@@ -81,18 +90,18 @@ rustc --version
 cargo --version
 
 # Clone the repository if not already present
-if [ ! -d "mame-frontend" ]; then
-    print_status "Cloning MAME Frontend repository..."
+if [ ! -d "MAMEUIx" ]; then
+    print_status "Cloning MAMEUIx repository..."
     git clone https://github.com/firesand/MAMEUIx.git
-    cd mame-frontend
+    cd MAMEUIx
 else
     print_status "Repository already exists. Updating..."
-    cd mame-frontend
+    cd MAMEUIx
     git pull origin main
 fi
 
 # Build the project
-print_status "Building MAME Frontend (this may take several minutes)..."
+print_status "Building MAMEUIx (this may take several minutes)..."
 cargo build --release
 
 # Install application icons
@@ -108,8 +117,8 @@ mkdir -p ~/.local/share/icons/hicolor/128x128/apps
 mkdir -p ~/.local/share/icons/hicolor/256x256/apps
 
 # Copy SVG icon (scalable)
-if [ -f "assets/mame-frontend-icon.svg" ]; then
-    cp assets/mame-frontend-icon.svg ~/.local/share/icons/hicolor/scalable/apps/mame-frontend.svg
+if [ -f "assets/mameuix-icon.svg" ]; then
+    cp assets/mameuix-icon.svg ~/.local/share/icons/hicolor/scalable/apps/mameuix.svg
     print_success "SVG icon installed"
 fi
 
@@ -117,15 +126,15 @@ fi
 if [ -d "assets/icons" ]; then
     # Copy all generated icon sizes
     for size in 16x16 32x32 48x48 64x64 128x128 256x256; do
-        if [ -f "assets/icons/$size/mame-frontend.png" ]; then
-            cp "assets/icons/$size/mame-frontend.png" ~/.local/share/icons/hicolor/$size/apps/
+        if [ -f "assets/icons/$size/mameuix.png" ]; then
+            cp "assets/icons/$size/mameuix.png" ~/.local/share/icons/hicolor/$size/apps/
             print_success "$size icon installed"
         fi
     done
 else
     # Fallback to single PNG icon
-    if [ -f "assets/mame-frontend-icon.png" ]; then
-        cp assets/mame-frontend-icon.png ~/.local/share/icons/hicolor/256x256/apps/mame-frontend.png
+    if [ -f "assets/mameuix-icon.png" ]; then
+        cp assets/mameuix-icon.png ~/.local/share/icons/hicolor/256x256/apps/mameuix.png
         print_success "PNG icon installed"
     fi
 fi
@@ -134,14 +143,14 @@ fi
 print_status "Creating desktop entry..."
 mkdir -p ~/.local/share/applications
 
-cat > ~/.local/share/applications/mame-frontend.desktop << EOF
+cat > ~/.local/share/applications/mameuix.desktop << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=MAME Frontend
+Name=MAMEUIx
 Comment=Modern frontend for MAME arcade emulator
-Exec=$PWD/target/release/mame-frontend
-Icon=mame-frontend
+Exec=$PWD/target/release/mameuix
+Icon=mameuix
 Terminal=false
 Categories=Game;Emulator;
 Keywords=mame;arcade;emulator;game;
@@ -149,17 +158,17 @@ StartupNotify=true
 EOF
 
 # Make the binary executable
-chmod +x target/release/mame-frontend
+chmod +x target/release/mameuix
 
 # Create a symlink in ~/.local/bin for easy access
 mkdir -p ~/.local/bin
-ln -sf "$PWD/target/release/mame-frontend" ~/.local/bin/mame-frontend
+ln -sf "$PWD/target/release/mameuix" ~/.local/bin/mameuix
 
 print_success "Installation completed successfully!"
 print_status "You can now run the application with:"
-echo "  mame-frontend"
+echo "  mameuix"
 echo "  or"
-echo "  $PWD/target/release/mame-frontend"
+echo "  $PWD/target/release/mameuix"
 echo ""
 print_status "The application should also appear in your application menu."
 echo ""
