@@ -248,157 +248,163 @@ impl GameList {
         // Force the scroll area to always use full available height
         let mut scroll_area = egui::ScrollArea::both()
             .id_salt("game_list_main")
-            .min_scrolled_height(available_height)  // Never shorter than available height
-            .max_height(available_height)  // Also set max height to prevent expansion
-            .auto_shrink([false, false]);  // Don't shrink the scroll area
-        
-        // Handle scroll to specific row if requested
-        if let Some(target_row) = self.scroll_to_row.take() {
-            let scroll_offset = target_row as f32 * self.row_height;
-            scroll_area = scroll_area.vertical_scroll_offset(scroll_offset);
-        }
-        
-        scroll_area.show_rows(
-            ui,
-            self.row_height,
-            total_rows,
-            |ui, row_range| {
-                // Update visible range
-                self.visible_start = row_range.start;
-                self.visible_end = row_range.end;
+            .min_scrolled_height(available_height.max(400.0))  // Never shorter than available height, at least 400px
+            .max_height(available_height)
+            .auto_shrink([false, false]);   // Don't shrink the scroll area
 
-                // Build table ONLY untuk visible rows
-                let mut table_builder = TableBuilder::new(ui)
-                .striped(true)
-                .resizable(true)
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .column(Column::exact(25.0))     // Expand/collapse
-                .column(Column::exact(25.0))     // Favorite
-                .column(Column::exact(icon_width)) // Icon
-                .column(Column::exact(25.0))     // Status
-                .column(Column::initial(column_widths.game).resizable(true).clip(true));     // Game name
+        // Add a border around the table for clarity and set a large min width for horizontal scrolling
+        ui.group(|ui| {
+            let min_table_width = 1200.0; // Large enough for many columns
+            let (table_rect, _table_resp) = ui.allocate_exact_size(
+                egui::vec2(ui.available_width().max(min_table_width), available_height.max(400.0)),
+                egui::Sense::hover()
+            );
+            ui.allocate_ui_at_rect(table_rect, |ui| {
+                // Handle scroll to specific row if requested
+                if let Some(target_row) = self.scroll_to_row.take() {
+                    let scroll_offset = target_row as f32 * self.row_height;
+                    scroll_area = scroll_area.vertical_scroll_offset(scroll_offset);
+                }
+                scroll_area.show_rows(
+                    ui,
+                    self.row_height,
+                    total_rows,
+                    |ui, row_range| {
+                        // Update visible range
+                        self.visible_start = row_range.start;
+                        self.visible_end = row_range.end;
+
+                        // Build table ONLY untuk visible rows
+                        let mut table_builder = TableBuilder::new(ui)
+                            .striped(true)
+                            .resizable(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .column(Column::exact(25.0))     // Expand/collapse
+                            .column(Column::exact(25.0))     // Favorite
+                            .column(Column::exact(icon_width)) // Icon
+                            .column(Column::exact(25.0))     // Status
+                            .column(Column::initial(column_widths.game).resizable(true).clip(true));     // Game name
                 
-                // Add optional columns based on preferences
-                if visible_columns.play_count {
-                    table_builder = table_builder.column(Column::initial(column_widths.play_count).resizable(true));   // Play Count
-                }
-                if visible_columns.manufacturer {
-                    table_builder = table_builder.column(Column::initial(column_widths.manufacturer).resizable(true).clip(true));  // Manufacturer
-                }
-                if visible_columns.year {
-                    table_builder = table_builder.column(Column::initial(column_widths.year).resizable(true));   // Year
-                }
-                if visible_columns.driver {
-                    table_builder = table_builder.column(Column::initial(column_widths.driver).resizable(true));   // Driver
-                }
-                if visible_columns.category {
-                    table_builder = table_builder.column(Column::initial(column_widths.category).resizable(true));  // Category
-                }
-                if visible_columns.rom {
-                    table_builder = table_builder.column(Column::initial(column_widths.rom).resizable(true));  // ROM
-                }
-                
-                table_builder = table_builder.column(Column::initial(column_widths.status).resizable(true))   // Status text
-                .min_scrolled_height(available_height - 40.0);  // Use most of available height minus header
-                
-                // Add CHD column only if enabled
-                if visible_columns.chd {
-                    table_builder = table_builder.column(Column::initial(60.0).resizable(true));   // CHD status
-                }
-                
-                table_builder
-                .header(20.0, |mut header| {
-                    header.col(|ui| { ui.label(""); });
-                    header.col(|ui| { ui.label("★"); });
-                    if show_icons {
-                        header.col(|ui| { ui.label("Icon"); });
-                    }
-                    header.col(|ui| { ui.label("St"); });
-                    header.col(|ui| {
-                        let sort_indicator = if self.sort_column == SortColumn::Name {
-                            if self.sort_ascending { " ▲" } else { " ▼" }
-                        } else { "" };
-                        if ui.button(format!("Game{}", sort_indicator)).clicked() {
-                            self.toggle_sort(SortColumn::Name);
-                        }
-                    });
+                    // Add optional columns based on preferences
                     if visible_columns.play_count {
-                        header.col(|ui| { ui.label("Plays"); });
+                        table_builder = table_builder.column(Column::initial(column_widths.play_count).resizable(true));   // Play Count
                     }
                     if visible_columns.manufacturer {
-                        header.col(|ui| {
-                            let sort_indicator = if self.sort_column == SortColumn::Manufacturer {
-                                if self.sort_ascending { " ▲" } else { " ▼" }
-                            } else { "" };
-                            if ui.button(format!("Manufacturer{}", sort_indicator)).clicked() {
-                                self.toggle_sort(SortColumn::Manufacturer);
-                            }
-                        });
+                        table_builder = table_builder.column(Column::initial(column_widths.manufacturer).resizable(true).clip(true));  // Manufacturer
                     }
                     if visible_columns.year {
-                        header.col(|ui| {
-                            let sort_indicator = if self.sort_column == SortColumn::Year {
-                                if self.sort_ascending { " ▲" } else { " ▼" }
-                            } else { "" };
-                            if ui.button(format!("Year{}", sort_indicator)).clicked() {
-                                self.toggle_sort(SortColumn::Year);
-                            }
-                        });
+                        table_builder = table_builder.column(Column::initial(column_widths.year).resizable(true));   // Year
                     }
                     if visible_columns.driver {
-                        header.col(|ui| { ui.label("Driver"); });
+                        table_builder = table_builder.column(Column::initial(column_widths.driver).resizable(true));   // Driver
                     }
                     if visible_columns.category {
-                        header.col(|ui| { ui.label("Category"); });
+                        table_builder = table_builder.column(Column::initial(column_widths.category).resizable(true));  // Category
                     }
                     if visible_columns.rom {
-                        header.col(|ui| { ui.label("ROM"); });
+                        table_builder = table_builder.column(Column::initial(column_widths.rom).resizable(true));  // ROM
                     }
-                    header.col(|ui| { ui.label("Status"); });
-                    // Add CHD column header only if enabled
+                    
+                    table_builder = table_builder.column(Column::initial(column_widths.status).resizable(true))   // Status text
+                    .min_scrolled_height(available_height - 40.0);  // Use most of available height minus header
+                    
+                    // Add CHD column only if enabled
                     if visible_columns.chd {
-                        header.col(|ui| { ui.label("CHD"); });
+                        table_builder = table_builder.column(Column::initial(60.0).resizable(true));   // CHD status
                     }
-                })
-                .body(|mut body| {
-                    // CRITICAL: Hanya render visible rows!
-                    for row_idx in row_range {
-                        if let Some(row_data) = self.expanded_rows_cache.get(row_idx).cloned() {
-                            if let Some(game) = games.get(row_data.game_idx) {
-                                body.row(self.row_height, |mut row| {
-                                    let (row_double_clicked, row_favorite_toggled) = self.render_single_row(
-                                        &mut row,
-                                        game,
-                                        &row_data,
-                                        selected,
-                                        expanded_parents,
-                                        favorites,
-                                        icons,
-                                        show_icons,
-                                        icon_size,
-                                        game_index,
-                                        visible_columns,
-                                        default_icon,
-                                        game_stats,
-                                    );
-                                    if row_double_clicked {
-                                        double_clicked = true;
-                                    }
-                                    if let Some(game_name) = row_favorite_toggled {
-                                        favorite_toggled = Some(game_name);
-                                    }
-                                });
+                    
+                    table_builder
+                    .header(20.0, |mut header| {
+                        header.col(|ui| { ui.label(""); });
+                        header.col(|ui| { ui.label("★"); });
+                        if show_icons {
+                            header.col(|ui| { ui.label("Icon"); });
+                        }
+                        header.col(|ui| { ui.label("St"); });
+                        header.col(|ui| {
+                            let sort_indicator = if self.sort_column == SortColumn::Name {
+                                if self.sort_ascending { " ▲" } else { " ▼" }
+                            } else { "" };
+                            if ui.button(format!("Game{}", sort_indicator)).clicked() {
+                                self.toggle_sort(SortColumn::Name);
+                            }
+                        });
+                        if visible_columns.play_count {
+                            header.col(|ui| { ui.label("Plays"); });
+                        }
+                        if visible_columns.manufacturer {
+                            header.col(|ui| {
+                                let sort_indicator = if self.sort_column == SortColumn::Manufacturer {
+                                    if self.sort_ascending { " ▲" } else { " ▼" }
+                                } else { "" };
+                                if ui.button(format!("Manufacturer{}", sort_indicator)).clicked() {
+                                    self.toggle_sort(SortColumn::Manufacturer);
+                                }
+                            });
+                        }
+                        if visible_columns.year {
+                            header.col(|ui| {
+                                let sort_indicator = if self.sort_column == SortColumn::Year {
+                                    if self.sort_ascending { " ▲" } else { " ▼" }
+                                } else { "" };
+                                if ui.button(format!("Year{}", sort_indicator)).clicked() {
+                                    self.toggle_sort(SortColumn::Year);
+                                }
+                            });
+                        }
+                        if visible_columns.driver {
+                            header.col(|ui| { ui.label("Driver"); });
+                        }
+                        if visible_columns.category {
+                            header.col(|ui| { ui.label("Category"); });
+                        }
+                        if visible_columns.rom {
+                            header.col(|ui| { ui.label("ROM"); });
+                        }
+                        header.col(|ui| { ui.label("Status"); });
+                        // Add CHD column header only if enabled
+                        if visible_columns.chd {
+                            header.col(|ui| { ui.label("CHD"); });
+                        }
+                    })
+                    .body(|mut body| {
+                        // CRITICAL: Hanya render visible rows!
+                        for row_idx in row_range {
+                            if let Some(row_data) = self.expanded_rows_cache.get(row_idx).cloned() {
+                                if let Some(game) = games.get(row_data.game_idx) {
+                                    body.row(self.row_height, |mut row| {
+                                        let (row_double_clicked, row_favorite_toggled) = self.render_single_row(
+                                            &mut row,
+                                            game,
+                                            &row_data,
+                                            selected,
+                                            expanded_parents,
+                                            favorites,
+                                            icons,
+                                            show_icons,
+                                            icon_size,
+                                            game_index,
+                                            visible_columns,
+                                            default_icon,
+                                            game_stats,
+                                        );
+                                        if row_double_clicked {
+                                            double_clicked = true;
+                                        }
+                                        if let Some(game_name) = row_favorite_toggled {
+                                            favorite_toggled = Some(game_name);
+                                        }
+                                    });
+                                }
                             }
                         }
-                    }
+                    });
+                    
+                    // Add sticky header row
+                    // table_builder = table_builder.sticky_header(true); // This line is removed as per the edit hint
                 });
-                
-                // After the table is rendered, try to capture column width changes
-                // Note: This is a workaround since egui_extras doesn't provide direct access to column widths
-                // We'll use a different approach with persistent IDs
-            }
-        );
-        
+            }); // Close ui.allocate_ui_at_rect
+        }); // Close ui.group
         (double_clicked, favorite_toggled)
     }
 

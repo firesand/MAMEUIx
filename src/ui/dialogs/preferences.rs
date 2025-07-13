@@ -1,6 +1,6 @@
 // src/ui/dialogs/preferences.rs
 use eframe::egui;
-use crate::models::Preferences;
+use crate::models::{Preferences, Theme};
 
 pub struct PreferencesDialog;
 
@@ -8,7 +8,7 @@ impl PreferencesDialog {
     /// Display the preferences dialog
     /// Note: This now takes a Preferences struct, not the entire AppConfig
     /// The calling code needs to pass config.preferences or similar
-    pub fn show(ctx: &egui::Context, prefs: &mut Preferences, open: &mut bool) {
+    pub fn show(ctx: &egui::Context, prefs: &mut Preferences, theme: &mut Theme, open: &mut bool) {
         let mut close = false;
 
         egui::Window::new("Preferences")
@@ -76,6 +76,41 @@ impl PreferencesDialog {
                     ui.add(egui::DragValue::new(&mut prefs.window_height)
                     .speed(10.0)
                     .range(480.0..=2160.0));
+                });
+            });
+
+            ui.add_space(10.0);
+
+            // Theme selection
+            ui.group(|ui| {
+                ui.label("Theme Selection");
+                ui.label("Choose your preferred visual theme:");
+                
+                // Create a grid layout for theme selection
+                ui.columns(2, |columns| {
+                    let themes = [
+                        Theme::DarkBlue,
+                        Theme::DarkGrey,
+                        Theme::ArcadePurple,
+                        Theme::LightClassic,
+                        Theme::NeonGreen,
+                        Theme::SunsetOrange,
+                        Theme::OceanBlue,
+                        Theme::MidnightBlack,
+                        Theme::ForestGreen,
+                        Theme::RetroAmber,
+                    ];
+
+                    for (i, theme_option) in themes.iter().enumerate() {
+                        let column = i % 2;
+                        let is_selected = *theme_option == *theme;
+                        
+                        columns[column].horizontal(|ui| {
+                            if ui.radio(is_selected, theme_option.display_name()).clicked() {
+                                *theme = theme_option.clone();
+                            }
+                        });
+                    }
                 });
             });
 

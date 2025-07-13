@@ -26,6 +26,7 @@ pub struct MameApp {
     pub show_preferences_dialog: bool,
     pub show_rom_info_dialog: bool,
     pub show_video_settings: bool,
+    pub show_about_dialog: bool,
 
     // UI components
     pub game_list: GameList,
@@ -79,6 +80,7 @@ impl MameApp {
             show_preferences_dialog: false,
             show_rom_info_dialog: false,
             show_video_settings: false,
+            show_about_dialog: false,
             game_list: GameList::new(),
             sidebar: Sidebar::new(),
             artwork_panel: ArtworkPanel::new(),
@@ -843,6 +845,55 @@ impl MameApp {
             println!("No game found starting with '{}'", character);
         }
     }
+
+    fn show_about_dialog(&mut self, ctx: &egui::Context) {
+        let mut should_close = false;
+        egui::Window::new("About MAME Frontend")
+            .open(&mut self.show_about_dialog)
+            .resizable(false)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("MAME Frontend");
+                    ui.label("A modern, fast, and user-friendly frontend for MAME");
+                    ui.label("Written in Rust using the egui framework");
+                    ui.add_space(10.0);
+                    
+                    ui.label("Version: 0.1.1");
+                    ui.label("Built with Rust and egui");
+                    ui.add_space(10.0);
+                    
+                    ui.label("Features:");
+                    ui.label("• Fast game loading and filtering");
+                    ui.label("• CHD game support");
+                    ui.label("• Virtual scrolling for performance");
+                    ui.label("• Modern, responsive UI");
+                    ui.label("• Cross-platform compatibility");
+                    ui.label("• 10 beautiful themes");
+                    ui.label("• Persistent column widths");
+                    ui.label("• Advanced preferences system");
+                    ui.add_space(10.0);
+                    
+                    ui.label("Acknowledgments:");
+                    ui.label("• MAME Team - For the excellent arcade emulator");
+                    ui.label("• egui - For the modern GUI framework");
+                    ui.label("• Rust Community - For the amazing ecosystem");
+                    ui.add_space(10.0);
+                    
+                    ui.label("This frontend requires MAME to be installed separately.");
+                    ui.label("It does not include ROM files or MAME itself.");
+                    ui.add_space(10.0);
+                    
+                    if ui.button("Close").clicked() {
+                        should_close = true;
+                    }
+                });
+            });
+        
+        if should_close {
+            self.show_about_dialog = false;
+        }
+    }
 }
 
 /// CRITICAL: Optimized App trait implementation
@@ -1275,7 +1326,7 @@ impl eframe::App for MameApp {
             }
 
             if self.show_preferences_dialog {
-                PreferencesDialog::show(ctx, &mut self.config.preferences, &mut self.show_preferences_dialog);
+                PreferencesDialog::show(ctx, &mut self.config.preferences, &mut self.config.theme, &mut self.show_preferences_dialog);
             }
 
             if self.show_rom_info_dialog {
@@ -1288,6 +1339,10 @@ impl eframe::App for MameApp {
 
             if self.show_video_settings {
                 VideoSettingsDialog::show(ctx, &mut self.config.video_settings, &mut self.show_video_settings);
+            }
+
+            if self.show_about_dialog {
+                self.show_about_dialog(ctx);
             }
     }
 }
@@ -1319,10 +1374,36 @@ impl MameApp {
                         self.show_video_settings = true;
                         ui.close_menu();
                     }
+                    
+                    ui.separator();
+                    
+                    // Quick theme selector
+                    ui.menu_button("Theme", |ui| {
+                        let themes = [
+                            crate::models::Theme::DarkBlue,
+                            crate::models::Theme::DarkGrey,
+                            crate::models::Theme::ArcadePurple,
+                            crate::models::Theme::LightClassic,
+                            crate::models::Theme::NeonGreen,
+                            crate::models::Theme::SunsetOrange,
+                            crate::models::Theme::OceanBlue,
+                            crate::models::Theme::MidnightBlack,
+                            crate::models::Theme::ForestGreen,
+                            crate::models::Theme::RetroAmber,
+                        ];
+                        
+                        for theme in themes {
+                            if ui.radio(self.config.theme == theme, theme.display_name()).clicked() {
+                                self.config.theme = theme;
+                                ui.close_menu();
+                            }
+                        }
+                    });
                 });
 
                 ui.menu_button("Help", |ui| {
                     if ui.button("About").clicked() {
+                        self.show_about_dialog = true;
                         ui.close_menu();
                     }
                 });

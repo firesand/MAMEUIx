@@ -52,33 +52,122 @@ impl Default for VideoSettings {
 // Theme controls the visual appearance of the frontend
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Theme {
-    DarkBlue,     // Professional dark theme with blue accents
-    DarkGrey,     // Neutral dark theme
-    ArcadePurple, // Retro arcade-inspired theme
+    DarkBlue,        // Professional dark theme with blue accents
+    DarkGrey,        // Neutral dark theme
+    ArcadePurple,    // Retro arcade-inspired theme
+    LightClassic,    // Classic light theme
+    NeonGreen,       // Cyberpunk green theme
+    SunsetOrange,    // Warm orange theme
+    OceanBlue,       // Deep ocean blue theme
+    MidnightBlack,   // Pure black theme
+    ForestGreen,     // Nature-inspired green theme
+    RetroAmber,      // Vintage amber theme
 }
 
 impl Theme {
     /// Apply this theme's colors to the UI context
     pub fn apply(&self, ctx: &egui::Context) {
-        let mut visuals = egui::Visuals::dark();
+        let mut visuals = match self {
+            Theme::LightClassic => egui::Visuals::light(),
+            _ => egui::Visuals::dark(),
+        };
 
         match self {
             Theme::DarkBlue => {
                 visuals.panel_fill = egui::Color32::from_rgb(20, 25, 40);
                 visuals.window_fill = egui::Color32::from_rgb(25, 30, 45);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(60, 80, 120);
+                visuals.hyperlink_color = egui::Color32::from_rgb(100, 150, 255);
             }
             Theme::DarkGrey => {
                 visuals.panel_fill = egui::Color32::from_rgb(30, 30, 35);
                 visuals.window_fill = egui::Color32::from_rgb(35, 35, 40);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(60, 60, 70);
+                visuals.hyperlink_color = egui::Color32::from_rgb(120, 120, 140);
             }
             Theme::ArcadePurple => {
                 visuals.panel_fill = egui::Color32::from_rgb(25, 20, 35);
                 visuals.window_fill = egui::Color32::from_rgb(35, 25, 45);
                 visuals.selection.bg_fill = egui::Color32::from_rgb(100, 50, 150);
+                visuals.hyperlink_color = egui::Color32::from_rgb(180, 100, 255);
+            }
+            Theme::LightClassic => {
+                visuals.panel_fill = egui::Color32::from_rgb(240, 240, 245);
+                visuals.window_fill = egui::Color32::from_rgb(245, 245, 250);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(200, 220, 255);
+                visuals.hyperlink_color = egui::Color32::from_rgb(0, 100, 200);
+            }
+            Theme::NeonGreen => {
+                visuals.panel_fill = egui::Color32::from_rgb(15, 25, 15);
+                visuals.window_fill = egui::Color32::from_rgb(20, 30, 20);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(0, 100, 0);
+                visuals.hyperlink_color = egui::Color32::from_rgb(0, 255, 100);
+            }
+            Theme::SunsetOrange => {
+                visuals.panel_fill = egui::Color32::from_rgb(35, 20, 15);
+                visuals.window_fill = egui::Color32::from_rgb(45, 25, 20);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(150, 80, 40);
+                visuals.hyperlink_color = egui::Color32::from_rgb(255, 150, 80);
+            }
+            Theme::OceanBlue => {
+                visuals.panel_fill = egui::Color32::from_rgb(10, 20, 35);
+                visuals.window_fill = egui::Color32::from_rgb(15, 25, 40);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(30, 60, 100);
+                visuals.hyperlink_color = egui::Color32::from_rgb(80, 160, 255);
+            }
+            Theme::MidnightBlack => {
+                visuals.panel_fill = egui::Color32::from_rgb(10, 10, 10);
+                visuals.window_fill = egui::Color32::from_rgb(15, 15, 15);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(40, 40, 40);
+                visuals.hyperlink_color = egui::Color32::from_rgb(100, 100, 100);
+            }
+            Theme::ForestGreen => {
+                visuals.panel_fill = egui::Color32::from_rgb(20, 35, 20);
+                visuals.window_fill = egui::Color32::from_rgb(25, 40, 25);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(60, 100, 60);
+                visuals.hyperlink_color = egui::Color32::from_rgb(120, 200, 120);
+            }
+            Theme::RetroAmber => {
+                visuals.panel_fill = egui::Color32::from_rgb(25, 20, 10);
+                visuals.window_fill = egui::Color32::from_rgb(35, 25, 15);
+                visuals.selection.bg_fill = egui::Color32::from_rgb(100, 80, 40);
+                visuals.hyperlink_color = egui::Color32::from_rgb(255, 200, 100);
             }
         }
 
         ctx.set_visuals(visuals);
+    }
+
+    /// Get a human-readable name for the theme
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Theme::DarkBlue => "Dark Blue",
+            Theme::DarkGrey => "Dark Grey",
+            Theme::ArcadePurple => "Arcade Purple",
+            Theme::LightClassic => "Light Classic",
+            Theme::NeonGreen => "Neon Green",
+            Theme::SunsetOrange => "Sunset Orange",
+            Theme::OceanBlue => "Ocean Blue",
+            Theme::MidnightBlack => "Midnight Black",
+            Theme::ForestGreen => "Forest Green",
+            Theme::RetroAmber => "Retro Amber",
+        }
+    }
+
+    /// Get a description for the theme
+    pub fn description(&self) -> &'static str {
+        match self {
+            Theme::DarkBlue => "Professional dark theme with blue accents",
+            Theme::DarkGrey => "Neutral dark theme for easy reading",
+            Theme::ArcadePurple => "Retro arcade-inspired purple theme",
+            Theme::LightClassic => "Classic light theme for traditional look",
+            Theme::NeonGreen => "Cyberpunk green theme with neon accents",
+            Theme::SunsetOrange => "Warm orange theme inspired by sunsets",
+            Theme::OceanBlue => "Deep ocean blue theme for calm experience",
+            Theme::MidnightBlack => "Pure black theme for OLED displays",
+            Theme::ForestGreen => "Nature-inspired green theme",
+            Theme::RetroAmber => "Vintage amber theme like old terminals",
+        }
     }
 }
 
