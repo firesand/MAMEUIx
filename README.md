@@ -30,14 +30,33 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 
 ## Installation
 
-### Prerequisites
+### Quick Installation (Linux)
+
+For Linux users, we provide automated installation scripts:
+
+```bash
+# Universal installer (detects your distribution automatically)
+chmod +x install.sh
+./install.sh
+
+# Or use distribution-specific installers:
+./install-debian.sh    # For Ubuntu, Debian, Linux Mint, etc.
+./install-rpm.sh       # For Fedora, RHEL, CentOS, etc.
+./install-arch.sh      # For Arch Linux, Manjaro, etc.
+```
+
+See [INSTALL.md](INSTALL.md) for detailed installation instructions.
+
+### Manual Installation
+
+#### Prerequisites
 - **Rust**: Install Rust from [rustup.rs](https://rustup.rs/)
 - **MAME**: Install MAME on your system
   - **Linux**: `sudo pacman -S mame` (Arch) or `sudo apt install mame` (Ubuntu)
   - **Windows**: Download from [mamedev.org](https://www.mamedev.org/)
   - **macOS**: `brew install mame`
 
-### Building from Source
+#### Building from Source
 
 1. **Clone the repository**:
    ```bash
