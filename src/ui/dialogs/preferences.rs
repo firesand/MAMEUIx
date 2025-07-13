@@ -45,6 +45,7 @@ impl PreferencesDialog {
                     columns[1].checkbox(&mut prefs.visible_columns.driver, "Driver");
                     columns[1].checkbox(&mut prefs.visible_columns.category, "Category");
                     columns[1].checkbox(&mut prefs.visible_columns.rom, "ROM");
+                    columns[1].checkbox(&mut prefs.visible_columns.chd, "CHD");
                 });
             });
 

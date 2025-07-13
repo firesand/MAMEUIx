@@ -1,0 +1,12 @@
+/home/edo/Downloads/New_Project_1/target/debug/deps/libloading-eb9d3df0445fd7b1.d: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/lib.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/changelog.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/mod.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/unix/mod.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/unix/consts.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/util.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/error.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/safe.rs
+
+/home/edo/Downloads/New_Project_1/target/debug/deps/liblibloading-eb9d3df0445fd7b1.rmeta: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/lib.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/changelog.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/mod.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/unix/mod.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/unix/consts.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/util.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/error.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/safe.rs
+
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/lib.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/changelog.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/mod.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/unix/mod.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/os/unix/consts.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/util.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/error.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libloading-0.8.8/src/safe.rs:

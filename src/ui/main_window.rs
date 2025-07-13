@@ -162,6 +162,7 @@ impl MameApp {
                 FilterCategory::Working => index.working_games.clone(),
                 FilterCategory::NotWorking => index.missing_games.clone(),
                 FilterCategory::NonClones => index.parent_games.clone(),
+                FilterCategory::ChdGames => index.chd_games.clone(),
             };
 
             // Apply search filter only if there's text
@@ -218,6 +219,7 @@ impl MameApp {
                 FilterCategory::Working => matches!(game.status, RomStatus::Available),
                 FilterCategory::NotWorking => !matches!(game.status, RomStatus::Available),
                 FilterCategory::NonClones => !game.is_clone,
+                FilterCategory::ChdGames => game.requires_chd,
             }
         })
         .map(|(idx, _)| idx)
@@ -545,11 +547,13 @@ impl MameApp {
 
                     LoadingMessage::RomScanComplete(games) => {
                         println!("UI: ROM scan complete with {} games", games.len());
+                        println!("UI: Setting loading stage to Complete");
                         self.games = games;
                         self.loading_stage = LoadingStage::Complete;
                         self.loading_start_time = None;
                         should_keep_receiver = false;
                         need_index_build = true; // CRITICAL: Build index after loading!
+                        println!("UI: Loading stage set to: {:?}", self.loading_stage);
                     }
 
                     LoadingMessage::RomScanFailed(error) => {
@@ -1216,6 +1220,9 @@ impl eframe::App for MameApp {
                         LoadingStage::ScanningRoms => {
                             ui.label("Scanning ROM files...");
                             ui.spinner();
+                        }
+                        LoadingStage::Complete => {
+                            ui.label(format!("{} games loaded", self.games.len()));
                         }
                         _ => {
                             ui.label(format!("{} games", self.games.len()));

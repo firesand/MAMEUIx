@@ -18,6 +18,8 @@ pub struct Game {
     pub is_device: bool,       // Whether this is a device ROM
     pub is_bios: bool,         // Whether this is a BIOS ROM
     pub controls: String,      // Control scheme description
+    pub requires_chd: bool,    // Whether this game requires a CHD file
+    pub chd_name: Option<String>, // Name of the required CHD file (if any)
 }
 
 /// Represents the status of a ROM file
@@ -29,6 +31,8 @@ pub enum RomStatus {
     Incorrect,      // ROM file exists but has wrong checksum
     NotWorking,     // ROM is present but game doesn't work
     Preliminary,    // Early driver, not fully working
+    ChdRequired,    // ROM is available but CHD is required
+    ChdMissing,     // ROM is available but CHD is missing
 }
 
 impl RomStatus {
@@ -42,6 +46,8 @@ impl RomStatus {
             RomStatus::Incorrect => "⚠️",     // Warning for bad ROMs
             RomStatus::NotWorking => "🚫",    // Prohibited sign for non-working
             RomStatus::Preliminary => "🔧",   // Wrench for in-development
+            RomStatus::ChdRequired => "💾",   // Diskette for CHD required
+            RomStatus::ChdMissing => "❌",    // X for CHD missing
         }
     }
 
@@ -54,6 +60,8 @@ impl RomStatus {
             RomStatus::Incorrect => "ROM file has incorrect checksum",
             RomStatus::NotWorking => "Game is not working in MAME",
             RomStatus::Preliminary => "Preliminary driver, may have issues",
+            RomStatus::ChdRequired => "ROM requires a CHD file to be playable",
+            RomStatus::ChdMissing => "ROM is available but CHD file is missing",
         }
     }
 
@@ -87,6 +95,8 @@ impl Game {
             is_device: false,
             is_bios: false,
             controls: String::new(),
+            requires_chd: false,
+            chd_name: None,
         }
     }
 

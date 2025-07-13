@@ -93,6 +93,12 @@ impl Default for Theme {
 pub struct ColumnWidths {
     pub game: f32,
     pub manufacturer: f32,
+    pub year: f32,
+    pub driver: f32,
+    pub category: f32,
+    pub rom: f32,
+    pub play_count: f32,
+    pub status: f32,
 }
 
 impl Default for ColumnWidths {
@@ -100,6 +106,49 @@ impl Default for ColumnWidths {
         Self {
             game: 300.0,        // Default width for game column
             manufacturer: 200.0, // Default width for manufacturer column
+            year: 60.0,         // Default width for year column
+            driver: 80.0,       // Default width for driver column
+            category: 100.0,    // Default width for category column
+            rom: 100.0,         // Default width for ROM column
+            play_count: 60.0,   // Default width for play count column
+            status: 80.0,       // Default width for status column
+        }
+    }
+}
+
+impl ColumnWidths {
+    /// Reset all column widths to default values
+    pub fn reset_to_defaults(&mut self) {
+        *self = Self::default();
+    }
+    
+    /// Get width for a specific column type
+    pub fn get_width(&self, column_type: &str) -> f32 {
+        match column_type {
+            "game" => self.game,
+            "manufacturer" => self.manufacturer,
+            "year" => self.year,
+            "driver" => self.driver,
+            "category" => self.category,
+            "rom" => self.rom,
+            "play_count" => self.play_count,
+            "status" => self.status,
+            _ => 100.0, // Default fallback
+        }
+    }
+    
+    /// Set width for a specific column type
+    pub fn set_width(&mut self, column_type: &str, width: f32) {
+        match column_type {
+            "game" => self.game = width,
+            "manufacturer" => self.manufacturer = width,
+            "year" => self.year = width,
+            "driver" => self.driver = width,
+            "category" => self.category = width,
+            "rom" => self.rom = width,
+            "play_count" => self.play_count = width,
+            "status" => self.status = width,
+            _ => {}, // Ignore unknown column types
         }
     }
 }

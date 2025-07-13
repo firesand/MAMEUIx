@@ -27,6 +27,7 @@ pub enum FilterCategory {
     Working,
     NotWorking,
     Parents,
+    ChdGames, // New filter for CHD games
 }
 
 impl Default for FilterCategory {
@@ -53,6 +54,7 @@ pub struct VisibleColumns {
     pub driver: bool,
     pub category: bool,
     pub rom: bool,
+    pub chd: bool, // CHD column visibility
 }
 
 impl Default for VisibleColumns {
@@ -65,6 +67,7 @@ impl Default for VisibleColumns {
             driver: false,
             category: false,
             rom: false,
+            chd: false, // CHD column hidden by default
         }
     }
 }
@@ -215,6 +218,7 @@ pub struct GameIndex {
     pub parent_games: Vec<usize>,
     pub clone_games: Vec<usize>,
     pub working_games: Vec<usize>,
+    pub chd_games: Vec<usize>, // Games that require CHD files
 
     // CRITICAL NEW FIELDS untuk menghilangkan O(n) clone scanning
     pub parent_to_clones: HashMap<String, Vec<usize>>, // Parent name -> clone indices
@@ -250,6 +254,7 @@ impl GameIndex {
         let mut parent_games = Vec::with_capacity(games.len() / 3);
         let mut clone_games = Vec::with_capacity(games.len() * 2 / 3);
         let mut working_games = Vec::with_capacity(games.len() / 2);
+        let mut chd_games = Vec::with_capacity(games.len() / 10); // Estimate ~10% of games are CHD
 
         // CRITICAL: Clone relationship maps untuk O(1) lookup
         let mut parent_to_clones: HashMap<String, Vec<usize>> = HashMap::new();
@@ -285,6 +290,11 @@ impl GameIndex {
             // Favorite index
             if favorites.contains(&game.name) {
                 favorite_games.push(idx);
+            }
+
+            // CHD games index
+            if game.requires_chd {
+                chd_games.push(idx);
             }
 
             // CRITICAL: Build parent-clone relationships
@@ -347,6 +357,7 @@ impl GameIndex {
             parent_games,
             clone_games,
             working_games,
+            chd_games,
             parent_to_clones,
             clone_count,
             search_cache: HashMap::new(),
@@ -383,6 +394,7 @@ impl GameIndex {
             FilterCategory::Working => &self.working_games,
             FilterCategory::NotWorking => &self.missing_games,
             FilterCategory::NonClones => &self.parent_games,
+            FilterCategory::ChdGames => &self.chd_games,
         }
     }
 

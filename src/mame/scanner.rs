@@ -120,6 +120,9 @@ impl GameScanner {
         let source_file = Self::extract_attribute(entry, "sourcefile")
             .unwrap_or_else(|| "unknown".to_string());
 
+        // Detect CHD requirements from XML data
+        let (requires_chd, chd_name) = Self::extract_chd_info(entry, &name, &description, &source_file);
+
         Some(Game {
             name: name.to_string(),
              description,
@@ -139,6 +142,8 @@ impl GameScanner {
              is_device,
              is_bios,
              controls: String::new(), // Bisa extract dari input tags
+             requires_chd,
+             chd_name,
         })
     }
 
@@ -226,6 +231,211 @@ impl GameScanner {
         } else {
             None
         }
+    }
+
+    /// Extract CHD information from XML entry
+    fn extract_chd_info(entry: &str, name: &str, description: &str, source_file: &str) -> (bool, Option<String>) {
+        // PRIMARY METHOD: Check for CHD disk images in the XML - this is the most reliable method
+        if entry.contains("<disk") {
+            // Look for disk entries that indicate CHD files
+            let mut chd_name = None;
+            let mut current_pos = 0;
+            
+            while let Some(disk_start) = entry[current_pos..].find("<disk ") {
+                let disk_start = current_pos + disk_start;
+                
+                // Find the end of this disk entry
+                let disk_end = if let Some(end) = entry[disk_start..].find("/>") {
+                    disk_start + end + 2
+                } else if let Some(end) = entry[disk_start..].find("</disk>") {
+                    disk_start + end + 7
+                } else {
+                    break;
+                };
+                
+                let disk_entry = &entry[disk_start..disk_end];
+                
+                // Extract disk name attribute
+                if let Some(name_start) = disk_entry.find("name=\"") {
+                    let name_start = name_start + 6;
+                    if let Some(name_end) = disk_entry[name_start..].find("\"") {
+                        let disk_name = &disk_entry[name_start..name_start + name_end];
+                        chd_name = Some(disk_name.to_string());
+                        break; // Found the CHD disk name
+                    }
+                }
+                
+                current_pos = disk_end;
+            }
+            
+            // If we found a disk entry, this is definitely a CHD game
+            if chd_name.is_some() {
+                return (true, chd_name);
+            }
+        }
+        
+        // SECONDARY METHOD: Check for harddisk device with CHD extension
+        if entry.contains("<device type=\"harddisk\"") && entry.contains("<extension name=\"chd\"/>") {
+            // This is a harddisk device that supports CHD files
+            // Look for the disk name in the device section
+            if let Some(disk_name) = Self::extract_disk_name_from_device(entry) {
+                return (true, Some(disk_name));
+            }
+        }
+        
+        // TERTIARY METHOD: Very specific known CHD games - ONLY games that definitely require CHD
+        // This list should be very small and only include games that are confirmed to use CHD files
+        let known_chd_games = [
+            // Killer Instinct series (confirmed CHD games)
+            "kinst", "kinst2", 
+            
+            // Gauntlet series (confirmed CHD games)
+            "gauntdl", "gauntleg", 
+            
+            // NFL Blitz series (confirmed CHD games)
+            "blitz99", "blitz", "blitz2k", "blitz2k1", "blitz2k2", "blitz2k3", "blitz2k4",
+            
+            // Fisherman's Bait series (confirmed CHD games)
+            "fbaitbc", "fbait2bc", 
+            
+            // Mortal Kombat 4/5 (confirmed CHD games)
+            "mk4", "mk5", 
+            
+            // Mace: The Dark Age (confirmed CHD game)
+            "mace", 
+            
+            // Hydro Thunder (confirmed CHD game)
+            "hydro", 
+            
+            // Cruisin' series (confirmed CHD games)
+            "crusnusa", "crusnwld", "crusnexo",
+            
+            // California Speed/Rush series (confirmed CHD games)
+            "calspeed", "calrushi", "calrush2",
+            
+            // San Francisco Rush series (confirmed CHD games)
+            "sfrush", "sf2049se", "rush2049",
+            
+            // Area 51 series (confirmed CHD games)
+            "area51", "area51t", "area51mx",
+            
+            // Maximum Force (confirmed CHD game)
+            "maxforce", "maxforc2",
+            
+            // War: Final Assault (confirmed CHD game)
+            "warfa",
+            
+            // Vapor TRX (confirmed CHD game)
+            "vaportrx",
+            
+            // Carnevil (confirmed CHD game)
+            "carnevil",
+            
+            // The Grid (confirmed CHD game)
+            "thegrid",
+            
+            // NBA Showtime (confirmed CHD game)
+            "nbashowt",
+            
+            // NFL Blitz 2000 Gold (confirmed CHD game)
+            "blitz2kg",
+        ];
+        
+        if known_chd_games.contains(&name) {
+            return (true, Some(name.to_string()));
+        }
+        
+        // FOURTH METHOD: Very specific game patterns that indicate CHD usage
+        // Only patterns that are 100% confirmed to indicate CHD usage
+        let chd_game_patterns = [
+            // Only very specific patterns that indicate CHD usage
+            "gauntlet legends", "gauntlet dark legacy", 
+            "blitz 99", "blitz 2000", "nfl blitz", "nba showtime", 
+            "mortal kombat 4", "mortal kombat 5", "mace the dark age",
+            "fisherman's bait", "bass challenge", "hydro thunder",
+            "crusin' usa", "crusin' world", "crusin' exotica",
+            "california speed", "california rush",
+            "san francisco rush", "rush 2049", "rush 2",
+            "area 51", "maximum force", "war final assault",
+            "vapor trx", "carnevil", "the grid",
+        ];
+        
+        let description_lower = description.to_lowercase();
+        for pattern in &chd_game_patterns {
+            if description_lower.contains(pattern) {
+                return (true, Some(name.to_string()));
+            }
+        }
+        
+        // FIFTH METHOD: System-based detection (most restrictive)
+        // Only systems that definitely use CHD files AND have specific characteristics
+        let chd_systems = [
+            // Only systems that definitely use CHD files
+            "naomi", "atomiswave", "cps3", "tgm2", "konamigx", "konamigv",
+            "segasaturn", "psx", "n64", "dreamcast", "gd-rom",
+            "jaguar", "midtunit",
+        ];
+        
+        let source_lower = source_file.to_lowercase();
+        for system in &chd_systems {
+            if source_lower.contains(system) {
+                // Additional check to avoid false positives
+                // Only mark as CHD if it's a known CHD system AND has specific characteristics
+                if Self::is_likely_chd_system(source_file, description) {
+                    return (true, Some(name.to_string()));
+                }
+            }
+        }
+        
+        (false, None)
+    }
+    
+    /// Extract disk name from device section
+    fn extract_disk_name_from_device(entry: &str) -> Option<String> {
+        // Look for disk name in the device section
+        if let Some(disk_start) = entry.find("<disk ") {
+            if let Some(name_start) = entry[disk_start..].find("name=\"") {
+                let name_start = disk_start + name_start + 6;
+                if let Some(name_end) = entry[name_start..].find("\"") {
+                    return Some(entry[name_start..name_start + name_end].to_string());
+                }
+            }
+        }
+        None
+    }
+    
+    /// Check if a system is likely to use CHD files
+    fn is_likely_chd_system(source_file: &str, description: &str) -> bool {
+        // Additional validation to avoid false positives
+        let source_lower = source_file.to_lowercase();
+        let desc_lower = description.to_lowercase();
+        
+        // Specific checks for known CHD systems
+        if source_lower.contains("jaguar") {
+            // Jaguar games that use CHD are typically light gun games
+            return desc_lower.contains("area 51") || 
+                   desc_lower.contains("maximum force") || 
+                   desc_lower.contains("war final assault") ||
+                   desc_lower.contains("vapor trx");
+        }
+        
+        if source_lower.contains("midtunit") {
+            // Midway T-Unit games that use CHD are typically sports/fighting games
+            return desc_lower.contains("blitz") || 
+                   desc_lower.contains("nba showtime") || 
+                   desc_lower.contains("gauntlet") ||
+                   desc_lower.contains("mace") ||
+                   desc_lower.contains("carnevil") ||
+                   desc_lower.contains("the grid");
+        }
+        
+        // For other systems, be very restrictive
+        if source_lower.contains("naomi") || source_lower.contains("atomiswave") {
+            // Only specific Naomi/Atomiswave games use CHD
+            return desc_lower.contains("naomi") || desc_lower.contains("atomiswave");
+        }
+        
+        false
     }
 }
 

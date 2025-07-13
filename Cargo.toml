@@ -3,6 +3,12 @@ name = "mame-frontend"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
 [dependencies]
 eframe = "0.31.1"
 egui = "0.31.1"

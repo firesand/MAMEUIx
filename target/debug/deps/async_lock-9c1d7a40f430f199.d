@@ -1,0 +1,12 @@
+/home/edo/Downloads/New_Project_1/target/debug/deps/async_lock-9c1d7a40f430f199.d: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/lib.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/barrier.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/mutex.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/once_cell.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock/futures.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock/raw.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/semaphore.rs
+
+/home/edo/Downloads/New_Project_1/target/debug/deps/libasync_lock-9c1d7a40f430f199.rmeta: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/lib.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/barrier.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/mutex.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/once_cell.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock/futures.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock/raw.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/semaphore.rs
+
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/lib.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/barrier.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/mutex.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/once_cell.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock/futures.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/rwlock/raw.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-lock-3.4.0/src/semaphore.rs:

@@ -173,6 +173,17 @@ impl GameList {
         // Show stats untuk large collections
         self.show_stats(ui, games.len());
 
+        // Add column width management context menu
+        ui.horizontal(|ui| {
+            ui.label("Column Widths:");
+            if ui.button("Reset to Defaults").clicked() {
+                column_widths.reset_to_defaults();
+            }
+            ui.menu_button("Customize", |ui| {
+                self.show_column_width_menu(ui, column_widths);
+            });
+        });
+
         // Allocate the full available height for the table container
         let (rect, _response) = ui.allocate_exact_size(
             egui::vec2(ui.available_width(), available_height),
@@ -265,30 +276,35 @@ impl GameList {
                 .column(Column::exact(25.0))     // Favorite
                 .column(Column::exact(icon_width)) // Icon
                 .column(Column::exact(25.0))     // Status
-                .column(Column::initial(column_widths.game).resizable(true));     // Game name
+                .column(Column::initial(column_widths.game).resizable(true).clip(true));     // Game name
                 
                 // Add optional columns based on preferences
                 if visible_columns.play_count {
-                    table_builder = table_builder.column(Column::initial(60.0));   // Play Count
+                    table_builder = table_builder.column(Column::initial(column_widths.play_count).resizable(true));   // Play Count
                 }
                 if visible_columns.manufacturer {
-                    table_builder = table_builder.column(Column::initial(column_widths.manufacturer).resizable(true));  // Manufacturer
+                    table_builder = table_builder.column(Column::initial(column_widths.manufacturer).resizable(true).clip(true));  // Manufacturer
                 }
                 if visible_columns.year {
-                    table_builder = table_builder.column(Column::initial(60.0));   // Year
+                    table_builder = table_builder.column(Column::initial(column_widths.year).resizable(true));   // Year
                 }
                 if visible_columns.driver {
-                    table_builder = table_builder.column(Column::initial(80.0));   // Driver
+                    table_builder = table_builder.column(Column::initial(column_widths.driver).resizable(true));   // Driver
                 }
                 if visible_columns.category {
-                    table_builder = table_builder.column(Column::initial(100.0));  // Category
+                    table_builder = table_builder.column(Column::initial(column_widths.category).resizable(true));  // Category
                 }
                 if visible_columns.rom {
-                    table_builder = table_builder.column(Column::initial(100.0));  // ROM
+                    table_builder = table_builder.column(Column::initial(column_widths.rom).resizable(true));  // ROM
                 }
                 
-                table_builder = table_builder.column(Column::initial(80.0))   // Status text
+                table_builder = table_builder.column(Column::initial(column_widths.status).resizable(true))   // Status text
                 .min_scrolled_height(available_height - 40.0);  // Use most of available height minus header
+                
+                // Add CHD column only if enabled
+                if visible_columns.chd {
+                    table_builder = table_builder.column(Column::initial(60.0).resizable(true));   // CHD status
+                }
                 
                 table_builder
                 .header(20.0, |mut header| {
@@ -339,6 +355,10 @@ impl GameList {
                         header.col(|ui| { ui.label("ROM"); });
                     }
                     header.col(|ui| { ui.label("Status"); });
+                    // Add CHD column header only if enabled
+                    if visible_columns.chd {
+                        header.col(|ui| { ui.label("CHD"); });
+                    }
                 })
                 .body(|mut body| {
                     // CRITICAL: Hanya render visible rows!
@@ -373,9 +393,9 @@ impl GameList {
                     }
                 });
                 
-                // Note: Column resize tracking would need to be implemented differently
-                // For now, the columns are resizable but we don't persist the changes
-                // This could be added later with a custom implementation
+                // After the table is rendered, try to capture column width changes
+                // Note: This is a workaround since egui_extras doesn't provide direct access to column widths
+                // We'll use a different approach with persistent IDs
             }
         );
         
@@ -527,11 +547,32 @@ impl GameList {
                 RomStatus::Missing => {
                     ui.colored_label(egui::Color32::from_rgb(200, 100, 100), "Missing");
                 }
+                RomStatus::ChdRequired => {
+                    ui.colored_label(egui::Color32::from_rgb(255, 165, 0), "CHD Required");
+                }
+                RomStatus::ChdMissing => {
+                    ui.colored_label(egui::Color32::from_rgb(255, 0, 0), "CHD Missing");
+                }
                 _ => {
                     ui.label("Unknown");
                 }
             }
         });
+
+        // CHD information (only if column is enabled)
+        if visible_columns.chd {
+            row.col(|ui| {
+                if game.requires_chd {
+                    if let Some(chd_name) = &game.chd_name {
+                        ui.label(chd_name);
+                    } else {
+                        ui.label("Required");
+                    }
+                } else {
+                    ui.label("None");
+                }
+            });
+        }
         
         (double_clicked, favorite_toggled)
     }
@@ -656,6 +697,7 @@ impl GameList {
             FilterCategory::Working => index.working_games.clone(),
             FilterCategory::NotWorking => index.missing_games.clone(),
             FilterCategory::NonClones => index.parent_games.clone(),
+            FilterCategory::ChdGames => index.chd_games.clone(),
         };
 
         // Apply additional filters
@@ -777,6 +819,11 @@ impl GameList {
                         return false;
                     }
                 }
+                FilterCategory::ChdGames => {
+                    if !game.requires_chd {
+                        return false;
+                    }
+                }
                 _ => {}
             }
 
@@ -870,11 +917,11 @@ impl GameList {
         expanded: &HashMap<String, bool>,
         category: FilterCategory,
     ) -> u64 {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
-
+        use std::hash::{Hash, Hasher};
+        
         let mut hasher = DefaultHasher::new();
-
+        
         // Hash semua filter state
         category.hash(&mut hasher);
         filters.show_favorites_only.hash(&mut hasher);
@@ -890,5 +937,34 @@ impl GameList {
         self.sort_ascending.hash(&mut hasher);
 
         hasher.finish()
+    }
+
+    /// Show column width management context menu
+    fn show_column_width_menu(&self, ui: &mut egui::Ui, column_widths: &mut crate::models::ColumnWidths) {
+        ui.label("Adjust Column Widths:");
+        ui.separator();
+        
+        let columns = [
+            ("Game", &mut column_widths.game, 100.0, 500.0),
+            ("Manufacturer", &mut column_widths.manufacturer, 80.0, 400.0),
+            ("Year", &mut column_widths.year, 40.0, 100.0),
+            ("Driver", &mut column_widths.driver, 60.0, 200.0),
+            ("Category", &mut column_widths.category, 80.0, 300.0),
+            ("ROM", &mut column_widths.rom, 80.0, 300.0),
+            ("Play Count", &mut column_widths.play_count, 40.0, 100.0),
+            ("Status", &mut column_widths.status, 60.0, 200.0),
+        ];
+        
+        for (name, width, min, max) in columns {
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", name));
+                ui.add(egui::Slider::new(width, min..=max).text("px"));
+            });
+        }
+        
+        ui.separator();
+        if ui.button("Reset All to Default").clicked() {
+            column_widths.reset_to_defaults();
+        }
     }
 }

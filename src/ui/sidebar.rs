@@ -65,6 +65,7 @@ impl Sidebar {
         ui.radio_value(selected_filter, FilterCategory::Clones, "Clones");
         ui.radio_value(selected_filter, FilterCategory::Working, "Working");
         ui.radio_value(selected_filter, FilterCategory::NotWorking, "Not Working");
+        ui.radio_value(selected_filter, FilterCategory::ChdGames, "CHD Games");
 
         ui.separator();
 

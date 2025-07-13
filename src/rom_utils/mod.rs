@@ -22,18 +22,29 @@ impl RomLoader {
         let rom_files = self.scan_rom_files();
         println!("Found {} ROM files in directories", rom_files.len());
 
-        // Buat map untuk lookup lebih cepat (case-insensitive)
+        // Separate ROM files by type for better CHD detection
         let mut available_roms: HashMap<String, PathBuf> = HashMap::new();
+        let mut available_chds: HashMap<String, PathBuf> = HashMap::new();
 
         for (rom_path, rom_name) in rom_files {
-            // Simpan dengan key lowercase untuk matching case-insensitive
-            available_roms.insert(rom_name.to_lowercase(), rom_path);
+            // Check if this is a CHD file
+            if let Some(extension) = rom_path.extension() {
+                if extension.to_str().unwrap_or("").to_lowercase() == "chd" {
+                    available_chds.insert(rom_name.to_lowercase(), rom_path);
+                } else {
+                    available_roms.insert(rom_name.to_lowercase(), rom_path);
+                }
+            }
         }
+
+        println!("Found {} ROM files and {} CHD files", available_roms.len(), available_chds.len());
 
         // Cocokkan file ROM dengan game metadata
         let mut games = Vec::new();
         let mut found_count = 0;
         let mut missing_count = 0;
+        let mut chd_required_count = 0;
+        let mut chd_missing_count = 0;
 
         // Process games dalam chunks untuk menghindari memory pressure
         for (game_name, mut game) in metadata {
@@ -41,8 +52,30 @@ impl RomLoader {
             let rom_key = game_name.to_lowercase();
 
             if available_roms.contains_key(&rom_key) {
-                game.status = RomStatus::Available;
-                found_count += 1;
+                // ROM is available, now check if it needs CHD
+                if game.requires_chd {
+                    // Debug output for CHD detection
+                    if game_name == "mace" {
+                        println!("DEBUG: Mace detected as CHD game");
+                    }
+                    
+                    // Check if CHD is available
+                    if let Some(chd_name) = &game.chd_name {
+                        if available_chds.contains_key(&chd_name.to_lowercase()) {
+                            game.status = RomStatus::Available;
+                            found_count += 1;
+                        } else {
+                            game.status = RomStatus::ChdMissing;
+                            chd_missing_count += 1;
+                        }
+                    } else {
+                        game.status = RomStatus::ChdRequired;
+                        chd_required_count += 1;
+                    }
+                } else {
+                    game.status = RomStatus::Available;
+                    found_count += 1;
+                }
             } else {
                 game.status = RomStatus::Missing;
                 missing_count += 1;
@@ -54,6 +87,8 @@ impl RomLoader {
         println!("ROM scan complete:");
         println!("  - Available: {} games", found_count);
         println!("  - Missing: {} games", missing_count);
+        println!("  - CHD Required: {} games", chd_required_count);
+        println!("  - CHD Missing: {} games", chd_missing_count);
         println!("  - Total: {} games", games.len());
 
         // Sort games berdasarkan description untuk display konsisten
@@ -243,6 +278,162 @@ impl RomLoader {
         }
 
         estimate.max(1000) // Minimum estimate untuk progress bar
+    }
+
+    /// Check if a game requires a CHD file
+    fn game_requires_chd(&self, game: &Game) -> bool {
+        // Use the requires_chd field that was set during XML parsing
+        // This is the most accurate method since it uses MAME's XML data
+        if game.requires_chd {
+            return true;
+        }
+        
+        // Fallback detection for games that might not be properly detected in XML
+        let description_lower = game.description.to_lowercase();
+        let driver_lower = game.driver.to_lowercase();
+        let name_lower = game.name.to_lowercase();
+        
+        // Very specific known CHD games - ONLY games that definitely require CHD
+        // This list should be very small and only include games that are confirmed to use CHD files
+        let known_chd_games = [
+            // Killer Instinct series (confirmed CHD games)
+            "kinst", "kinst2", 
+            
+            // Gauntlet series (confirmed CHD games)
+            "gauntdl", "gauntleg", 
+            
+            // NFL Blitz series (confirmed CHD games)
+            "blitz99", "blitz", "blitz2k", "blitz2k1", "blitz2k2", "blitz2k3", "blitz2k4",
+            
+            // Fisherman's Bait series (confirmed CHD games)
+            "fbaitbc", "fbait2bc", 
+            
+            // Mortal Kombat 4/5 (confirmed CHD games)
+            "mk4", "mk5", 
+            
+            // Mace: The Dark Age (confirmed CHD game)
+            "mace", 
+            
+            // Hydro Thunder (confirmed CHD game)
+            "hydro", 
+            
+            // Cruisin' series (confirmed CHD games)
+            "crusnusa", "crusnwld", "crusnexo",
+            
+            // California Speed/Rush series (confirmed CHD games)
+            "calspeed", "calrushi", "calrush2",
+            
+            // San Francisco Rush series (confirmed CHD games)
+            "sfrush", "sf2049se", "rush2049",
+            
+            // Area 51 series (confirmed CHD games)
+            "area51", "area51t", "area51mx",
+            
+            // Maximum Force (confirmed CHD game)
+            "maxforce", "maxforc2",
+            
+            // War: Final Assault (confirmed CHD game)
+            "warfa",
+            
+            // Vapor TRX (confirmed CHD game)
+            "vaportrx",
+            
+            // Carnevil (confirmed CHD game)
+            "carnevil",
+            
+            // The Grid (confirmed CHD game)
+            "thegrid",
+            
+            // NBA Showtime (confirmed CHD game)
+            "nbashowt",
+            
+            // NFL Blitz 2000 Gold (confirmed CHD game)
+            "blitz2kg",
+        ];
+        
+        if known_chd_games.contains(&name_lower.as_str()) {
+            return true;
+        }
+        
+        // Check for very specific game patterns that indicate CHD usage
+        // Only patterns that are 100% confirmed to indicate CHD usage
+        let chd_game_patterns = [
+            // Only very specific patterns that indicate CHD usage
+            "gauntlet legends", "gauntlet dark legacy", 
+            "blitz 99", "blitz 2000", "nfl blitz", "nba showtime", 
+            "mortal kombat 4", "mortal kombat 5", "mace the dark age",
+            "fisherman's bait", "bass challenge", "hydro thunder",
+            "crusin' usa", "crusin' world", "crusin' exotica",
+            "california speed", "california rush",
+            "san francisco rush", "rush 2049", "rush 2",
+            "area 51", "maximum force", "war final assault",
+            "vapor trx", "carnevil", "the grid",
+        ];
+        
+        for pattern in &chd_game_patterns {
+            if description_lower.contains(pattern) {
+                return true;
+            }
+        }
+        
+        // Only systems that definitely use CHD files
+        let chd_systems = [
+            // Arcade systems that use CHD
+            "naomi", "atomiswave", "cps3", "tgm2", "konamigx", "konamigv",
+            "segasaturn", "psx", "n64", "dreamcast", "gd-rom",
+            "jaguar", "midtunit",
+        ];
+        
+        // Check if the driver indicates a CHD system
+        for system in &chd_systems {
+            if driver_lower.contains(system) {
+                // Additional validation to avoid false positives
+                if self.is_likely_chd_system(&driver_lower, &description_lower) {
+                    return true;
+                }
+            }
+        }
+        
+        false
+    }
+    
+    /// Check if a system is likely to use CHD files
+    fn is_likely_chd_system(&self, driver: &str, description: &str) -> bool {
+        // Specific checks for known CHD systems
+        if driver.contains("jaguar") {
+            // Jaguar games that use CHD are typically light gun games
+            return description.contains("area 51") || 
+                   description.contains("maximum force") || 
+                   description.contains("war final assault") ||
+                   description.contains("vapor trx");
+        }
+        
+        if driver.contains("midtunit") {
+            // Midway T-Unit games that use CHD are typically sports/fighting games
+            return description.contains("blitz") || 
+                   description.contains("nba showtime") || 
+                   description.contains("gauntlet") ||
+                   description.contains("mace") ||
+                   description.contains("carnevil") ||
+                   description.contains("the grid");
+        }
+        
+        // For other systems, be very restrictive
+        if driver.contains("naomi") || driver.contains("atomiswave") {
+            // Only specific Naomi/Atomiswave games use CHD
+            return description.contains("naomi") || description.contains("atomiswave");
+        }
+        
+        false
+    }
+
+    /// Get the required CHD name for a game
+    fn get_required_chd_name(&self, game: &Game) -> Option<String> {
+        // In a full implementation, this would parse MAME's XML to get the exact CHD name
+        // For now, we'll use a simple heuristic based on the game name
+        
+        // Most CHD files have the same name as the ROM
+        Some(game.name.clone())
     }
 }
 

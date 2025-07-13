@@ -1,0 +1,11 @@
+/home/edo/Downloads/New_Project_1/target/debug/deps/egui_glow-16b9bfaf1278466a.d: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/lib.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/painter.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/misc_util.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader_version.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/vao.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader/vertex.glsl /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader/fragment.glsl
+
+/home/edo/Downloads/New_Project_1/target/debug/deps/libegui_glow-16b9bfaf1278466a.rmeta: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/lib.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/painter.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/misc_util.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader_version.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/vao.rs /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader/vertex.glsl /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader/fragment.glsl
+
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/lib.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/painter.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/misc_util.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader_version.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/vao.rs:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader/vertex.glsl:
+/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_glow-0.31.1/src/shader/fragment.glsl:
