@@ -1,5 +1,0 @@
-/home/edo/Downloads/New_Project_1/target/debug/build/liblzma-sys-78e799fce63c1723/build_script_build-78e799fce63c1723.d: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/liblzma-sys-0.4.4/build.rs
-
-/home/edo/Downloads/New_Project_1/target/debug/build/liblzma-sys-78e799fce63c1723/build_script_build-78e799fce63c1723: /home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/liblzma-sys-0.4.4/build.rs
-
-/home/edo/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/liblzma-sys-0.4.4/build.rs:
