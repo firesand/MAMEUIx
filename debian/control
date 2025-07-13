@@ -1,0 +1,26 @@
+Source: mame-frontend
+Section: games
+Priority: optional
+Maintainer: MAME Frontend Team <mame-frontend@example.com>
+Build-Depends: debhelper (>= 13), rustc, cargo, pkg-config, libssl-dev, libgtk-3-dev, libwebkit2gtk-4.0-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/yourusername/mame-frontend
+Vcs-Browser: https://github.com/yourusername/mame-frontend
+Vcs-Git: https://github.com/yourusername/mame-frontend.git
+
+Package: mame-frontend
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, mame (>= 0.200)
+Description: Modern GUI frontend for MAME arcade emulator
+ MAME Frontend is a modern, fast, and user-friendly graphical interface
+ for the MAME arcade emulator. It provides an intuitive way to browse,
+ search, and launch arcade games with features like:
+ .
+  * Fast game scanning and filtering
+  * Artwork display and management
+  * Multiple theme support
+  * ROM status detection
+  * Game history tracking
+  * Responsive and modern UI
+ .
+ This package provides the main application binary and desktop integration. 

@@ -47,6 +47,50 @@ chmod +x install.sh
 
 See [INSTALL.md](INSTALL.md) for detailed installation instructions.
 
+### Package Installation
+
+We also provide native packages for easy installation:
+
+#### Debian/Ubuntu (.deb)
+```bash
+# Build the package
+./build-deb.sh
+
+# Install the package
+sudo dpkg -i ../mame-frontend_*.deb
+sudo apt-get install -f  # Install dependencies if needed
+```
+
+#### Red Hat/Fedora (.rpm)
+```bash
+# Build the package
+./build-rpm.sh
+
+# Install the package
+sudo dnf install mame-frontend-*.rpm
+```
+
+#### Arch Linux (.pkg.tar.zst)
+```bash
+# Build the package
+./build-arch.sh
+
+# Install the package
+sudo pacman -U mame-frontend-*.pkg.tar.zst
+```
+
+#### Universal Package Builder
+```bash
+# Build for your current distribution (auto-detected)
+./build-packages.sh
+
+# Or build specific package types
+./build-packages.sh deb    # Debian package only
+./build-packages.sh rpm    # RPM package only
+./build-packages.sh arch   # Arch package only
+./build-packages.sh all    # All package types
+```
+
 ### Manual Installation
 
 #### Prerequisites
