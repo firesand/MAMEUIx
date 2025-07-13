@@ -28,6 +28,20 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - **Debug Tools**: Comprehensive logging and debugging options
 - **Cross-Platform**: Runs on Windows, macOS, and Linux
 
+## Screenshots
+
+### Main Interface
+![Main UI](assets/Screenshot_20250713_163905.png)
+
+### Directories Selection
+![Directories Dialog](assets/Screenshot_20250713_163924.png)
+
+### Preferences Dialog
+![Preferences Dialog](assets/Screenshot_20250713_163936.png)
+
+### Video Settings
+![Video Settings](assets/Screenshot_20250713_163949.png)
+
 ## Installation
 
 ### Quick Installation (Linux)
