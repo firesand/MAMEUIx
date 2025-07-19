@@ -10,6 +10,7 @@ pub struct Game {
     pub manufacturer: String,   // Company that made the game
     pub year: String,          // Year of release
     pub driver: String,        // MAME driver used
+    pub driver_status: String, // Driver status: good, imperfect, preliminary
     pub status: RomStatus,     // Current status of this ROM
     pub parent: Option<String>, // Parent ROM name if this is a clone
     pub category: String,      // Game category/genre
@@ -87,6 +88,7 @@ impl Game {
             manufacturer: String::new(),
             year: String::new(),
             driver: String::new(),
+            driver_status: "unknown".to_string(),
             status: RomStatus::Unknown,
             parent: None,
             category: String::new(),
@@ -112,6 +114,26 @@ impl Game {
             format!("{} (clone of {})", self.description, parent)
         } else {
             self.description.clone()
+        }
+    }
+    
+    /// Get formatted driver status with appropriate icon
+    pub fn get_driver_status_display(&self) -> (&'static str, &'static str) {
+        match self.driver_status.to_lowercase().as_str() {
+            "good" => ("✅", "Good"),
+            "imperfect" => ("⚠️", "Imperfect"),
+            "preliminary" => ("🔧", "Preliminary"),
+            _ => ("❓", "Unknown"),
+        }
+    }
+    
+    /// Get color for driver status
+    pub fn get_driver_status_color(&self) -> egui::Color32 {
+        match self.driver_status.to_lowercase().as_str() {
+            "good" => egui::Color32::from_rgb(0, 200, 0),        // Green
+            "imperfect" => egui::Color32::from_rgb(255, 165, 0), // Orange
+            "preliminary" => egui::Color32::from_rgb(255, 0, 0), // Red
+            _ => egui::Color32::from_rgb(128, 128, 128),         // Gray
         }
     }
 }

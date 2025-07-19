@@ -37,10 +37,8 @@ impl ArtworkLoader {
         let search_dir = match artwork_type {
             ArtworkType::Screenshot => {
                 if let Some(path) = config.snap_path.as_ref() {
-                    println!("ArtworkLoader: Screenshot path configured: {:?}", path);
                     path
                 } else {
-                    println!("ArtworkLoader: No screenshot path configured in config!");
                     return None;
                 }
             },
@@ -49,19 +47,14 @@ impl ArtworkLoader {
             ArtworkType::Title => config.title_path.as_ref()?,
             ArtworkType::Flyer => config.flyer_path.as_ref()?,
         };
-
-        println!("ArtworkLoader: Looking for {:?} artwork for game '{}' in directory: {:?}",
-                 artwork_type, game_name, search_dir);
         
         // Check if the directory exists
         if !search_dir.exists() {
-            println!("ArtworkLoader: Directory does not exist: {:?}", search_dir);
             return None;
         }
 
         // Try to load the artwork
         if let Some(texture) = self.load_from_directory(ctx, game_name, search_dir, artwork_type) {
-            println!("ArtworkLoader: Successfully loaded {:?} artwork for game '{}'", artwork_type, game_name);
             // Cache the texture
             self.texture_cache.insert(cache_key, texture.clone());
             return Some(texture);
@@ -82,19 +75,12 @@ impl ArtworkLoader {
         // Don't add subdirectories - the user has already configured the full path
         let search_path = dir.to_path_buf();
 
-        println!("ArtworkLoader: Searching in path: {:?}", search_path);
-
         // Try to find and load the artwork file
         // First try ZIP file
         let zip_path = search_path.join(format!("{}.zip", game_name));
-        println!("ArtworkLoader: Checking for ZIP file: {:?}", zip_path);
         if zip_path.exists() {
-            println!("ArtworkLoader: ZIP file exists, attempting to extract");
             if let Some(image_data) = self.extract_from_zip(&zip_path, game_name) {
-                println!("ArtworkLoader: Successfully extracted image from ZIP");
                 return self.create_texture(ctx, &image_data, game_name);
-            } else {
-                println!("ArtworkLoader: Failed to extract image from ZIP");
             }
         }
 
@@ -102,7 +88,6 @@ impl ArtworkLoader {
         for ext in &["png", "jpg", "jpeg", "bmp", "gif"] {
             let image_path = search_path.join(format!("{}.{}", game_name, ext));
             if image_path.exists() {
-                println!("ArtworkLoader: Found image file: {:?}", image_path);
                 if let Ok(image_data) = std::fs::read(&image_path) {
                     return self.create_texture(ctx, &image_data, game_name);
                 }
@@ -113,13 +98,10 @@ impl ArtworkLoader {
         if artwork_type == ArtworkType::Screenshot {
             let game_subdir = search_path.join(game_name);
             if game_subdir.exists() && game_subdir.is_dir() {
-                println!("ArtworkLoader: Found game subdirectory: {:?}", game_subdir);
-                
                 // First try direct game name files in the subdirectory
                 for ext in &["png", "jpg", "jpeg", "bmp", "gif"] {
                     let image_path = game_subdir.join(format!("{}.{}", game_name, ext));
                     if image_path.exists() {
-                        println!("ArtworkLoader: Found image in subdirectory: {:?}", image_path);
                         if let Ok(image_data) = std::fs::read(&image_path) {
                             return self.create_texture(ctx, &image_data, game_name);
                         }
@@ -148,7 +130,6 @@ impl ArtworkLoader {
                     numbered_files.sort_by(|a, b| b.0.cmp(&a.0));
                     
                     if let Some((num, path)) = numbered_files.first() {
-                        println!("ArtworkLoader: Using numbered file {:04}.png from subdirectory", num);
                         if let Ok(image_data) = std::fs::read(path) {
                             return self.create_texture(ctx, &image_data, game_name);
                         }
@@ -157,7 +138,6 @@ impl ArtworkLoader {
             }
         }
 
-        println!("ArtworkLoader: No artwork found for game '{}'", game_name);
         None
     }
 

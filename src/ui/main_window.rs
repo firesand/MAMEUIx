@@ -25,8 +25,9 @@ pub struct MameApp {
     pub show_directories_dialog: bool,
     pub show_preferences_dialog: bool,
     pub show_rom_info_dialog: bool,
-    pub show_video_settings: bool,
+
     pub show_about_dialog: bool,
+    pub show_hidden_categories_dialog: bool,
 
     // UI components
     pub game_list: GameList,
@@ -63,12 +64,50 @@ pub struct MameApp {
     pub pending_search: Option<String>,          // Search text yang pending
     pub performance_monitor: PerformanceMonitor, // Monitor FPS dan lag
     pub last_filter_update: Instant,             // Kapan filter terakhir diupdate
-    pub low_performance_mode: bool,              // Mode untuk PC lemah
+    
+    // Category management
+    pub category_manager: Option<filters::CategoryManager>, // Manages catver.ini categories
+    pub category_loader: Option<crate::mame::CategoryLoader>, // Stores the category loader
+    
+    // MAME finder dialog state
+    pub show_mame_finder_dialog: bool,
+    pub found_mame_executables: Vec<crate::ui::dialogs::FoundMame>,
+    pub show_manual_mame_dialog: bool,
+    
+    // ROM verification window state
+    pub rom_verify_dialog: crate::ui::dialogs::RomVerifyDialog,
+    
+    // Game Properties dialog state
+    pub show_game_properties_dialog: bool,
+    pub game_properties_dialog: Option<GamePropertiesDialog>,
+    
+    // Column width persistence
+    pub last_column_save: Instant,
 }
 
 impl MameApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let config = crate::config::load_config().unwrap_or_default();
+        let mut config = crate::config::load_config().unwrap_or_default();
+        
+        // Check if this is first launch (no MAME executables configured)
+        let mut show_mame_finder = false;
+        let mut found_mames = Vec::new();
+        
+        if config.mame_executables.is_empty() {
+            println!("First launch detected - searching for MAME executables...");
+            found_mames = crate::ui::dialogs::MameFinderDialog::find_mame_executables();
+            
+            if !found_mames.is_empty() {
+                println!("Found {} MAME executable(s)", found_mames.len());
+                for mame in &found_mames {
+                    println!("  - {} ({})", mame.path, mame.version);
+                }
+                show_mame_finder = true;
+            } else {
+                println!("No MAME executables found in standard locations");
+                show_mame_finder = true; // Will show manual selection dialog
+            }
+        }
 
         let mut app = Self {
             games: vec![],
@@ -79,8 +118,9 @@ impl MameApp {
             show_directories_dialog: false,
             show_preferences_dialog: false,
             show_rom_info_dialog: false,
-            show_video_settings: false,
+    
             show_about_dialog: false,
+            show_hidden_categories_dialog: false,
             game_list: GameList::new(),
             sidebar: Sidebar::new(),
             artwork_panel: ArtworkPanel::new(),
@@ -108,15 +148,46 @@ impl MameApp {
                 pending_search: None,
                 performance_monitor: PerformanceMonitor::new(),
                 last_filter_update: Instant::now(),
-                low_performance_mode: false,
+                
+                // Category management
+                category_manager: None,
+                category_loader: None,
+                
+                // MAME finder dialog state
+                show_mame_finder_dialog: show_mame_finder,
+                found_mame_executables: found_mames,
+                show_manual_mame_dialog: false,
+                
+                // ROM verification window state
+                rom_verify_dialog: crate::ui::dialogs::RomVerifyDialog::default(),
+                
+                // Game Properties dialog state
+                show_game_properties_dialog: false,
+                game_properties_dialog: None,
+                
+                // Column width persistence
+                last_column_save: Instant::now(),
         };
 
-        // Initial load
-        if !app.config.mame_executables.is_empty() &&
-            app.config.selected_mame_index < app.config.mame_executables.len() {
-                println!("Initial load: Found {} MAME executables", app.config.mame_executables.len());
-                app.start_initial_load();
+        // Load categories if path is configured (do this before MAME finder logic)
+        if let Some(catver_path) = &app.config.catver_ini_path {
+            if catver_path.exists() {
+                if let Ok(loader) = crate::mame::CategoryLoader::new(catver_path) {
+                    app.category_loader = Some(loader.clone());
+                    
+                    let mut manager = filters::CategoryManager::new();
+                    manager.load_from_catver_map(&loader.categories);
+                    app.category_manager = Some(manager);
+                }
             }
+        }
+
+        // Only start initial load if we already have MAME configured
+        if !app.config.mame_executables.is_empty() &&
+           app.config.selected_mame_index < app.config.mame_executables.len() {
+            println!("Initial load: Found {} MAME executables", app.config.mame_executables.len());
+            app.start_initial_load();
+        }
 
             app
     }
@@ -165,7 +236,51 @@ impl MameApp {
                 FilterCategory::NotWorking => index.missing_games.clone(),
                 FilterCategory::NonClones => index.parent_games.clone(),
                 FilterCategory::ChdGames => index.chd_games.clone(),
+                FilterCategory::NonMerged => index.parent_games.clone(), // Same as Parents for now
             };
+
+            // Apply catver.ini category filter if set
+            if let Some(ref category_name) = self.config.filter_settings.catver_category {
+                if let Some(ref category_loader) = self.category_loader {
+                    let category_name_lower = category_name.to_lowercase();
+                    self.filtered_games_cache.retain(|&idx| {
+                        if let Some(game) = self.games.get(idx) {
+                            // Try exact match first
+                            if let Some(game_category) = category_loader.get_category(&game.name) {
+                                // Case-insensitive category comparison
+                                game_category.to_lowercase() == category_name_lower
+                            } else {
+                                // Try case-insensitive match on game name
+                                let game_name_lower = game.name.to_lowercase();
+                                category_loader.categories.iter().any(|(catver_name, catver_category)| {
+                                    catver_name.to_lowercase() == game_name_lower &&
+                                    catver_category.to_lowercase() == category_name_lower
+                                })
+                            }
+                        } else {
+                            false
+                        }
+                    });
+                }
+            }
+
+            // Apply hidden categories filter if enabled
+            if self.config.filter_settings.apply_hidden_categories && !self.config.hidden_categories.is_empty() {
+                if let Some(ref category_loader) = self.category_loader {
+                    self.filtered_games_cache.retain(|&idx| {
+                        if let Some(game) = self.games.get(idx) {
+                            // Check if the game's category is in the hidden list
+                            if let Some(game_category) = category_loader.get_category(&game.name) {
+                                !self.config.hidden_categories.contains(game_category)
+                            } else {
+                                true // If we can't determine the category, show the game
+                            }
+                        } else {
+                            false
+                        }
+                    });
+                }
+            }
 
             // Apply search filter only if there's text
             if !self.config.filter_settings.search_text.is_empty() {
@@ -211,7 +326,8 @@ impl MameApp {
         self.games.iter()
         .enumerate()
         .filter(|(_, game)| {
-            match self.selected_filter {
+            // First apply the main filter category
+            let main_filter_passed = match self.selected_filter {
                 FilterCategory::All => true,
                 FilterCategory::Available => matches!(game.status, RomStatus::Available),
                 FilterCategory::Missing => matches!(game.status, RomStatus::Missing),
@@ -222,7 +338,29 @@ impl MameApp {
                 FilterCategory::NotWorking => !matches!(game.status, RomStatus::Available),
                 FilterCategory::NonClones => !game.is_clone,
                 FilterCategory::ChdGames => game.requires_chd,
+                FilterCategory::NonMerged => !game.is_clone, // Same as Parents for now
+            };
+            
+            if !main_filter_passed {
+                return false;
             }
+            
+            // Then apply catver.ini category filter if set
+            if let Some(ref category_name) = self.config.filter_settings.catver_category {
+                if let Some(ref category_loader) = self.category_loader {
+                    let category_name_lower = category_name.to_lowercase();
+                    if let Some(game_category) = category_loader.get_category(&game.name) {
+                        // Case-insensitive category comparison
+                        return game_category.to_lowercase() == category_name_lower;
+                    } else {
+                        return false; // Game not found in catver.ini
+                    }
+                } else {
+                    return false; // No category loader available
+                }
+            }
+            
+            true // No category filter applied
         })
         .map(|(idx, _)| idx)
         .collect()
@@ -255,6 +393,18 @@ impl MameApp {
                         crate::models::SearchMode::Status => {
                             game.status.description().to_lowercase().contains(&search_lower)
                         }
+                        crate::models::SearchMode::Cpu => {
+                            // For now, return false as we don't have hardware filter here
+                            false
+                        }
+                        crate::models::SearchMode::Device => {
+                            // For now, return false as we don't have hardware filter here
+                            false
+                        }
+                        crate::models::SearchMode::Sound => {
+                            // For now, return false as we don't have hardware filter here
+                            false
+                        }
                     }
                 } else {
                     false
@@ -281,6 +431,18 @@ impl MameApp {
                         }
                         crate::models::SearchMode::Status => {
                             game.status.description().to_lowercase().contains(&search_lower)
+                        }
+                        crate::models::SearchMode::Cpu => {
+                            // For now, return false as we don't have hardware filter here
+                            false
+                        }
+                        crate::models::SearchMode::Device => {
+                            // For now, return false as we don't have hardware filter here
+                            false
+                        }
+                        crate::models::SearchMode::Sound => {
+                            // For now, return false as we don't have hardware filter here
+                            false
                         }
                     }
                 } else {
@@ -313,40 +475,6 @@ impl MameApp {
                     self.game_list.invalidate_cache();
                 }
             }
-        }
-    }
-
-    /// IMPROVED: Check and adjust performance mode
-    pub fn check_performance_mode(&mut self) {
-        let fps = self.performance_monitor.get_average_fps();
-        let lag_spikes = self.performance_monitor.get_lag_spike_count();
-
-        // Auto-enable low performance mode if struggling
-        if fps < 20.0 && lag_spikes > 10 && !self.low_performance_mode {
-            println!("Performance critical: Enabling low performance mode (FPS: {:.1})", fps);
-            self.low_performance_mode = true;
-
-            // Aggressive optimizations for weak systems
-            self.config.preferences.performance.virtual_scroll_buffer = 2;
-            self.config.preferences.performance.max_visible_items = 30;
-            self.config.show_rom_icons = false;
-            self.config.preferences.performance.enable_lazy_icons = false;
-
-            // Clear heavy resources
-            self.rom_icons.clear();
-            self.icon_info.clear();
-            self.icon_load_queue.clear();
-
-            // Force UI update
-            self.filter_cache_dirty = true;
-            self.game_list.invalidate_cache();
-        }
-
-        // Auto-disable if performance recovers
-        if fps > 45.0 && self.low_performance_mode {
-            println!("Performance recovered: Disabling low performance mode");
-            self.low_performance_mode = false;
-            self.config.preferences.performance = PerformanceSettings::default();
         }
     }
 
@@ -417,11 +545,31 @@ impl MameApp {
         self.loading_stage = LoadingStage::LoadingMame;
         self.loading_start_time = Some(Instant::now());
 
+        // Get catver.ini path for category support
+        let catver_path = self.config.catver_ini_path.clone();
+        
         thread::spawn(move || {
             println!("Starting MAME data load in background thread...");
             let _ = tx.send(LoadingMessage::MameLoadStarted);
 
-            let scanner = GameScanner::new(&mame.path);
+            // Initialize CategoryLoader if catver.ini path is configured
+            let category_loader = if let Some(ref catver_path) = catver_path {
+                match crate::mame::CategoryLoader::new(catver_path) {
+                    Ok(loader) => Some(loader),
+                    Err(e) => {
+                        eprintln!("Failed to load categories from {:?}: {}", catver_path, e);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            
+            // Create scanner with category loader if available
+            let mut scanner = GameScanner::new(&mame.path);
+            if let Some(ref loader) = category_loader {
+                scanner = scanner.with_category_loader(loader.clone());
+            }
 
             let _ = tx.send(LoadingMessage::MameLoadProgress(
                 "Running mame -listxml... This may take 10-30 seconds".to_string()
@@ -438,7 +586,11 @@ impl MameApp {
                     manufacturers.sort();
                     manufacturers.dedup();
 
-                    let _ = tx.send(LoadingMessage::MameLoadComplete(games, manufacturers));
+                    // Box the category loader for sending through the channel
+                    let boxed_loader: Option<Box<dyn std::any::Any + Send>> = category_loader.map(|loader| {
+                        Box::new(loader) as Box<dyn std::any::Any + Send>
+                    });
+                    let _ = tx.send(LoadingMessage::MameLoadComplete(games, manufacturers, boxed_loader));
                 }
                 Err(e) => {
                     eprintln!("MAME scan failed: {}", e);
@@ -513,7 +665,7 @@ impl MameApp {
                         println!("UI: MAME load progress: {}", msg);
                     }
 
-                    LoadingMessage::MameLoadComplete(games, manufacturers) => {
+                    LoadingMessage::MameLoadComplete(games, manufacturers, category_loader) => {
                         println!("UI: MAME load complete with {} games", games.len());
 
                         self.game_metadata = games.iter()
@@ -521,6 +673,20 @@ impl MameApp {
                         .collect();
 
                         self.all_manufacturers = manufacturers;
+                        
+                        // Store category loader and initialize category manager
+                        if let Some(boxed_loader) = category_loader {
+                            // Try to downcast the boxed loader back to CategoryLoader
+                            if let Ok(loader) = boxed_loader.downcast::<crate::mame::CategoryLoader>() {
+                                let loader = *loader;
+
+                                let mut manager = filters::CategoryManager::new();
+                                manager.load_from_catver_map(&loader.categories);
+                                self.category_manager = Some(manager);
+                                
+                                self.category_loader = Some(loader);
+                            }
+                        }
 
                         if !self.config.rom_paths.is_empty() {
                             need_rom_scan = true;
@@ -548,14 +714,29 @@ impl MameApp {
                     }
 
                     LoadingMessage::RomScanComplete(games) => {
-                        println!("UI: ROM scan complete with {} games", games.len());
-                        println!("UI: Setting loading stage to Complete");
-                        self.games = games;
+                        // Apply categories to games if category loader is available
+                        let mut games_with_categories = games;
+                        if let Some(ref category_loader) = self.category_loader {
+                            for game in &mut games_with_categories {
+                                // Use get_category_with_parent to handle clones properly
+                                if let Some(category) = category_loader.get_category_with_parent(&game.name, game.parent.as_deref()) {
+                                    game.category = category.to_string();
+                                } else if game.category.is_empty() {
+                                    // Ensure games without categories in catver.ini have "Misc."
+                                    game.category = "Misc.".to_string();
+                                }
+                            }
+                        }
+                        
+                        self.games = games_with_categories;
                         self.loading_stage = LoadingStage::Complete;
                         self.loading_start_time = None;
                         should_keep_receiver = false;
                         need_index_build = true; // CRITICAL: Build index after loading!
                         println!("UI: Loading stage set to: {:?}", self.loading_stage);
+                        
+                        // Check plugin support after loading is complete
+                        self.show_plugin_info();
                     }
 
                     LoadingMessage::RomScanFailed(error) => {
@@ -613,8 +794,69 @@ impl MameApp {
             }
     }
 
+    /// Reload categories from catver.ini file
+    pub fn reload_categories(&mut self) {
+        // Clear existing category data
+        self.category_loader = None;
+        self.category_manager = None;
+        
+        // Load categories if path is configured
+        if let Some(catver_path) = &self.config.catver_ini_path {
+            if catver_path.exists() {
+                match crate::mame::CategoryLoader::new(catver_path) {
+                    Ok(loader) => {
+                        self.category_loader = Some(loader.clone());
+                        
+                        // Update category manager
+                        let mut manager = filters::CategoryManager::new();
+                        manager.load_from_catver_map(&loader.categories);
+                        self.category_manager = Some(manager);
+                        
+                        // Apply categories to existing games if any
+                        if !self.games.is_empty() {
+                            for game in &mut self.games {
+                                // Use get_category_with_parent to handle clones properly
+                                if let Some(category) = loader.get_category_with_parent(&game.name, game.parent.as_deref()) {
+                                    game.category = category.to_string();
+                                } else if game.category.is_empty() {
+                                    // Ensure games without categories in catver.ini have "Misc."
+                                    game.category = "Misc.".to_string();
+                                }
+                            }
+                            
+                            // CRITICAL: Force complete UI refresh after applying categories
+                            // Clear all caches to ensure UI shows updated categories
+                            self.filter_cache_dirty = true;
+                            self.game_list.invalidate_cache();
+                            self.game_list.expanded_rows_cache.clear(); // Clear row cache
+                            self.game_list.visible_start = 0; // Reset scroll position
+                            self.game_list.visible_end = 0;
+                            
+                            // Rebuild index with new categories
+                            self.build_game_index();
+                            
+                            // Force immediate filter update
+                            self.update_filtered_games_cache();
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load categories from {:?}: {}", catver_path, e);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn save_config(&self) {
-        let _ = crate::config::save_config(&self.config);
+        println!("DEBUG: save_config called");
+        if let Some(dialog) = &self.game_properties_dialog {
+            println!("DEBUG: Generating MAME args from dialog:");
+            let args = dialog.generate_mame_args();
+            println!("DEBUG: Generated MAME args: {:?}", args);
+        }
+        if let Err(e) = crate::config::save_config(&self.config) {
+            eprintln!("Failed to save config: {}", e);
+        }
     }
 
     pub fn toggle_favorite(&mut self, rom_name: &str) {
@@ -752,9 +994,7 @@ impl MameApp {
 
         // Adaptive loading based on current FPS - increased limits for faster loading
         let fps = self.performance_monitor.get_average_fps();
-        let max_per_frame = if self.low_performance_mode {
-            0 // Don't load ANY icons in low perf mode
-        } else if fps < 25.0 {
+        let max_per_frame = if fps < 25.0 {
             2  // Increased from 1
         } else if fps < 40.0 {
             5  // Increased from 2
@@ -854,32 +1094,48 @@ impl MameApp {
             .collapsible(false)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.heading("MAMEUIx");
+                    ui.heading("🎮 MAMEUIx");
                     ui.label("A modern, fast, and user-friendly frontend for MAME");
                     ui.label("Written in Rust using the egui framework");
                     ui.add_space(10.0);
                     
-                    ui.label("Version: 0.1.1");
-                    ui.label("Built with Rust and egui");
+                    ui.label("Version: 0.1.2 (Development)");
+                    ui.label("Built with Rust 1.88+ and egui 0.32");
                     ui.add_space(10.0);
                     
-                    ui.label("Features:");
-                    ui.label("• Fast game loading and filtering");
+                    ui.label("🚀 Recent Improvements:");
+                    ui.label("• Modernized egui API (0.32)");
+                    ui.label("• Enhanced performance optimizations");
+                    ui.label("• Updated dependencies");
+                    ui.label("• Improved code quality");
+                    ui.label("• Fixed category loading and persistence");
+                    ui.add_space(10.0);
+                    
+                    ui.label("✨ Key Features:");
+                    ui.label("• Fast game loading (48,000+ games)");
                     ui.label("• CHD game support");
                     ui.label("• Virtual scrolling for performance");
-                    ui.label("• Modern, responsive UI");
-                    ui.label("• Cross-platform compatibility");
                     ui.label("• 10 beautiful themes");
                     ui.label("• Persistent column widths");
-                    ui.label("• Advanced preferences system");
+                    ui.label("• Advanced filtering & search");
+                    ui.label("• Cross-platform compatibility");
+                    ui.label("• Category support via catver.ini");
                     ui.add_space(10.0);
                     
-                    ui.label("Acknowledgments:");
+                    ui.label("🛠️ Technical Details:");
+                    ui.label("• Optimized release builds (LTO enabled)");
+                    ui.label("• Background processing");
+                    ui.label("• Memory-efficient design");
+                    ui.label("• Comprehensive packaging support");
+                    ui.add_space(10.0);
+                    
+                    ui.label("🙏 Acknowledgments:");
                     ui.label("• MAME Team - For the excellent arcade emulator");
                     ui.label("• egui - For the modern GUI framework");
                     ui.label("• Rust Community - For the amazing ecosystem");
                     ui.add_space(10.0);
                     
+                    ui.label("⚠️ Important Note:");
                     ui.label("This frontend requires MAME to be installed separately.");
                     ui.label("It does not include ROM files or MAME itself.");
                     ui.add_space(10.0);
@@ -901,11 +1157,6 @@ impl eframe::App for MameApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Update performance monitor
         self.performance_monitor.frame_start();
-
-        // Check performance mode less frequently
-        if self.performance_monitor.frame_count % 300 == 0 {
-            self.check_performance_mode();
-        }
 
         // Batch all state updates before rendering
         let mut needs_repaint = false;
@@ -939,7 +1190,10 @@ impl eframe::App for MameApp {
         let dialog_open = self.show_directories_dialog ||
                          self.show_preferences_dialog ||
                          self.show_rom_info_dialog ||
-                         self.show_video_settings;
+                 
+                         self.show_mame_finder_dialog ||
+                         self.show_manual_mame_dialog ||
+                         self.show_game_properties_dialog;
         
         ctx.input(|i| {
             // Don't process keyboard navigation if:
@@ -973,16 +1227,30 @@ impl eframe::App for MameApp {
             }
         }
 
-        // Update filter cache with rate limiting
-        if self.filter_cache_dirty &&
-            self.last_filter_update.elapsed() > Duration::from_millis(100) {
+        // Update filter cache with rate limiting (but immediate for category changes)
+        let category_just_changed = {
+            let current_category = self.config.filter_settings.catver_category.clone();
+            let prev_category = self.sidebar.get_previous_category();
+            current_category != prev_category
+        };
+
+        if self.filter_cache_dirty {
+            // Immediate update for category changes, rate limited for other changes
+            if category_just_changed || self.last_filter_update.elapsed() > Duration::from_millis(10) {
                 self.update_filtered_games_cache();
                 needs_repaint = true;
             }
+        }
 
             // Cleanup resources periodically (not every frame!)
             if self.last_icon_cleanup.elapsed() > Duration::from_secs(120) {
                 self.cleanup_resources();
+            }
+
+            // Save column widths periodically (every 5 seconds)
+            if self.last_column_save.elapsed() > Duration::from_secs(5) {
+                self.save_config();
+                self.last_column_save = Instant::now();
             }
 
             // Smart repaint scheduling
@@ -1005,10 +1273,9 @@ impl eframe::App for MameApp {
             }
 
             // Process icons with adaptive rate
-            if self.config.preferences.performance.enable_lazy_icons &&
-                !self.low_performance_mode {
-                    self.process_icon_queue(ctx);
-                }
+            if self.config.preferences.performance.enable_lazy_icons {
+                self.process_icon_queue(ctx);
+            }
 
                 // Show toolbar
                 self.show_toolbar(ctx);
@@ -1020,12 +1287,33 @@ impl eframe::App for MameApp {
             .show(ctx, |ui| {
                 let old_filter = self.selected_filter;
                 let old_search = self.config.filter_settings.search_text.clone();
-                self.sidebar.show(ui, &mut self.selected_filter, &mut self.config.filter_settings);
+                let old_category = self.config.filter_settings.catver_category.clone();
+                let old_hidden_categories_len = self.config.hidden_categories.len();
+                let old_apply_hidden_categories = self.config.filter_settings.apply_hidden_categories;
+                self.sidebar.show(
+                    ui, 
+                    &mut self.selected_filter, 
+                    &mut self.config.filter_settings, 
+                    self.category_manager.as_ref(),
+                    &mut self.config.hidden_categories,
+                    &mut self.show_hidden_categories_dialog,
+                );
                 
-                // Check if filter or search changed
-                if self.selected_filter != old_filter || self.config.filter_settings.search_text != old_search {
+                // Check if filter, search, category, or hidden categories changed
+                let hidden_categories_changed = self.config.hidden_categories.len() != old_hidden_categories_len ||
+                    self.config.filter_settings.apply_hidden_categories != old_apply_hidden_categories;
+                
+                if self.selected_filter != old_filter || 
+                   self.config.filter_settings.search_text != old_search ||
+                   self.config.filter_settings.catver_category != old_category ||
+                   hidden_categories_changed {
                     self.filter_cache_dirty = true;
                     self.game_list.invalidate_cache();
+                    
+                    // IMMEDIATE UPDATE for category changes - CRITICAL FIX
+                    if self.config.filter_settings.catver_category != old_category || hidden_categories_changed {
+                        self.update_filtered_games_cache();
+                    }
                 }
 
                 // Show performance info in debug mode
@@ -1034,15 +1322,11 @@ impl eframe::App for MameApp {
                     ui.label("Performance:");
                     self.performance_monitor.show_debug_info(ui);
 
-                    if self.low_performance_mode {
-                        ui.colored_label(egui::Color32::YELLOW, "Low Performance Mode");
-                    }
                 }
             });
 
-            // Artwork panel (skip in low performance mode)
-            if !self.low_performance_mode {
-                egui::SidePanel::right("artwork")
+            // Artwork panel
+            egui::SidePanel::right("artwork")
                 .resizable(true)
                 .default_width(300.0)
                 .show(ctx, |ui| {
@@ -1076,17 +1360,16 @@ impl eframe::App for MameApp {
                             // Update history panel with selected game
                             if let Some(idx) = self.selected_game {
                                 if let Some(game) = self.games.get(idx) {
-                                    self.history_panel.set_selected_game(Some(game.name.clone()), &self.config);
+                                    self.history_panel.set_selected_game(Some(game.name.clone()), Some(game.name.clone()), &self.config);
                                 }
                             } else {
-                                self.history_panel.set_selected_game(None, &self.config);
+                                self.history_panel.set_selected_game(None, None, &self.config);
                             }
                             
                             self.history_panel.show(ui, &self.config);
                         }
                     );
-                });
-            }
+            });
 
             // Main content
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -1175,8 +1458,13 @@ impl eframe::App for MameApp {
                                     }
                                 });
                             } else {
+                                // CRITICAL: Update filter cache BEFORE showing game list
+                                if self.filter_cache_dirty {
+                                    self.update_filtered_games_cache();
+                                }
+                                
                                 // Queue icons for visible games before showing the list
-                                if self.config.show_rom_icons && !self.low_performance_mode {
+                                if self.config.show_rom_icons {
                                     // Get visible range from game list
                                     let visible_start = self.game_list.visible_start;
                                     let visible_end = self.game_list.visible_end;
@@ -1230,7 +1518,7 @@ impl eframe::App for MameApp {
                                     &mut self.expanded_parents,
                                     &self.config.favorite_games,
                                     &mut self.rom_icons,
-                                    self.config.show_rom_icons && !self.low_performance_mode,
+                                    self.config.show_rom_icons,
                                     self.config.icon_size,
                                     self.game_index.as_ref(),
                                     self.selected_filter,
@@ -1238,6 +1526,9 @@ impl eframe::App for MameApp {
                                     &self.config.preferences.visible_columns,
                                     self.default_icon_texture.as_ref(),
                                     &self.config.game_stats,
+                                    None, // hardware_filter - not available here
+                                    self.config.catver_ini_path.is_some(),
+                                    Some(&self.filtered_games_cache), // Pass pre-filtered indices
                                 );
                                 
                                 // Handle favorite toggle
@@ -1315,8 +1606,25 @@ impl eframe::App for MameApp {
             if self.show_directories_dialog {
                 let changed = DirectoriesDialog::show(ctx, &mut self.config, &mut self.show_directories_dialog);
 
-                if !self.show_directories_dialog && changed {
-                    self.need_reload_after_dialog = true;
+                // Check if dialog was closed (not just hidden)
+                if !self.show_directories_dialog {
+                    // Always save config when dialog is closed to ensure persistence
+                    self.save_config();
+                    
+                    // Check if catver.ini was just configured
+                    if self.category_loader.is_none() && self.config.catver_ini_path.is_some() {
+                        // This is first-time catver.ini configuration - load categories immediately
+                        self.reload_categories();
+                        
+                        // Force UI refresh if games are already loaded
+                        if !self.games.is_empty() {
+                            // Force immediate UI update
+                            ctx.request_repaint();
+                        }
+                    } else if changed {
+                        // For other changes, reload everything
+                        self.need_reload_after_dialog = true;
+                    }
                 }
 
                 if !self.show_directories_dialog && self.need_reload_after_dialog {
@@ -1326,7 +1634,7 @@ impl eframe::App for MameApp {
             }
 
             if self.show_preferences_dialog {
-                PreferencesDialog::show(ctx, &mut self.config.preferences, &mut self.config.theme, &mut self.show_preferences_dialog);
+                PreferencesDialog::show(ctx, &mut self.config.preferences, &mut self.config.theme, &mut self.show_preferences_dialog, self.config.catver_ini_path.is_some());
             }
 
             if self.show_rom_info_dialog {
@@ -1337,42 +1645,167 @@ impl eframe::App for MameApp {
                 }
             }
 
-            if self.show_video_settings {
-                VideoSettingsDialog::show(ctx, &mut self.config.video_settings, &mut self.show_video_settings);
-            }
+            
 
             if self.show_about_dialog {
                 self.show_about_dialog(ctx);
+            }
+
+            if self.show_hidden_categories_dialog {
+                HiddenCategoriesDialog::show(
+                    ctx, 
+                    &mut self.config.hidden_categories, 
+                    self.category_manager.as_ref(),
+                    &mut self.show_hidden_categories_dialog
+                );
+            }
+            
+            // Handle MAME finder dialog
+            if self.show_mame_finder_dialog {
+                if !self.found_mame_executables.is_empty() {
+                    if MameFinderDialog::show_selection_dialog(
+                        ctx,
+                        &self.found_mame_executables,
+                        &mut self.config,
+                        &mut self.show_mame_finder_dialog,
+                    ) {
+                        self.save_config();
+                        self.start_initial_load();
+                    } else if !self.show_mame_finder_dialog {
+                        // User chose to browse manually
+                        self.show_manual_mame_dialog = true;
+                    }
+                } else {
+                    // No MAME found, show manual selection
+                    self.show_mame_finder_dialog = false;
+                    self.show_manual_mame_dialog = true;
+                }
+            }
+            
+            if self.show_manual_mame_dialog {
+                if MameFinderDialog::show_manual_selection_dialog(
+                    ctx,
+                    &mut self.config,
+                    &mut self.show_manual_mame_dialog,
+                ) {
+                    self.save_config();
+                    self.start_initial_load();
+                }
+            }
+            
+            // Show ROM verification window
+            if self.rom_verify_dialog.is_open() {
+                self.rom_verify_dialog.show_window(ctx, &self.config, &self.games);
+            }
+            
+            // Show Game Properties dialog
+            if self.show_game_properties_dialog {
+                if let Some(dialog) = &mut self.game_properties_dialog {
+                    if dialog.show(ctx, &mut self.show_game_properties_dialog, &mut self.config) {
+                        // Properties were applied
+                        self.save_config();
+                    }
+                }
             }
     }
 }
 
 impl MameApp {
+    // Add this helper function to show plugin support info
+    fn show_plugin_info(&self) {
+        if let Some(mame) = self.config.mame_executables.get(self.config.selected_mame_index) {
+            match crate::mame::verify_plugin_support(&mame.path) {
+                Ok(support) => {
+                    println!("\n=== MAME Plugin Support ===");
+                    println!("Plugin system available: {}", support.has_plugin_support);
+                    println!("Hiscore plugin: {}", support.hiscore_available);
+                    println!("Cheat plugin: {}", support.cheat_available);
+                    println!("Autofire plugin: {}", support.autofire_available);
+                    println!("Available plugins: {:?}", support.available_plugins);
+                    
+                    // You could show this in a dialog instead
+                }
+                Err(e) => {
+                    eprintln!("Failed to check plugin support: {}", e);
+                }
+            }
+        }
+    }
+    
     fn show_toolbar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("MAME Manager").clicked() {
+                        ui.close();
+                    }
+                    
+                    ui.separator();
+                    
+                    // Add ROM verification option
+                    if ui.button("🔍 Verify ROMs...").clicked() {
+                        self.rom_verify_dialog.open();
                         ui.close_menu();
                     }
+                    
                     ui.separator();
+                    
                     if ui.button("Exit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+
+                ui.menu_button("Game", |ui| {
+                    if ui.button("🎮 Play").clicked() {
+                        if let Some(idx) = self.selected_game {
+                            if let Some(game) = self.games.get(idx) {
+                                if let Ok(child) = crate::mame::launch_game(&game.name, &self.config) {
+                                    self.running_games.insert(game.name.clone(), (child, Instant::now()));
+                                }
+                            }
+                        }
+                        ui.close();
+                    }
+                    
+                    ui.separator();
+                    
+
+                    
+                    if ui.button("ℹ ROM Info...").clicked() {
+                        self.show_rom_info_dialog = true;
+                        ui.close();
                     }
                 });
 
                 ui.menu_button("Options", |ui| {
                     if ui.button("Directories").clicked() {
                         self.show_directories_dialog = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Preferences").clicked() {
                         self.show_preferences_dialog = true;
-                        ui.close_menu();
+                        ui.close();
                     }
-                    if ui.button("Video Settings").clicked() {
-                        self.show_video_settings = true;
-                        ui.close_menu();
+
+                    
+                    ui.separator();
+                    
+                    if ui.button("⚙️ Default Game Properties...").clicked() {
+                        self.game_properties_dialog = Some(GamePropertiesDialog::new_with_config(None, &self.config));
+                        self.show_game_properties_dialog = true;
+                        ui.close();
+                    }
+                    
+                    ui.separator();
+                    
+                    if ui.button("🔍 Find MAME Executables").clicked() {
+                        self.found_mame_executables = MameFinderDialog::find_mame_executables();
+                        if !self.found_mame_executables.is_empty() {
+                            self.show_mame_finder_dialog = true;
+                        } else {
+                            self.show_manual_mame_dialog = true;
+                        }
+                        ui.close();
                     }
                     
                     ui.separator();
@@ -1395,16 +1828,41 @@ impl MameApp {
                         for theme in themes {
                             if ui.radio(self.config.theme == theme, theme.display_name()).clicked() {
                                 self.config.theme = theme;
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                     });
                 });
 
+                // Add Tools menu
+                ui.menu_button("Tools", |ui| {
+                    if ui.button("🔍 ROM Verification").clicked() {
+                        self.rom_verify_dialog.open();
+                        ui.close_menu();
+                    }
+                    
+                    if ui.button("🎯 Verify Selected ROM").clicked() {
+                        if let Some(idx) = self.selected_game {
+                            if let Some(game) = self.games.get(idx) {
+                                self.rom_verify_dialog.open();
+                                // You could pass the selected game to the dialog here
+                                ui.close_menu();
+                            }
+                        }
+                    }
+                    
+                    ui.separator();
+                    
+                    if ui.button("📊 Plugin Support Info").clicked() {
+                        self.show_plugin_info();
+                        ui.close_menu();
+                    }
+                });
+
                 ui.menu_button("Help", |ui| {
                     if ui.button("About").clicked() {
                         self.show_about_dialog = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
             });
@@ -1438,20 +1896,6 @@ impl MameApp {
                     }
                 });
 
-                // Performance toggle
-                ui.separator();
-                if ui.checkbox(&mut self.low_performance_mode, "Low Performance Mode").changed() {
-                    if self.low_performance_mode {
-                        // Enable low performance settings
-                        self.config.preferences.performance.virtual_scroll_buffer = 5;
-                        self.config.preferences.performance.max_visible_items = 50;
-                        self.config.show_rom_icons = false;
-                    } else {
-                        // Restore normal settings
-                        self.config.preferences.performance = PerformanceSettings::default();
-                        self.config.show_rom_icons = true;
-                    }
-                }
             });
         });
     }

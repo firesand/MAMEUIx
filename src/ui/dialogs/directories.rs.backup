@@ -19,7 +19,6 @@ impl DirectoriesDialog {
         let initial_mame_count = config.mame_executables.len();
         let initial_rom_count = config.rom_paths.len();
         let initial_sample_count = config.sample_paths.len();
-        let initial_catver_path = config.catver_ini_path.clone();
 
         egui::Window::new("Directories Selection")
         .default_size([650.0, 450.0])
@@ -38,9 +37,6 @@ impl DirectoriesDialog {
                 }
                 if ui.selectable_label(selected_tab == 2, "History, INI's and DAT's Files").clicked() {
                     selected_tab = 2;
-                }
-                if ui.selectable_label(selected_tab == 3, "MAME Internal Folders").clicked() {
-                    selected_tab = 3;
                 }
             });
             
@@ -198,63 +194,6 @@ impl DirectoriesDialog {
                             }
                         });
                 }
-                3 => {
-                    // MAME Internal Folders tab
-                    ui.label("Configure MAME internal folders (these override MAME's default locations):");
-                    ui.colored_label(
-                        egui::Color32::from_rgb(200, 200, 100),
-                        "Note: These folders are used by MAME for saving configuration, high scores, save states, etc."
-                    );
-                    ui.add_space(10.0);
-                    
-                    egui::ScrollArea::vertical()
-                        .max_height(400.0)
-                        .show(ui, |ui| {
-                            // Configuration files directory
-                            if Self::optional_path_field(ui, "Configuration Files (cfg)", "MAME configuration files directory", &mut config.cfg_path) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // NVRAM directory
-                            if Self::optional_path_field(ui, "NVRAM", "Non-volatile RAM directory", &mut config.nvram_path) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-
-                            
-                            ui.add_space(10.0);
-                            
-                            // Input configuration directory
-                            if Self::optional_path_field(ui, "Input Configuration (input)", "Input configuration files directory", &mut config.input_path) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Save state directory
-                            if Self::optional_path_field(ui, "Save States (state)", "Save state files directory", &mut config.state_path) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Hard disk diff directory
-                            if Self::optional_path_field(ui, "Hard Disk Diffs (diff)", "Hard disk diff files directory", &mut config.diff_path) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Comment files directory
-                            if Self::optional_path_field(ui, "Comment Files (comment)", "Comment files directory", &mut config.comment_path) {
-                                changes_made = true;
-                            }
-                        });
-                }
                 _ => {}
             }
 
@@ -270,13 +209,12 @@ impl DirectoriesDialog {
 
                 if ui.button("OK").clicked() {
                     close = true;
-                    // Cek jika jumlah berubah atau catver.ini path berubah
+                    // Cek jika jumlah berubah (jika kita melewatkan tracking perubahan)
                     if config.mame_executables.len() != initial_mame_count ||
                         config.rom_paths.len() != initial_rom_count ||
-                        config.sample_paths.len() != initial_sample_count ||
-                        config.catver_ini_path != initial_catver_path {
+                        config.sample_paths.len() != initial_sample_count {
                             changes_made = true;
-                    }
+                        }
                 }
             });
 

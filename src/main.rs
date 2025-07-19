@@ -4,6 +4,8 @@ mod mame;
 mod config;
 mod rom_utils;
 mod graphics;
+mod ini_utils;
+mod hardware_filter;
 
 use eframe::egui;
 use anyhow::Result;

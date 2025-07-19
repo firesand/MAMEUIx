@@ -37,8 +37,6 @@ impl ArtworkPanel {
         if let Some(idx) = selected_game {
             // Use the index to get the game - this is the correct way
             if let Some(game) = games.get(*idx) {
-                println!("ArtworkPanel: Selected game: {} ({})", game.name, game.description);
-                
                 // Display game information
                 ui.label(format!("Game: {}", game.description));
                 ui.label(format!("Year: {}", game.year));

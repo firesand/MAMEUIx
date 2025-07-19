@@ -2,6 +2,30 @@
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
+## 🚀 Recent Improvements
+
+### Performance & Stability
+- **Modern API**: Updated to egui 0.32 with latest UI patterns
+- **Optimized Builds**: Enhanced release profile with LTO and strip optimizations
+- **Dependency Updates**: All dependencies updated to latest compatible versions
+- **Code Quality**: Reduced warnings and improved code maintainability
+- **Column Resizing**: Fully resizable table columns with persistent widths
+- **Background Processing**: Non-blocking UI during large ROM scans (48,000+ games)
+
+### Advanced Graphics & Rendering
+- **BGFX Integration**: Multi-backend rendering support (OpenGL, DirectX11/12, Vulkan, Metal)
+- **GLSL Shader System**: Custom shader management with CRT, LCD, and scanline effects
+- **Integer Scaling**: Complete implementation of MAME's integer scaling options
+- **Core Performance Options**: Comprehensive emulation performance controls
+- **SDL Driver Options**: Enhanced Linux/Unix system support
+
+### Development Experience
+- **Clean Builds**: `cargo clean` removes 2.6GB of build artifacts
+- **Fast Compilation**: Optimized for quick development cycles
+- **Cross-Platform**: Tested on Linux with comprehensive packaging support
+- **New Modules**: Added hardware filtering, INI utilities, and graphics shader support
+- **Testing Tools**: Added test binaries for category system and BGFX/GLSL integration
+
 ## Features
 
 ### 🎮 Core Features
@@ -16,17 +40,30 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - **Modern Design**: Clean, intuitive interface built with egui
 - **10 Beautiful Themes**: Choose from Dark Blue, Neon Green, Arcade Purple, Light Classic, and 6 more themes
 - **Responsive Layout**: Adapts to different screen sizes
-- **Customizable Columns**: Resize and reorder game list columns with persistent widths
+- **Fully Resizable Columns**: All table columns can be resized to any width with persistent settings
 - **Artwork Display**: Shows game artwork and screenshots
 - **Search Functionality**: Quick search through game names and descriptions
 - **Favorites System**: Mark and filter your favorite games
 - **Theme Customization**: Easy theme switching via menu or preferences
+- **Column Width Persistence**: Column widths are automatically saved and restored between sessions
 
 ### 🔧 Advanced Features
 - **Background Scanning**: Non-blocking ROM and MAME data loading
 - **Performance Monitoring**: Built-in performance tracking
 - **Debug Tools**: Comprehensive logging and debugging options
 - **Cross-Platform**: Runs on Windows, macOS, and Linux
+- **Hardware Filtering**: Filter games by CPU, device, and sound chip types
+- **BGFX/GLSL Support**: Advanced graphics backend integration with shader support
+- **INI File Processing**: Support for MAME INI files and hardware categorization
+- **Plugin Detection**: Automatic detection of MAME plugins (hiscore, cheat, autofire)
+
+### 🎯 Graphics & Performance
+- **BGFX Backend Support**: 8 rendering backends (Auto, OpenGL, DirectX11/12, Vulkan, Metal, Gnm, Nvn)
+- **GLSL Shader Templates**: Pre-built CRT geometry, LCD sharp, and scanline effects
+- **Integer Scaling**: Pixel-perfect scaling with manual scale factors (1x-10x)
+- **Core Performance Options**: Auto-frameskip, frameskip value, sleep when idle, emulation speed
+- **Real-time Configuration**: Dynamic parameter adjustment for shaders and performance
+- **Graphics Presets**: Pre-configured visual settings for different use cases
 
 ## Screenshots
 
@@ -41,6 +78,14 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 
 ### Video Settings
 ![Video Settings](assets/Screenshot_20250713_163949.png)
+
+## System Requirements
+
+- **Rust**: 1.88.0 or later (recommended)
+- **MAME**: Any recent version (0.200+ recommended)
+- **Memory**: 4GB RAM minimum, 8GB recommended for large ROM collections
+- **Storage**: 100MB for application, additional space for ROMs and artwork
+- **Graphics**: OpenGL 3.3+ for BGFX support, DirectX 11+ for Windows
 
 ## Installation
 
@@ -145,6 +190,21 @@ sudo pacman -U mameuix-*.pkg.tar.zst
 2. Set the path to your MAME executable
 3. The application will automatically detect MAME version and game list
 
+### Category Support (Optional)
+To enable the Category column in the game list:
+1. Go to **Options → Directories → "History, INI's and DAT's Files" tab**
+2. Set the path to your `catver.ini` file
+3. Enable the Category column in **Options → Preferences → General → Visible Columns**
+4. Categories will load immediately and persist across application restarts
+
+**Note**: The `catver.ini` file is required to display game categories. You can download it from the MAME community resources. Games without categories will display "Misc." in the category column.
+
+### Graphics Configuration
+1. Go to **Options → Default Game Properties → Video Settings**
+2. Configure BGFX backend and GLSL shaders
+3. Set integer scaling options for pixel-perfect display
+4. Adjust core performance options for optimal emulation
+
 ## Usage
 
 ### Basic Navigation
@@ -155,11 +215,41 @@ sudo pacman -U mameuix-*.pkg.tar.zst
 
 ### Advanced Features
 - **Theme Selection**: Choose from 10 beautiful themes via Options → Theme menu
-- **Column Customization**: Right-click column headers to customize with persistent widths
+- **Column Resizing**: Drag column dividers to resize any column to any width
+- **Column Width Persistence**: Column widths are automatically saved every 5 seconds
 - **Favorites**: Click the star icon to mark favorite games
 - **Artwork**: View game artwork in the right panel
 - **Game Info**: See detailed game information and ROM status
 - **Preferences**: Comprehensive settings dialog for UI customization
+- **Hardware Filtering**: Filter games by CPU, device, and sound chip types
+- **Plugin Detection**: Automatic detection of MAME plugins (hiscore, cheat, autofire)
+
+### Graphics & Performance Features
+- **BGFX Backend Selection**: Choose from 8 rendering backends for optimal performance
+- **GLSL Shader Effects**: Apply CRT, LCD, and scanline effects for authentic arcade look
+- **Integer Scaling**: Set pixel-perfect scaling factors (1x-10x) for crisp graphics
+- **Core Performance Options**: Fine-tune emulation speed, frame skipping, and system usage
+- **Real-time Parameter Adjustment**: Modify shader and performance settings on-the-fly
+
+### Column Customization
+The game list table supports full column customization:
+- **Resizable Columns**: All columns can be resized by dragging the dividers
+- **No Width Restrictions**: Columns can be made as narrow or wide as you want
+- **Persistent Settings**: Column widths are automatically saved and restored
+- **Available Columns**:
+  - Expand/Collapse (▼/▶)
+  - Favorite (★)
+  - Icon (game artwork)
+  - Status (ROM availability)
+  - Game Name
+  - Play Count
+  - Manufacturer
+  - Year
+  - Driver
+  - Driver Status
+  - Category (with catver.ini)
+  - ROM Status
+  - CHD Status
 
 ### Keyboard Shortcuts
 - **Ctrl+F**: Focus search bar
@@ -176,9 +266,20 @@ src/
 ├── main.rs              # Application entry point
 ├── config/              # Configuration management
 ├── graphics/            # Graphics and rendering
+│   ├── shader_manager.rs # GLSL shader management
+│   ├── shader_templates/ # Pre-built shader templates
+│   │   ├── crt-geom.vert # CRT geometry vertex shader
+│   │   ├── crt-geom.frag # CRT geometry fragment shader
+│   │   ├── lcd.vert      # LCD vertex shader
+│   │   ├── lcd.frag      # LCD fragment shader
+│   │   └── scanlines.frag # Scanline effect shader
+│   └── mod.rs           # BGFX integration and graphics config
+├── hardware_filter.rs   # Hardware filtering (CPU, device, sound)
+├── ini_utils/           # INI file processing utilities
 ├── mame/                # MAME integration
-│   ├── launcher.rs      # Game launching
+│   ├── launcher.rs      # Game launching with performance options
 │   ├── scanner.rs       # ROM scanning
+│   ├── category_loader.rs # Category loading from catver.ini
 │   └── mod.rs
 ├── models/              # Data models
 │   ├── game.rs          # Game data structure
@@ -188,11 +289,19 @@ src/
 ├── rom_utils/           # ROM utilities
 ├── ui/                  # User interface
 │   ├── main_window.rs   # Main application window
-│   ├── game_list.rs     # Game list component
+│   ├── game_list.rs     # Game list component (with resizable columns)
 │   ├── sidebar.rs       # Sidebar with filters
 │   ├── artwork_panel.rs # Artwork display
+│   ├── theme.rs         # Theme system
 │   ├── dialogs/         # Dialog windows
+│   │   ├── directories.rs # Directory configuration
+│   │   ├── preferences.rs # Preferences dialog
+│   │   ├── video_settings.rs # Video settings with BGFX/GLSL
+│   │   ├── mame_finder.rs # MAME executable finder
+│   │   ├── rom_verify.rs # ROM verification dialog
+│   │   └── hidden_categories.rs # Hidden categories management
 │   └── mod.rs
+└── test_*.rs            # Test binaries for development
 ```
 
 ## Performance
@@ -201,7 +310,22 @@ The application is optimized for performance:
 - **Virtual Scrolling**: Only renders visible game rows
 - **Background Processing**: Non-blocking UI during scans
 - **Efficient Indexing**: Fast search and filtering
-- **Memory Management**: Optimized for large game collections
+- **Memory Management**: Optimized for large game collections (48,000+ games)
+- **LTO Optimization**: Link-time optimization for faster execution
+- **Release Profile**: Optimized builds with strip symbols
+- **Column Width Caching**: Persistent column widths for consistent UI experience
+- **Smart Repaint Scheduling**: Adaptive frame rate based on activity
+- **Icon Management**: Lazy loading and caching of game icons
+- **BGFX Performance**: Hardware-accelerated rendering with multiple backends
+- **GLSL Optimization**: Efficient shader compilation and caching
+
+## Development Status
+
+✅ **Stable Release**: v0.1.1 is production-ready with column resizing
+🔄 **Active Development**: v0.1.2 in development with advanced graphics features
+📦 **Packaging**: Complete Linux distribution support (Debian, RPM, Arch)
+🎯 **Roadmap**: Performance optimizations and feature enhancements
+🔧 **New Features**: BGFX/GLSL support, core performance options, integer scaling
 
 ## Troubleshooting
 
@@ -223,6 +347,14 @@ The application is optimized for performance:
 - Use release builds: `cargo run --release`
 - Reduce the number of ROM directories
 - Close other applications to free memory
+- Enable auto-frameskip in core performance options
+- Use appropriate BGFX backend for your system
+
+**"Graphics issues"**
+- Try different BGFX backends (OpenGL, DirectX, Vulkan)
+- Disable GLSL shaders if causing problems
+- Check integer scaling settings
+- Verify graphics drivers are up to date
 
 ### Debug Mode
 Run with debug logging:
@@ -247,16 +379,56 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **MAME Team**: For the excellent arcade emulator
 - **egui**: For the modern GUI framework
 - **Rust Community**: For the amazing ecosystem
+- **BGFX**: For the cross-platform graphics library
 
 ## Version History
+
+### v0.1.2 (Current Development)
+- **BGFX/GLSL Integration**: Complete multi-backend graphics support
+  - 8 rendering backends (Auto, OpenGL, DirectX11/12, Vulkan, Metal, Gnm, Nvn)
+  - GLSL shader system with CRT, LCD, and scanline effects
+  - Real-time parameter adjustment for shaders
+  - Graphics presets for common configurations
+- **Integer Scaling**: Complete implementation of MAME's scaling options
+  - Manual scale factors (1x-10x) for pixel-perfect scaling
+  - Non-integer scaling options for better screen fit
+  - Auto-stretch based on game orientation
+  - Overscan support for CRT-like displays
+- **Core Performance Options**: Comprehensive emulation performance controls
+  - Auto-frameskip and manual frameskip value (0-10)
+  - Sleep when idle for better system responsiveness
+  - Emulation speed control (0.1x-2.0x)
+  - Low latency mode for competitive gaming
+  - Seconds to run for automated testing
+- **SDL Driver Options**: Enhanced Linux/Unix system support
+- **Column Resizing**: Fully resizable table columns with persistent widths
+  - All columns can be resized to any width (no minimum restrictions)
+  - Column widths are automatically saved every 5 seconds
+  - Widths persist between application sessions
+  - Enhanced user control over table layout
+- **API Modernization**: Updated egui API calls to latest version (0.32)
+- **Deprecation Fixes**: Resolved 6 out of 9 deprecation warnings
+- **Code Quality**: Improved codebase with modern Rust patterns
+- **Performance**: Enhanced build optimizations and dependency updates
+- **Dependency Updates**: Updated to latest compatible versions
+- **Bug Fixes**: Fixed menu system and UI interactions
+- **Category Loading**: Fixed category display issues:
+  - Categories now persist to config.toml properly
+  - Categories load immediately when first configured (no restart required)
+  - Games without categories display "Misc." correctly
+  - Improved category loader with case-insensitive matching
+- **New Modules**: Added hardware filtering, INI utilities, and graphics shader support
+- **Testing Tools**: Added test binaries for category system and BGFX/GLSL integration
+- **Plugin Detection**: Automatic detection of MAME plugins (hiscore, cheat, autofire)
+- **Enhanced UI**: Improved preferences dialog and theme system
 
 ### v0.1.1
 - **10 Beautiful Themes**: Added comprehensive theme system with 10 different visual themes
 - **Theme Customization**: Easy theme switching via menu and preferences dialog
-- **Persistent Column Widths**: Column widths are now saved and restored
 - **Enhanced UI**: Improved preferences dialog with theme selection
 - **Better Performance**: Optimized rendering and reduced UI lag
 - **Bug Fixes**: Fixed borrow checker issues and compilation warnings
+- **Packaging**: Complete Linux distribution support (Debian, RPM, Arch)
 
 ### v0.1.0
 - Initial release

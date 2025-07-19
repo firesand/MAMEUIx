@@ -1,34 +1,38 @@
 // src/mame/scanner.rs
-use crate::models::Game;
+use crate::models::{Game, GameIndex, RomSetType};
+use crate::mame::CategoryLoader;
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
 use anyhow::{Result, Context};
 
 pub struct GameScanner {
     mame_path: String,
+    category_loader: Option<CategoryLoader>,
 }
 
 impl GameScanner {
     pub fn new(mame_path: &str) -> Self {
         Self {
             mame_path: mame_path.to_string(),
+            category_loader: None,
         }
+    }
+    
+    /// Set the category loader for this scanner
+    pub fn with_category_loader(mut self, loader: CategoryLoader) -> Self {
+        self.category_loader = Some(loader);
+        self
     }
 
     /// Scan games dari MAME menggunakan -listxml
     /// Versi ini dioptimasi untuk eksekusi background thread
     pub fn scan_games(&self) -> Result<Vec<Game>> {
-        println!("GameScanner: Starting scan with MAME at: {}", self.mame_path);
-
         // Pertama, verifikasi MAME executable valid
         if !std::path::Path::new(&self.mame_path).exists() {
             return Err(anyhow::anyhow!("MAME executable not found at: {}", self.mame_path));
         }
 
         // Jalankan mame -listxml dan capture output
-        println!("GameScanner: Running {} -listxml", self.mame_path);
-        let start_time = std::time::Instant::now();
-
         let output = Command::new(&self.mame_path)
         .arg("-listxml")
         .stdout(Stdio::piped())
@@ -41,16 +45,10 @@ impl GameScanner {
             return Err(anyhow::anyhow!("MAME -listxml failed: {}", stderr));
         }
 
-        let elapsed = start_time.elapsed();
-        println!("GameScanner: MAME -listxml completed in {:.2}s", elapsed.as_secs_f32());
-
         // Parse XML output
         let xml_str = String::from_utf8_lossy(&output.stdout);
-        println!("GameScanner: Parsing XML data ({:.2} MB)", xml_str.len() as f32 / 1_048_576.0);
-
         let games = self.parse_xml(&xml_str)?;
 
-        println!("GameScanner: Successfully parsed {} games", games.len());
         Ok(games)
     }
 
@@ -82,11 +80,6 @@ impl GameScanner {
             }
 
             current_pos = machine_end;
-
-            // Yield secara periodik untuk menghindari blocking terlalu lama
-            if games.len() % 1000 == 0 {
-                println!("GameScanner: Parsed {} games so far...", games.len());
-            }
         }
 
         Ok(games)
@@ -114,7 +107,7 @@ impl GameScanner {
 
         // Extract driver information
         let driver_name = Self::extract_driver_name(entry);
-        let _driver_status = Self::extract_driver_status(entry);
+        let driver_status = Self::extract_driver_status(entry);
         
         // Extract source file (which often indicates the driver/system)
         let source_file = Self::extract_attribute(entry, "sourcefile")
@@ -134,9 +127,10 @@ impl GameScanner {
                      .trim_end_matches(".c")
                      .to_string()
              }),
+             driver_status,
              status: crate::models::RomStatus::Unknown, // Akan ditentukan oleh ROM scan
              parent: parent.clone(),
-             category: Self::extract_category(entry).unwrap_or_else(|| "Misc.".to_string()),
+             category: self.get_category(&name, entry),
              play_count: 0,
              is_clone: parent.is_some(),
              is_device,
@@ -201,6 +195,27 @@ impl GameScanner {
         None
     }
 
+    /// Get category for a game, first from CategoryLoader, then fallback to extraction
+    fn get_category(&self, game_name: &str, entry: &str) -> String {
+        // First try to get category from CategoryLoader if available
+        if let Some(ref loader) = self.category_loader {
+            // Try exact match first
+            if let Some(category) = loader.get_category(game_name) {
+                return category.to_string();
+            }
+            
+            // For clones, try to get category from parent ROM if clone name not found
+            if let Some(parent_name) = Self::extract_attribute(entry, "cloneof") {
+                if let Some(category) = loader.get_category(&parent_name) {
+                    return category.to_string();
+                }
+            }
+        }
+        
+        // Fallback to extracting from XML or guessing
+        Self::extract_category(entry).unwrap_or_else(|| "Misc.".to_string())
+    }
+    
     /// Extract category from entry (if available in XML)
     fn extract_category(entry: &str) -> Option<String> {
         // Try to extract category from XML if present
@@ -437,18 +452,78 @@ impl GameScanner {
         
         false
     }
+
+    /// Detect ROM set type based on collection analysis
+    pub fn detect_rom_set_type(&self, games: &[Game]) -> RomSetType {
+        if games.is_empty() {
+            return RomSetType::Unknown;
+        }
+
+        // Count total games vs parent games
+        let total_games = games.len();
+        let parent_games = games.iter().filter(|g| !g.is_clone).count();
+        let clone_games = total_games - parent_games;
+        
+        // Calculate clone ratio
+        let clone_ratio = if total_games > 0 {
+            clone_games as f64 / total_games as f64
+        } else {
+            0.0
+        };
+
+        // Analyze clone patterns to determine ROM set type
+        let mut clone_groups = std::collections::HashMap::new();
+        
+        for game in games {
+            if game.is_clone {
+                if let Some(parent) = &game.parent {
+                    clone_groups.entry(parent.clone()).or_insert_with(Vec::new).push(game.name.clone());
+                }
+            }
+        }
+
+        // Count average clones per parent
+        let avg_clones_per_parent = if !clone_groups.is_empty() {
+            clone_groups.values().map(|clones| clones.len()).sum::<usize>() as f64 / clone_groups.len() as f64
+        } else {
+            0.0
+        };
+
+        // Detection logic based on RomVault documentation and clone patterns
+        if clone_ratio > 0.4 && avg_clones_per_parent > 2.0 {
+            // High clone ratio with many clones per parent = Non-Merged
+            RomSetType::NonMerged
+        } else if clone_ratio > 0.2 && avg_clones_per_parent > 1.0 {
+            // Moderate clone ratio = Split
+            RomSetType::Split
+        } else if clone_ratio < 0.1 {
+            // Low clone ratio = likely Merged
+            RomSetType::Merged
+        } else {
+            // Default to Split if uncertain
+            RomSetType::Split
+        }
+    }
 }
 
 /// Scanner alternatif yang menggunakan streaming untuk instalasi MAME sangat besar
 pub struct StreamingGameScanner {
     mame_path: String,
+    category_loader: Option<CategoryLoader>,
 }
 
 impl StreamingGameScanner {
     pub fn new(mame_path: &str) -> Self {
         Self {
             mame_path: mame_path.to_string(),
+            category_loader: None,
         }
+    }
+    
+    /// Set the category loader for this scanner
+    pub fn with_category_loader(mut self, loader: CategoryLoader) -> Self {
+        self.category_loader = Some(loader);
+        self
     }
 
     /// Scan games menggunakan pendekatan streaming untuk minimize memory usage
@@ -486,15 +561,12 @@ impl StreamingGameScanner {
                     in_machine = false;
 
                     // Parse complete machine entry
-                    let scanner = GameScanner::new(&self.mame_path);
+                    let mut scanner = GameScanner::new(&self.mame_path);
+                    scanner.category_loader = self.category_loader.as_ref().cloned();
                     if let Some(game) = scanner.parse_machine_entry(&current_machine) {
                         games.push(game);
                     }
 
-                    // Report progress
-                    if games.len() % 1000 == 0 {
-                        println!("Streaming scanner: {} games processed", games.len());
-                    }
                 }
             }
         }

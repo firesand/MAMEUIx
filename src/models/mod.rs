@@ -5,11 +5,13 @@
 pub mod game;
 pub mod config;
 pub mod filters;
+pub mod game_properties;
 
 // Re-export everything from submodules
 pub use game::*;
 pub use config::*;
 pub use filters::*;
+pub use game_properties::*;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -28,11 +30,26 @@ pub enum FilterCategory {
     NotWorking,
     Parents,
     ChdGames, // New filter for CHD games
+    NonMerged, // Special filter for non-merged sets (parents only)
 }
 
 impl Default for FilterCategory {
     fn default() -> Self {
         FilterCategory::All
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RomSetType {
+    NonMerged,  // Each game is independent with all required files
+    Split,      // Parent contains normal data, clones contain only changes
+    Merged,     // All clones are merged into parent archive
+    Unknown,    // Type not detected yet
+}
+
+impl Default for RomSetType {
+    fn default() -> Self {
+        RomSetType::Unknown
     }
 }
 
@@ -55,6 +72,7 @@ pub struct VisibleColumns {
     pub category: bool,
     pub rom: bool,
     pub chd: bool, // CHD column visibility
+    pub driver_status: bool, // Driver status column visibility
 }
 
 impl Default for VisibleColumns {
@@ -65,9 +83,10 @@ impl Default for VisibleColumns {
             manufacturer: true,
             year: true,
             driver: false,
-            category: false,
+            category: true,
             rom: false,
             chd: false, // CHD column hidden by default
+            driver_status: true, // Driver status column visible by default
         }
     }
 }
@@ -163,6 +182,33 @@ impl Default for PerformanceSettings {
     }
 }
 
+// centralized sort enums
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SortColumn {
+    Name,
+    Manufacturer,
+    Year,
+    Status,
+    Category,
+}
+
+impl Default for SortColumn {
+    fn default() -> Self {
+        Self::Name
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SortDirection {
+    Ascending,
+    Descending,
+}
+
+impl Default for SortDirection {
+    fn default() -> Self {
+        Self::Ascending
+    }
+}
 // IconInfo melacak status loading untuk game icons
 #[derive(Debug, Clone)]
 pub struct IconInfo {
@@ -180,11 +226,11 @@ impl Default for IconInfo {
 }
 
 // LoadingMessage untuk komunikasi antar thread
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum LoadingMessage {
     MameLoadStarted,
     MameLoadProgress(String),
-    MameLoadComplete(Vec<Game>, Vec<String>),
+    MameLoadComplete(Vec<Game>, Vec<String>, Option<Box<dyn std::any::Any + Send>>),
     MameLoadFailed(String),
     RomScanStarted,
     RomScanProgress(usize, usize),
@@ -395,6 +441,7 @@ impl GameIndex {
             FilterCategory::NotWorking => &self.missing_games,
             FilterCategory::NonClones => &self.parent_games,
             FilterCategory::ChdGames => &self.chd_games,
+            FilterCategory::NonMerged => &self.parent_games, // Same as Parents for now
         }
     }
 

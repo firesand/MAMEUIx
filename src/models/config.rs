@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet};
 use crate::graphics::GraphicsConfig;
-use crate::models::GameStats; // Important: Import GameStats from models
-use crate::models::Preferences;
+use super::{GameStats, Preferences, FilterSettings, SortColumn, SortDirection};
 
 // MameExecutable represents a MAME emulator executable
 // Unlike simple paths, this contains metadata about each MAME version
@@ -18,36 +17,7 @@ pub struct MameExecutable {
 }
 
 // VideoSettings controls how MAME displays games
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VideoSettings {
-    pub video_backend: String,    // OpenGL, DirectX, etc.
-    pub window_mode: bool,        // Windowed vs fullscreen
-    pub maximize: bool,           // Start maximized
-    pub wait_vsync: bool,         // Wait for vertical sync
-    pub sync_refresh: bool,       // Sync to monitor refresh
-    pub prescale: u8,             // Pre-scaling factor
-    pub keep_aspect: bool,        // Maintain original aspect ratio
-    pub filter: bool,             // Enable bilinear filtering
-    pub num_screens: u8,          // Number of screens to use
-    pub custom_args: String,      // Additional command-line arguments
-}
 
-impl Default for VideoSettings {
-    fn default() -> Self {
-        Self {
-            video_backend: "auto".to_string(),
-            window_mode: true,
-            maximize: false,
-            wait_vsync: false,
-            sync_refresh: false,
-            prescale: 0,
-            keep_aspect: true,
-            filter: true,
-            num_screens: 1,
-            custom_args: String::new(),
-        }
-    }
-}
 
 // Theme controls the visual appearance of the frontend
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -180,27 +150,37 @@ impl Default for Theme {
 // Column width settings for the game list
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnWidths {
+    pub expand: f32,      // Expand/collapse arrow column
+    pub favorite: f32,    // Favorite star column
+    pub icon: f32,        // Game icon column
+    pub status: f32,      // Status column
     pub game: f32,
+    pub play_count: f32,
     pub manufacturer: f32,
     pub year: f32,
     pub driver: f32,
+    pub driver_status: f32,
     pub category: f32,
     pub rom: f32,
-    pub play_count: f32,
-    pub status: f32,
+    pub chd: f32,
 }
 
 impl Default for ColumnWidths {
     fn default() -> Self {
         Self {
+            expand: 25.0,       // Default width for expand column
+            favorite: 25.0,     // Default width for favorite column
+            icon: 40.0,         // Default width for icon column
+            status: 30.0,       // Default width for status column
             game: 300.0,        // Default width for game column
+            play_count: 60.0,   // Default width for play count column
             manufacturer: 200.0, // Default width for manufacturer column
             year: 60.0,         // Default width for year column
             driver: 80.0,       // Default width for driver column
+            driver_status: 120.0, // Default width for driver status column
             category: 100.0,    // Default width for category column
-            rom: 100.0,         // Default width for ROM column
-            play_count: 60.0,   // Default width for play count column
-            status: 80.0,       // Default width for status column
+            rom: 80.0,          // Default width for ROM column
+            chd: 60.0,          // Default width for CHD column
         }
     }
 }
@@ -214,14 +194,19 @@ impl ColumnWidths {
     /// Get width for a specific column type
     pub fn get_width(&self, column_type: &str) -> f32 {
         match column_type {
+            "expand" => self.expand,
+            "favorite" => self.favorite,
+            "icon" => self.icon,
+            "status" => self.status,
             "game" => self.game,
+            "play_count" => self.play_count,
             "manufacturer" => self.manufacturer,
             "year" => self.year,
             "driver" => self.driver,
+            "driver_status" => self.driver_status,
             "category" => self.category,
             "rom" => self.rom,
-            "play_count" => self.play_count,
-            "status" => self.status,
+            "chd" => self.chd,
             _ => 100.0, // Default fallback
         }
     }
@@ -229,14 +214,19 @@ impl ColumnWidths {
     /// Set width for a specific column type
     pub fn set_width(&mut self, column_type: &str, width: f32) {
         match column_type {
+            "expand" => self.expand = width,
+            "favorite" => self.favorite = width,
+            "icon" => self.icon = width,
+            "status" => self.status = width,
             "game" => self.game = width,
+            "play_count" => self.play_count = width,
             "manufacturer" => self.manufacturer = width,
             "year" => self.year = width,
             "driver" => self.driver = width,
+            "driver_status" => self.driver_status = width,
             "category" => self.category = width,
             "rom" => self.rom = width,
-            "play_count" => self.play_count = width,
-            "status" => self.status = width,
+            "chd" => self.chd = width,
             _ => {}, // Ignore unknown column types
         }
     }
@@ -268,22 +258,47 @@ pub struct AppConfig {
     pub cheats_path: Option<PathBuf>,    // Cheat files directory
     pub icons_path: Option<PathBuf>,     // Icons directory
     
+    // Additional MAME Search Paths
+    pub ctrlr_path: Option<PathBuf>,     // Controller definitions directory
+    pub crosshair_path: Option<PathBuf>, // Crosshair files directory
+    pub font_path: Option<PathBuf>,      // Font files directory
+    pub plugins_path: Option<PathBuf>,   // Plugin files directory
+    pub language_path: Option<PathBuf>,  // UI translation files directory
+    pub sw_path: Option<PathBuf>,        // Loose software directory
+    pub hash_path: Option<PathBuf>,      // Software definition files directory
+    pub ini_path: Option<PathBuf>,       // INI files directory
+    pub home_path: Option<PathBuf>,      // Base folder for plugin data (read/write)
+    
     // History and DAT files
     pub history_path: Option<PathBuf>,    // History XML file path
     pub mameinfo_dat_path: Option<PathBuf>,  // mameinfo.dat file path
     pub hiscore_dat_path: Option<PathBuf>,   // hiscore.dat file path
     pub gameinit_dat_path: Option<PathBuf>,  // gameinit.dat file path
     pub command_dat_path: Option<PathBuf>,   // command.dat file path
+    pub catver_ini_path: Option<PathBuf>,    // catver.ini file path for category support
+
+    // MAME Internal Folders Configuration
+    pub cfg_path: Option<PathBuf>,        // Configuration files directory
+    pub nvram_path: Option<PathBuf>,      // Non-volatile RAM directory
+    pub input_path: Option<PathBuf>,      // Input configuration directory
+    pub state_path: Option<PathBuf>,      // Save state directory
+    pub diff_path: Option<PathBuf>,       // Hard disk diff directory
+    pub comment_path: Option<PathBuf>,    // Comment files directory
 
     // Filter and display settings
-    pub filter_settings: super::FilterSettings,  // Game filtering options
-    pub sort_column: super::SortColumn,         // Current sort column
-    pub sort_direction: super::SortDirection,   // Ascending or descending
+    pub filter_settings: FilterSettings,  // Game filtering options
+    pub sort_column: SortColumn,         // Current sort column
+    pub sort_direction: SortDirection,   // Ascending or descending
 
     // Game-specific settings
     pub game_preferred_mame: HashMap<String, usize>, // Preferred MAME for each game
     pub favorite_games: HashSet<String>,            // User's favorite games
     pub game_stats: HashMap<String, GameStats>,     // Play statistics per game
+    pub game_properties: HashMap<String, super::game_properties::GameProperties>, // Per-game properties
+    pub default_game_properties: super::game_properties::GameProperties, // Default properties for all games
+    
+    // Hidden categories - categories that should not be shown in the game list
+    pub hidden_categories: HashSet<String>,
 
     // UI preferences
     pub show_filters: bool,          // Show filter panel
@@ -301,7 +316,8 @@ pub struct AppConfig {
 
     // Graphics and video
     pub graphics_config: GraphicsConfig, // Graphics backend configuration
-    pub video_settings: VideoSettings,   // MAME video settings
+    pub bgfx_path: Option<PathBuf>,      // BGFX shader path
+
     pub preferences: Preferences,
 }
 
@@ -329,22 +345,47 @@ impl Default for AppConfig {
             cheats_path: None,
             icons_path: None,
             
+            // Additional MAME Search Paths
+            ctrlr_path: None,
+            crosshair_path: None,
+            font_path: None,
+            plugins_path: None,
+            language_path: None,
+            sw_path: None,
+            hash_path: None,
+            ini_path: None,
+            home_path: None,
+            
             // History and DAT files
             history_path: None,
             mameinfo_dat_path: None,
             hiscore_dat_path: None,
             gameinit_dat_path: None,
             command_dat_path: None,
+            catver_ini_path: None,
+
+            // MAME Internal Folders Configuration
+            cfg_path: None,
+            nvram_path: None,
+            input_path: None,
+            state_path: None,
+            diff_path: None,
+            comment_path: None,
 
             // Use default filter settings
-            filter_settings: super::FilterSettings::default(),
-            sort_column: super::SortColumn::default(),
-            sort_direction: super::SortDirection::default(),
+            filter_settings: FilterSettings::default(),
+            sort_column: SortColumn::default(),
+            sort_direction: SortDirection::default(),
 
             // Empty game-specific maps
             game_preferred_mame: HashMap::new(),
             favorite_games: HashSet::new(),
             game_stats: HashMap::new(),
+            game_properties: HashMap::new(),
+            default_game_properties: super::game_properties::GameProperties::default(),
+            
+            // Initialize empty hidden categories
+            hidden_categories: HashSet::new(),
 
             // Default UI settings
             show_filters: false,
@@ -362,7 +403,8 @@ impl Default for AppConfig {
 
             // Default graphics settings
             graphics_config: GraphicsConfig::default(),
-            video_settings: VideoSettings::default(),
+            bgfx_path: None,
+    
             preferences: Preferences::default(),  // Add this line
         }
     }

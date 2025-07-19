@@ -26,7 +26,7 @@ pub fn save_config(config: &AppConfig) -> Result<()> {
 
     let config_file = config_dir.join("config.toml");
     let contents = toml::to_string_pretty(config)?;
-    std::fs::write(config_file, contents)?;
+    std::fs::write(&config_file, contents)?;
 
     Ok(())
 }

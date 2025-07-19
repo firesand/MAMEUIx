@@ -56,7 +56,7 @@ impl RomLoader {
                 if game.requires_chd {
                     // Debug output for CHD detection
                     if game_name == "mace" {
-                        println!("DEBUG: Mace detected as CHD game");
+                
                     }
                     
                     // Check if CHD is available
