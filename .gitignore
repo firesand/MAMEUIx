@@ -1,0 +1,88 @@
+# Rust build artifacts
+/target/
+**/target/
+Cargo.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# Temporary files
+*.tmp
+*.temp
+
+# MAME specific files
+*.zip
+*.tar.gz
+*.pkg.tar.zst
+*.spec
+mameuix.1
+mameuix.desktop
+PKGBUILD
+
+# Documentation files (keep README.md)
+*.md
+!README.md
+
+# Configuration and data files
+cfg/
+nvram/
+screenshot/
+diff/
+debian/mameuix/
+MAMEUI-inifiles/
+pS_CatVer_277/
+
+# Test files
+test_*
+listxml.txt
+mame_command_list.txt
+mame_help.txt
+
+# Workspace files
+*.code-workspace 
