@@ -1,7 +1,7 @@
 Source: mameuix
 Section: games
 Priority: optional
-Maintainer: MAMEUIx Team <mameuix@example.com>
+Maintainer: edo hikmahtiar <edohikmahtiar@me.com>
 Build-Depends: debhelper (>= 13), rustc, cargo, pkg-config, libssl-dev, libgtk-3-dev, libwebkit2gtk-4.0-dev
 Standards-Version: 4.6.2
 Homepage: https://github.com/firesand/MAMEUIx
