@@ -92,8 +92,12 @@ pub struct AdvancedProperties {
     pub enable_pbo: bool,
     
     // GLSL Shader paths (10 slots each for mame and screen)
-    pub glsl_shader_mame: Vec<Option<String>>,  // 0-9
-    pub glsl_shader_screen: Vec<Option<String>>, // 0-9
+    // Use Vec<String> instead of Vec<Option<String>> to avoid TOML serialization issues
+    // Empty strings represent None values
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub glsl_shader_mame: Vec<String>,  // 0-9, empty string = None
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub glsl_shader_screen: Vec<String>, // 0-9, empty string = None
     
     // BGFX settings
     pub bgfx_settings: BGFXSettings,
@@ -305,7 +309,10 @@ pub struct SDLDriverOptions {
     pub dual_lightgun: bool,
     
     // SDL Lightgun Mapping (8 slots)
-    pub lightgun_mappings: Vec<Option<String>>,
+    // Use Vec<String> instead of Vec<Option<String>> to avoid TOML serialization issues
+    // Empty strings represent None values
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub lightgun_mappings: Vec<String>, // Empty string = None
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -363,7 +370,7 @@ impl Default for SDLDriverOptions {
             dual_lightgun: false,
             
             // SDL Lightgun Mapping
-            lightgun_mappings: vec![None; 8],
+            lightgun_mappings: vec![String::new(); 8], // Empty strings instead of None
         }
     }
 }
@@ -483,8 +490,8 @@ impl Default for AdvancedProperties {
             dont_use_gl_arb_texture_rectangle: true, // default on per MAME
             enable_vbo: true,  // default on per MAME
             enable_pbo: true,  // default on per MAME
-            glsl_shader_mame: vec![None; 10],
-            glsl_shader_screen: vec![None; 10],
+            glsl_shader_mame: vec![String::new(); 10], // Empty strings instead of None
+            glsl_shader_screen: vec![String::new(); 10], // Empty strings instead of None
             bgfx_settings: BGFXSettings::default(),
         }
     }

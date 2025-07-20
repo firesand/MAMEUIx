@@ -559,8 +559,8 @@ fn apply_game_properties(cmd: &mut Command, props: &crate::models::GamePropertie
     
     // SDL Lightgun Mappings
     for (i, mapping) in props.sdl_options.lightgun_mappings.iter().enumerate() {
-        if let Some(device) = mapping {
-            cmd.arg(format!("-lightgun_index{}", i + 1)).arg(device);
+        if !mapping.is_empty() {
+            cmd.arg(format!("-lightgun_index{}", i + 1)).arg(mapping);
         }
     }
     

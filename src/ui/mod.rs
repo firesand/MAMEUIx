@@ -1,9 +1,10 @@
-mod main_window;
-mod game_list;
-mod sidebar;
-mod dialogs;
-mod artwork_panel;
-mod artwork_loader;
-mod history_panel;
+// src/ui/mod.rs
+// User interface components
 
-pub use main_window::MameApp;
+pub mod panels;
+pub mod components;
+pub mod themes;
+
+// Re-export commonly used components
+pub use panels::{GameList, Sidebar, ArtworkPanel, HistoryPanel, IconManager, PerformanceManager, GameIndexManager};
+pub use components::{DialogManager, DialogType, DialogAction}; 

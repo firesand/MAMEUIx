@@ -29,25 +29,6 @@ enum PropertiesTab {
 }
 
 impl GamePropertiesDialog {
-    pub fn new(game: Option<&Game>) -> Self {
-        let properties = if let Some(g) = game {
-            // Load saved properties or create new
-            GameProperties {
-                game_name: g.name.clone(),
-                ..Default::default()
-            }
-        } else {
-            GameProperties::default()
-        };
-        
-        Self {
-            original_properties: properties.clone(),
-            properties,
-            selected_tab: PropertiesTab::Display,
-            is_default_game: game.is_none(),
-        }
-    }
-    
     pub fn new_with_config(game: Option<&Game>, config: &crate::models::AppConfig) -> Self {
         let properties = if let Some(g) = game {
             // Load saved properties for this specific game
@@ -454,8 +435,8 @@ impl GamePropertiesDialog {
                             Self::apply_shader_preset_static(advanced, "lcd");
                         }
                         if ui.button("Clear All").clicked() {
-                            advanced.glsl_shader_mame = vec![None; 10];
-                            advanced.glsl_shader_screen = vec![None; 10];
+                            advanced.glsl_shader_mame = vec![String::new(); 10];
+                            advanced.glsl_shader_screen = vec![String::new(); 10];
                         }
                     });
                     
@@ -471,19 +452,13 @@ impl GamePropertiesDialog {
                                 ui.horizontal(|ui| {
                                     ui.label(format!("Slot {}:", i));
                                     
-                                    let mut shader_text = advanced.glsl_shader_mame[i]
-                                        .clone()
-                                        .unwrap_or_default();
+                                    let mut shader_text = advanced.glsl_shader_mame[i].clone();
                                     
                                     if ui.text_edit_singleline(&mut shader_text)
                                         .on_hover_text("Path to GLSL shader file")
                                         .changed() 
                                     {
-                                        advanced.glsl_shader_mame[i] = if shader_text.is_empty() {
-                                            None
-                                        } else {
-                                            Some(shader_text)
-                                        };
+                                        advanced.glsl_shader_mame[i] = shader_text;
                                     }
                                     
                                     if ui.button(format!("Browse##mame_browse_{}", i)).clicked() {
@@ -493,13 +468,13 @@ impl GamePropertiesDialog {
                                             .pick_file()
                                         {
                                             advanced.glsl_shader_mame[i] = 
-                                                Some(path.to_string_lossy().to_string());
+                                                path.to_string_lossy().to_string();
                                         }
                                     }
                                     
-                                    if advanced.glsl_shader_mame[i].is_some() {
+                                    if !advanced.glsl_shader_mame[i].is_empty() {
                                         if ui.button(format!("Clear##mame_clear_{}", i)).clicked() {
-                                            advanced.glsl_shader_mame[i] = None;
+                                            advanced.glsl_shader_mame[i] = String::new();
                                         }
                                     }
                                 });
@@ -518,19 +493,13 @@ impl GamePropertiesDialog {
                                 ui.horizontal(|ui| {
                                     ui.label(format!("Slot {}:", i));
                                     
-                                    let mut shader_text = advanced.glsl_shader_screen[i]
-                                        .clone()
-                                        .unwrap_or_default();
+                                    let mut shader_text = advanced.glsl_shader_screen[i].clone();
                                     
                                     if ui.text_edit_singleline(&mut shader_text)
                                         .on_hover_text("Path to GLSL shader file")
                                         .changed() 
                                     {
-                                        advanced.glsl_shader_screen[i] = if shader_text.is_empty() {
-                                            None
-                                        } else {
-                                            Some(shader_text)
-                                        };
+                                        advanced.glsl_shader_screen[i] = shader_text;
                                     }
                                     
                                     if ui.button(format!("Browse##screen_browse_{}", i)).clicked() {
@@ -540,13 +509,13 @@ impl GamePropertiesDialog {
                                             .pick_file()
                                         {
                                             advanced.glsl_shader_screen[i] = 
-                                                Some(path.to_string_lossy().to_string());
+                                                path.to_string_lossy().to_string();
                                         }
                                     }
                                     
-                                    if advanced.glsl_shader_screen[i].is_some() {
+                                    if !advanced.glsl_shader_screen[i].is_empty() {
                                         if ui.button(format!("Clear##screen_clear_{}", i)).clicked() {
-                                            advanced.glsl_shader_screen[i] = None;
+                                            advanced.glsl_shader_screen[i] = String::new();
                                         }
                                     }
                                 });
@@ -1108,13 +1077,9 @@ impl GamePropertiesDialog {
             for i in 0..8 {
                 ui.horizontal(|ui| {
                     ui.label(format!("Lightgun #{}:", i + 1));
-                    let mut lightgun_str = sdl_options.lightgun_mappings[i].clone().unwrap_or_default();
+                    let mut lightgun_str = sdl_options.lightgun_mappings[i].clone();
                     if ui.text_edit_singleline(&mut lightgun_str).changed() {
-                        sdl_options.lightgun_mappings[i] = if lightgun_str.is_empty() {
-                            None
-                        } else {
-                            Some(lightgun_str)
-                        };
+                        sdl_options.lightgun_mappings[i] = lightgun_str;
                     }
                 });
             }
@@ -1488,21 +1453,17 @@ impl GamePropertiesDialog {
                 
                 // GLSL shader paths - MAME bitmaps
                 for (i, shader_path) in advanced.glsl_shader_mame.iter().enumerate() {
-                    if let Some(path) = shader_path {
-                        if !path.is_empty() {
-                            args.push(format!("-glsl_shader_mame{}", i));
-                            args.push(path.clone());
-                        }
+                    if !shader_path.is_empty() {
+                        args.push(format!("-glsl_shader_mame{}", i));
+                        args.push(shader_path.clone());
                     }
                 }
                 
                 // GLSL shader paths - Screen bitmaps
                 for (i, shader_path) in advanced.glsl_shader_screen.iter().enumerate() {
-                    if let Some(path) = shader_path {
-                        if !path.is_empty() {
-                            args.push(format!("-glsl_shader_screen{}", i));
-                            args.push(path.clone());
-                        }
+                    if !shader_path.is_empty() {
+                        args.push(format!("-glsl_shader_screen{}", i));
+                        args.push(shader_path.clone());
                     }
                 }
             }
@@ -1635,20 +1596,20 @@ impl GamePropertiesDialog {
         let advanced = &mut self.properties.advanced;
         
         // Clear existing shaders
-        advanced.glsl_shader_mame = vec![None; 10];
-        advanced.glsl_shader_screen = vec![None; 10];
+        advanced.glsl_shader_mame = vec![String::new(); 10];
+        advanced.glsl_shader_screen = vec![String::new(); 10];
         
         // Apply preset
         match preset {
             "crt" => {
                 // Example CRT shader setup
-                advanced.glsl_shader_screen[0] = Some("shaders/crt-geom.glsl".to_string());
+                advanced.glsl_shader_screen[0] = "shaders/crt-geom.glsl".to_string();
             }
             "scanlines" => {
-                advanced.glsl_shader_screen[0] = Some("shaders/scanlines.glsl".to_string());
+                advanced.glsl_shader_screen[0] = "shaders/scanlines.glsl".to_string();
             }
             "lcd" => {
-                advanced.glsl_shader_screen[0] = Some("shaders/lcd-grid.glsl".to_string());
+                advanced.glsl_shader_screen[0] = "shaders/lcd-grid.glsl".to_string();
             }
             _ => {}
         }
@@ -1656,22 +1617,22 @@ impl GamePropertiesDialog {
     
     fn apply_shader_preset_static(advanced: &mut AdvancedProperties, preset: &str) {
         // Clear existing shaders
-        advanced.glsl_shader_mame = vec![None; 10];
-        advanced.glsl_shader_screen = vec![None; 10];
+        advanced.glsl_shader_mame = vec![String::new(); 10];
+        advanced.glsl_shader_screen = vec![String::new(); 10];
         
         // Apply preset
         match preset {
             "crt" => {
                 // Example CRT shader setup
-                advanced.glsl_shader_screen[0] = Some("shaders/crt-geom.glsl".to_string());
+                advanced.glsl_shader_screen[0] = "shaders/crt-geom.glsl".to_string();
             }
             "scanlines" => {
-                advanced.glsl_shader_screen[0] = Some("shaders/scanlines.glsl".to_string());
+                advanced.glsl_shader_screen[0] = "shaders/scanlines.glsl".to_string();
             }
             "lcd" => {
-                advanced.glsl_shader_screen[0] = Some("shaders/lcd-grid.glsl".to_string());
+                advanced.glsl_shader_screen[0] = "shaders/lcd-grid.glsl".to_string();
             }
             _ => {}
         }
     }
-} 
+}

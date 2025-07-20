@@ -37,38 +37,30 @@ pub enum RomStatus {
 }
 
 impl RomStatus {
-    /// Convert the status to a display icon
-    /// This provides a visual indicator in the game list
     pub fn to_icon(&self) -> &'static str {
         match self {
-            RomStatus::Unknown => "❓",      // Question mark for unknown
-            RomStatus::Available => "✅",     // Checkmark for good ROMs
-            RomStatus::Missing => "❌",       // X for missing ROMs
-            RomStatus::Incorrect => "⚠️",     // Warning for bad ROMs
-            RomStatus::NotWorking => "🚫",    // Prohibited sign for non-working
-            RomStatus::Preliminary => "🔧",   // Wrench for in-development
-            RomStatus::ChdRequired => "💾",   // Diskette for CHD required
-            RomStatus::ChdMissing => "❌",    // X for CHD missing
+            RomStatus::Available => "✅",
+            RomStatus::Missing => "❌",
+            RomStatus::Incorrect => "⚠️",
+            RomStatus::NotWorking => "🔴",
+            RomStatus::Preliminary => "🟡",
+            RomStatus::ChdRequired => "💿",
+            RomStatus::ChdMissing => "💿❌",
+            RomStatus::Unknown => "❓",
         }
     }
 
-    /// Get a human-readable description of the status
     pub fn description(&self) -> &'static str {
         match self {
-            RomStatus::Unknown => "Status unknown",
-            RomStatus::Available => "ROM available and verified",
-            RomStatus::Missing => "ROM file not found",
-            RomStatus::Incorrect => "ROM file has incorrect checksum",
-            RomStatus::NotWorking => "Game is not working in MAME",
-            RomStatus::Preliminary => "Preliminary driver, may have issues",
-            RomStatus::ChdRequired => "ROM requires a CHD file to be playable",
-            RomStatus::ChdMissing => "ROM is available but CHD file is missing",
+            RomStatus::Available => "Available",
+            RomStatus::Missing => "Missing",
+            RomStatus::Incorrect => "Incorrect",
+            RomStatus::NotWorking => "Not Working",
+            RomStatus::Preliminary => "Preliminary",
+            RomStatus::ChdRequired => "CHD Required",
+            RomStatus::ChdMissing => "CHD Missing",
+            RomStatus::Unknown => "Unknown",
         }
-    }
-
-    /// Check if the game is playable with this status
-    pub fn is_playable(&self) -> bool {
-        matches!(self, RomStatus::Available | RomStatus::Preliminary)
     }
 }
 
@@ -79,61 +71,23 @@ impl Default for RomStatus {
 }
 
 impl Game {
-    /// Create a new game with minimal information
-    /// This is useful when parsing game lists before full verification
-    pub fn new(name: String, description: String) -> Self {
-        Self {
-            name,
-            description,
-            manufacturer: String::new(),
-            year: String::new(),
-            driver: String::new(),
-            driver_status: "unknown".to_string(),
-            status: RomStatus::Unknown,
-            parent: None,
-            category: String::new(),
-            play_count: 0,
-            is_clone: false,
-            is_device: false,
-            is_bios: false,
-            controls: String::new(),
-            requires_chd: false,
-            chd_name: None,
-        }
-    }
-
-    /// Check if this game should be shown based on its properties
-    /// Devices and BIOS ROMs are typically hidden from normal game lists
-    pub fn is_game(&self) -> bool {
-        !self.is_device && !self.is_bios
-    }
-
-    /// Get a display name that includes clone information
-    pub fn full_name(&self) -> String {
-        if let Some(parent) = &self.parent {
-            format!("{} (clone of {})", self.description, parent)
-        } else {
-            self.description.clone()
-        }
-    }
-    
-    /// Get formatted driver status with appropriate icon
-    pub fn get_driver_status_display(&self) -> (&'static str, &'static str) {
-        match self.driver_status.to_lowercase().as_str() {
+    pub fn get_driver_status_display(&self) -> (&'static str, &str) {
+        match self.driver_status.as_str() {
             "good" => ("✅", "Good"),
             "imperfect" => ("⚠️", "Imperfect"),
-            "preliminary" => ("🔧", "Preliminary"),
-            _ => ("❓", "Unknown"),
+            "preliminary" => ("🔴", "Preliminary"),
+            _ => ("❓", &self.driver_status),
         }
     }
-    
-    /// Get color for driver status
+
     pub fn get_driver_status_color(&self) -> egui::Color32 {
-        match self.driver_status.to_lowercase().as_str() {
-            "good" => egui::Color32::from_rgb(0, 200, 0),        // Green
-            "imperfect" => egui::Color32::from_rgb(255, 165, 0), // Orange
-            "preliminary" => egui::Color32::from_rgb(255, 0, 0), // Red
-            _ => egui::Color32::from_rgb(128, 128, 128),         // Gray
+        match self.driver_status.as_str() {
+            "good" => egui::Color32::from_rgb(0, 255, 0),
+            "imperfect" => egui::Color32::from_rgb(255, 255, 0),
+            "preliminary" => egui::Color32::from_rgb(255, 0, 0),
+            _ => egui::Color32::GRAY,
         }
     }
 }
+
+

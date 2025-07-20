@@ -392,4 +392,4 @@ void main() {
 }
 
 pub mod shader_manager;
-pub use shader_manager::{ShaderManager, BGFXManager, ShaderInfo};
+pub use shader_manager::{ShaderManager, BGFXManager};

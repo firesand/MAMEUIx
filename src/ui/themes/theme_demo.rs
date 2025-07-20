@@ -2,7 +2,7 @@
 // Demo untuk menampilkan warna-warna UI yang diminta
 
 use eframe::egui;
-use crate::ui::theme::{UiTheme, ThemeHelper};
+use crate::ui::themes::theme::{UiTheme, ThemeHelper};
 
 pub struct ThemeDemo {
     theme: UiTheme,

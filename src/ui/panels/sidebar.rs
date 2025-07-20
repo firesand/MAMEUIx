@@ -3,7 +3,6 @@ use eframe::egui;
 use crate::models::{FilterCategory, FilterSettings, RomSetType, filters::SearchMode};
 
 pub struct Sidebar {
-    search_text: String,
     category_search_text: String,
     previous_category: Option<String>,  // Add this
 }
@@ -11,16 +10,16 @@ pub struct Sidebar {
 impl Sidebar {
     pub fn new() -> Self {
         Self {
-            search_text: String::new(),
             category_search_text: String::new(),
             previous_category: None,  // Initialize
         }
     }
 
-    // Add getter for previous category
     pub fn get_previous_category(&self) -> Option<String> {
         self.previous_category.clone()
     }
+
+
 
     /// Display the sidebar with filter options
     /// The selected_filter parameter allows the sidebar to modify which filter is active
@@ -31,7 +30,7 @@ impl Sidebar {
         filter_settings: &mut FilterSettings, 
         category_manager: Option<&crate::models::filters::CategoryManager>,
         hidden_categories: &mut std::collections::HashSet<String>,
-        show_hidden_categories_dialog: &mut bool,
+        dialog_manager: &mut crate::ui::DialogManager,
     ) {
         // Store the current category before any changes
         self.previous_category = filter_settings.catver_category.clone();
@@ -303,7 +302,7 @@ impl Sidebar {
                     // Button to manage all hidden categories
                     if ui.button("Manage Hidden Categories...").clicked() {
                         // This will open a dialog - we'll implement it next
-                        *show_hidden_categories_dialog = true;
+                        dialog_manager.open_dialog(crate::ui::DialogType::HiddenCategories);
                     }
                     
                     // Show list of currently hidden categories
@@ -348,9 +347,7 @@ impl Sidebar {
     }
 
     /// Get the current search text
-    pub fn search_text(&self) -> &str {
-        &self.search_text
-    }
+
 
     /// Format category display for sidebar
     fn format_category_display(category: &crate::models::filters::CatverCategory) -> String {

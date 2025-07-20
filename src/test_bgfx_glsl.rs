@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::collections::HashMap;
-mod graphics;
-use graphics::{GraphicsConfig, BGFXBackend, BGFXOptions, ShaderManager, BGFXManager};
+mod utils;
+use utils::graphics::{GraphicsConfig, ShaderManager, BGFXManager};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 Testing BGFX and GLSL Integration");

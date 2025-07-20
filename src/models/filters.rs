@@ -33,18 +33,7 @@ pub struct CatverCategory {
     pub game_count: usize,
 }
 
-impl CatverCategory {
-    pub fn new(name: String) -> Self {
-        let display_name = name.clone();
-        let letter_group = name.chars().next().unwrap_or('A').to_ascii_uppercase();
-        Self {
-            name,
-            display_name,
-            letter_group,
-            game_count: 0,
-        }
-    }
-}
+
 
 /// Manages catver.ini categories with alphabetical organization
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -63,96 +52,59 @@ impl CategoryManager {
         }
     }
 
-    /// Load categories from a HashMap of game names to category names
-    pub fn load_from_catver_map(&mut self, categories_map: &HashMap<String, String>) {
-        self.categories.clear();
-        self.categories_by_letter.clear();
-        
-        // First, collect unique category names and count games per category
-        let mut category_counts: HashMap<String, usize> = HashMap::new();
-        for (_game_name, category_name) in categories_map {
-            *category_counts.entry(category_name.clone()).or_insert(0) += 1;
-        }
-        
-        // Create unique categories from catver.ini data
-        for (category_name, game_count) in category_counts {
-            let mut category = CatverCategory::new(category_name.clone());
-            category.game_count = game_count;
-            let letter = category.letter_group;
-            
-            // Add to categories map
-            self.categories.insert(category_name.clone(), category);
-            
-            // Add to letter grouping
-            self.categories_by_letter
-                .entry(letter)
-                .or_insert_with(Vec::new)
-                .push(category_name);
-        }
-        
-        // Sort categories within each letter group
-        for categories in self.categories_by_letter.values_mut() {
-            categories.sort();
-        }
-        
-        self.total_games = categories_map.len();
+    pub fn has_categories_for_letter(&self, letter: char) -> bool {
+        self.categories_by_letter.contains_key(&letter)
     }
 
-    /// Get all categories organized by letter (A-Z)
-    pub fn get_categories_by_letter(&self) -> Vec<(char, Vec<&CatverCategory>)> {
-        let mut result = Vec::new();
-        
-        for letter in 'A'..='Z' {
-            if let Some(category_names) = self.categories_by_letter.get(&letter) {
-                let mut categories: Vec<&CatverCategory> = category_names
-                    .iter()
-                    .filter_map(|name| self.categories.get(name))
-                    .collect();
-                categories.sort_by(|a, b| a.display_name.cmp(&b.display_name));
-                
-                if !categories.is_empty() {
-                    result.push((letter, categories));
-                }
-            }
-        }
-        
-        result
-    }
-
-    /// Get category by name
-    pub fn get_category(&self, name: &str) -> Option<&CatverCategory> {
-        self.categories.get(name)
-    }
-
-    /// Get all category names sorted alphabetically
-    pub fn get_all_category_names(&self) -> Vec<String> {
-        let mut names: Vec<String> = self.categories.keys().cloned().collect();
-        names.sort();
-        names
-    }
-
-
-    /// Get all letter groups (A-Z) that have categories
     pub fn get_letter_groups(&self) -> Vec<char> {
         let mut letters: Vec<char> = self.categories_by_letter.keys().cloned().collect();
         letters.sort();
         letters
     }
 
-    /// Check if a letter has any categories
-    pub fn has_categories_for_letter(&self, letter: char) -> bool {
-        self.categories_by_letter.get(&letter)
-            .map(|cats| !cats.is_empty())
-            .unwrap_or(false)
+    pub fn get_categories_by_letter(&self) -> Vec<(char, Vec<&CatverCategory>)> {
+        let mut result: Vec<(char, Vec<&CatverCategory>)> = self.categories_by_letter
+            .iter()
+            .map(|(letter, category_names)| {
+                let categories: Vec<&CatverCategory> = category_names
+                    .iter()
+                    .filter_map(|name| self.categories.get(name))
+                    .collect();
+                (*letter, categories)
+            })
+            .collect();
+        result.sort_by_key(|(letter, _)| *letter);
+        result
     }
 
-    /// Get total count of games in a specific category
-    pub fn get_category_game_count(&self, category_name: &str) -> usize {
-        self.categories.get(category_name)
-            .map(|cat| cat.game_count)
-            .unwrap_or(0)
+    pub fn load_from_catver_map(&mut self, categories: &HashMap<String, String>) {
+        self.categories.clear();
+        self.categories_by_letter.clear();
+        self.total_games = 0;
+
+        for (game_name, category_name) in categories {
+            let letter = category_name.chars().next().unwrap_or('A').to_ascii_uppercase();
+            
+            let catver_category = CatverCategory {
+                name: category_name.clone(),
+                display_name: category_name.clone(),
+                letter_group: letter,
+                game_count: 1,
+            };
+
+            self.categories.insert(category_name.clone(), catver_category);
+            
+            self.categories_by_letter
+                .entry(letter)
+                .or_insert_with(Vec::new)
+                .push(category_name.clone());
+            
+            self.total_games += 1;
+        }
     }
 }
+
+
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SearchMode {

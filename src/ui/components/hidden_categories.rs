@@ -44,7 +44,7 @@ impl HiddenCategoriesDialog {
                     // Quick actions
                     ui.horizontal(|ui| {
                         if ui.button("Hide All Casino/Gambling").clicked() {
-                            for category in manager.categories.values() {
+                            for (name, category) in &manager.categories {
                                 let name_lower = category.display_name.to_lowercase();
                                 if name_lower.contains("casino") || 
                                    name_lower.contains("gambling") ||
@@ -55,7 +55,7 @@ impl HiddenCategoriesDialog {
                         }
                         
                         if ui.button("Hide All Mature").clicked() {
-                            for category in manager.categories.values() {
+                            for (name, category) in &manager.categories {
                                 if category.display_name.to_lowercase().contains("mature") {
                                     hidden_categories.insert(category.display_name.clone());
                                 }

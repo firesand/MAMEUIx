@@ -14,8 +14,167 @@ pub use filters::*;
 pub use game_properties::*;
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::{Duration, Instant};
+use std::collections::{HashMap, HashSet};
+
+// Loading stage and message types for background operations
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LoadingStage {
+    Idle,
+    LoadingMame,
+    ScanningRoms,
+    Complete,
+    Error,
+}
+
+#[derive(Debug, Clone)]
+pub enum LoadingMessage {
+    MameLoadStarted,
+    MameLoadProgress(String),
+    MameLoadComplete(Vec<crate::models::Game>, Vec<String>),
+    MameLoadFailed(String),
+    RomScanStarted,
+    RomScanProgress(usize, usize),
+    RomScanComplete(Vec<crate::models::Game>),
+    RomScanFailed(String),
+}
+
+// GameIndex for managing game data efficiently
+#[derive(Debug, Clone)]
+pub struct GameIndex {
+    pub games: Vec<crate::models::Game>,
+    pub favorites: HashSet<String>,
+    pub available_games: Vec<usize>,
+    pub missing_games: Vec<usize>,
+    pub favorite_games: Vec<usize>,
+    pub parent_games: Vec<usize>,
+    pub clone_games: Vec<usize>,
+    pub working_games: Vec<usize>,
+    pub chd_games: Vec<usize>,
+    pub search_cache: HashMap<String, Vec<usize>>,
+    pub max_cache_size: usize,
+}
+
+impl GameIndex {
+    pub fn build(games: Vec<crate::models::Game>, favorites: HashSet<String>) -> Self {
+        let mut index = Self {
+            games,
+            favorites,
+            available_games: Vec::new(),
+            missing_games: Vec::new(),
+            favorite_games: Vec::new(),
+            parent_games: Vec::new(),
+            clone_games: Vec::new(),
+            working_games: Vec::new(),
+            chd_games: Vec::new(),
+            search_cache: HashMap::new(),
+            max_cache_size: 100,
+        };
+        index.build_indices();
+        index
+    }
+
+    fn build_indices(&mut self) {
+        for (i, game) in self.games.iter().enumerate() {
+            // Available games
+            if matches!(game.status, RomStatus::Available) {
+                self.available_games.push(i);
+            }
+            
+            // Missing games
+            if matches!(game.status, RomStatus::Missing) {
+                self.missing_games.push(i);
+            }
+            
+            // Favorite games
+            if self.favorites.contains(&game.name) {
+                self.favorite_games.push(i);
+            }
+            
+            // Parent games (non-clones)
+            if !game.is_clone {
+                self.parent_games.push(i);
+            } else {
+                self.clone_games.push(i);
+            }
+            
+            // Working games
+            if game.driver_status == "good" {
+                self.working_games.push(i);
+            }
+            
+            // CHD games
+            if game.requires_chd {
+                self.chd_games.push(i);
+            }
+        }
+    }
+
+    pub fn has_clones(&self, game_name: &str) -> bool {
+        self.games.iter().any(|g| g.parent.as_ref().map(|p| p.as_str()) == Some(game_name))
+    }
+
+    pub fn get_clones(&self, game_name: &str) -> Vec<usize> {
+        self.games.iter()
+            .enumerate()
+            .filter_map(|(i, g)| {
+                if g.parent.as_ref().map(|p| p.as_str()) == Some(game_name) {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn get_cached_search(&self, search_text: &str) -> Option<Vec<usize>> {
+        self.search_cache.get(search_text).cloned()
+    }
+
+    pub fn get_sorted(&self, _column: &str, _ascending: bool) -> Option<Vec<usize>> {
+        // Simple implementation - return all games sorted by name
+        let mut indices: Vec<usize> = (0..self.games.len()).collect();
+        indices.sort_by(|&a, &b| self.games[a].name.cmp(&self.games[b].name));
+        Some(indices)
+    }
+
+    pub fn cache_search(&mut self, search_text: String, results: Vec<usize>) {
+        if self.search_cache.len() >= self.max_cache_size {
+            // Remove oldest entry
+            let oldest_key = self.search_cache.keys().next().cloned();
+            if let Some(key) = oldest_key {
+                self.search_cache.remove(&key);
+            }
+        }
+        self.search_cache.insert(search_text, results);
+    }
+
+    pub fn clear_cache(&mut self) {
+        self.search_cache.clear();
+    }
+
+    pub fn update_favorites(&mut self, _games: &[Game], favorites: &HashSet<String>) {
+        self.favorites = favorites.clone();
+        self.favorite_games.clear();
+        for (i, game) in self.games.iter().enumerate() {
+            if self.favorites.contains(&game.name) {
+                self.favorite_games.push(i);
+            }
+        }
+    }
+}
+
+// IconInfo for managing game icons
+#[derive(Debug, Clone)]
+pub struct IconInfo {
+    pub path: String,
+    pub loaded: bool,
+    pub last_accessed: std::time::Instant,
+}
+
+// CategoryLoader trait for loading game categories
+pub trait CategoryLoader: Send + Sync {
+    fn categories(&self) -> &HashMap<String, String>;
+}
 
 // FilterCategory enum - kategori filter untuk game list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -209,365 +368,12 @@ impl Default for SortDirection {
         Self::Ascending
     }
 }
-// IconInfo melacak status loading untuk game icons
-#[derive(Debug, Clone)]
-pub struct IconInfo {
-    pub loaded: bool,
-    pub last_accessed: std::time::Instant,
-}
 
-impl Default for IconInfo {
-    fn default() -> Self {
-        Self {
-            loaded: false,
-            last_accessed: std::time::Instant::now(),
-        }
-    }
-}
 
-// LoadingMessage untuk komunikasi antar thread
-#[derive(Debug)]
-pub enum LoadingMessage {
-    MameLoadStarted,
-    MameLoadProgress(String),
-    MameLoadComplete(Vec<Game>, Vec<String>, Option<Box<dyn std::any::Any + Send>>),
-    MameLoadFailed(String),
-    RomScanStarted,
-    RomScanProgress(usize, usize),
-    RomScanComplete(Vec<Game>),
-    RomScanFailed(String),
-}
 
-// LoadingStage melacak tahap loading saat ini
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoadingStage {
-    Idle,
-    LoadingMame,
-    ScanningRoms,
-    Complete,
-    Error,
-}
 
-// CRITICAL OPTIMIZATION: Enhanced GameIndex dengan O(1) clone lookups
-// Struktur ini adalah kunci untuk menangani 48,000+ games dengan cepat
-#[derive(Debug, Clone)]
-pub struct GameIndex {
-    // Existing index fields
-    pub by_name: HashMap<String, usize>,
-    pub by_manufacturer: HashMap<String, Vec<usize>>,
-    pub by_year: HashMap<String, Vec<usize>>,
 
-    // Pre-filtered lists untuk common filters - O(1) access!
-    pub available_games: Vec<usize>,
-    pub missing_games: Vec<usize>,
-    pub favorite_games: Vec<usize>,
-    pub parent_games: Vec<usize>,
-    pub clone_games: Vec<usize>,
-    pub working_games: Vec<usize>,
-    pub chd_games: Vec<usize>, // Games that require CHD files
 
-    // CRITICAL NEW FIELDS untuk menghilangkan O(n) clone scanning
-    pub parent_to_clones: HashMap<String, Vec<usize>>, // Parent name -> clone indices
-    pub clone_count: HashMap<String, usize>,           // Parent name -> jumlah clones
 
-    // Search optimization
-    pub search_cache: HashMap<String, Vec<usize>>,     // Cache search results
-    pub max_cache_size: usize,                         // Limit cache memory usage
 
-    // Sorting optimization
-    pub sorted_indices: HashMap<SortKey, Vec<usize>>,  // Pre-sorted untuk common sorts
-}
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct SortKey {
-    pub column: String,
-    pub ascending: bool,
-}
-
-impl GameIndex {
-    /// Build index dari game list untuk ultra-fast lookup
-    /// Ini mengubah operasi O(n) menjadi O(1) untuk sebagian besar queries
-    pub fn build(games: &[Game], favorites: &HashSet<String>) -> Self {
-        println!("Building optimized game index for {} games...", games.len());
-        let start = Instant::now();
-
-        let mut by_name = HashMap::with_capacity(games.len());
-        let mut by_manufacturer: HashMap<String, Vec<usize>> = HashMap::new();
-        let mut by_year: HashMap<String, Vec<usize>> = HashMap::new();
-        let mut available_games = Vec::with_capacity(games.len() / 2);
-        let mut missing_games = Vec::with_capacity(games.len() / 2);
-        let mut favorite_games = Vec::with_capacity(favorites.len());
-        let mut parent_games = Vec::with_capacity(games.len() / 3);
-        let mut clone_games = Vec::with_capacity(games.len() * 2 / 3);
-        let mut working_games = Vec::with_capacity(games.len() / 2);
-        let mut chd_games = Vec::with_capacity(games.len() / 10); // Estimate ~10% of games are CHD
-
-        // CRITICAL: Clone relationship maps untuk O(1) lookup
-        let mut parent_to_clones: HashMap<String, Vec<usize>> = HashMap::new();
-        let mut clone_count: HashMap<String, usize> = HashMap::new();
-
-        // Single pass untuk build semua indices
-        for (idx, game) in games.iter().enumerate() {
-            // Name index untuk instant lookup by name
-            by_name.insert(game.name.clone(), idx);
-
-            // Manufacturer index untuk filter by manufacturer
-            by_manufacturer
-            .entry(game.manufacturer.clone())
-            .or_insert_with(Vec::new)
-            .push(idx);
-
-            // Year index untuk filter by year
-            by_year
-            .entry(game.year.clone())
-            .or_insert_with(Vec::new)
-            .push(idx);
-
-            // Status-based indices untuk instant filtering
-            match game.status {
-                RomStatus::Available => {
-                    available_games.push(idx);
-                    working_games.push(idx);
-                }
-                RomStatus::Missing => missing_games.push(idx),
-                _ => {}
-            }
-
-            // Favorite index
-            if favorites.contains(&game.name) {
-                favorite_games.push(idx);
-            }
-
-            // CHD games index
-            if game.requires_chd {
-                chd_games.push(idx);
-            }
-
-            // CRITICAL: Build parent-clone relationships
-            if let Some(parent_name) = &game.parent {
-                // Ini adalah clone
-                clone_games.push(idx);
-                parent_to_clones
-                .entry(parent_name.clone())
-                .or_insert_with(Vec::new)
-                .push(idx);
-                *clone_count.entry(parent_name.clone()).or_insert(0) += 1;
-            } else if !game.is_clone {
-                // Ini adalah parent
-                parent_games.push(idx);
-                // Initialize empty clone list bahkan jika tidak punya clones
-                parent_to_clones.entry(game.name.clone()).or_insert_with(Vec::new);
-                clone_count.entry(game.name.clone()).or_insert(0);
-            }
-        }
-
-        // Pre-compute sorted indices untuk common sort orders
-        let mut sorted_indices = HashMap::new();
-
-        // Sort by name ascending - paling sering digunakan
-        let mut name_asc: Vec<usize> = (0..games.len()).collect();
-        name_asc.sort_by(|&a, &b| {
-            games[a].description.to_lowercase().cmp(&games[b].description.to_lowercase())
-        });
-        sorted_indices.insert(
-            SortKey { column: "name".to_string(), ascending: true },
-                              name_asc
-        );
-
-        // Sort by manufacturer
-        let mut manuf_asc: Vec<usize> = (0..games.len()).collect();
-        manuf_asc.sort_by(|&a, &b| {
-            games[a].manufacturer.cmp(&games[b].manufacturer)
-            .then(games[a].description.cmp(&games[b].description))
-        });
-        sorted_indices.insert(
-            SortKey { column: "manufacturer".to_string(), ascending: true },
-                              manuf_asc
-        );
-
-        let elapsed = start.elapsed();
-        println!("Game index built in {:.2}s", elapsed.as_secs_f32());
-        println!("  - {} parent games", parent_games.len());
-        println!("  - {} clone games", clone_games.len());
-        println!("  - {} available games", available_games.len());
-        println!("  - {} parents with clones",
-                 parent_to_clones.values().filter(|v| !v.is_empty()).count());
-
-        Self {
-            by_name,
-            by_manufacturer,
-            by_year,
-            available_games,
-            missing_games,
-            favorite_games,
-            parent_games,
-            clone_games,
-            working_games,
-            chd_games,
-            parent_to_clones,
-            clone_count,
-            search_cache: HashMap::new(),
-            max_cache_size: 100, // Cache up to 100 search results
-            sorted_indices,
-        }
-    }
-
-    /// Get clones untuk parent game - O(1) operation!
-    /// Ini menggantikan O(n) scanning dengan instant HashMap lookup
-    #[inline]
-    pub fn get_clones(&self, parent_name: &str) -> &[usize] {
-        self.parent_to_clones
-        .get(parent_name)
-        .map(|v| v.as_slice())
-        .unwrap_or(&[])
-    }
-
-    /// Check apakah game punya clones - O(1) operation!
-    #[inline]
-    pub fn has_clones(&self, parent_name: &str) -> bool {
-        self.clone_count.get(parent_name).copied().unwrap_or(0) > 0
-    }
-
-    /// Get games berdasarkan filter category dengan O(1) access
-    pub fn get_by_category(&self, category: FilterCategory) -> &[usize] {
-        match category {
-            FilterCategory::All => &[], // Special case - return empty, caller should use all indices
-            FilterCategory::Available => &self.available_games,
-            FilterCategory::Missing => &self.missing_games,
-            FilterCategory::Favorites => &self.favorite_games,
-            FilterCategory::Parents => &self.parent_games,
-            FilterCategory::Clones => &self.clone_games,
-            FilterCategory::Working => &self.working_games,
-            FilterCategory::NotWorking => &self.missing_games,
-            FilterCategory::NonClones => &self.parent_games,
-            FilterCategory::ChdGames => &self.chd_games,
-            FilterCategory::NonMerged => &self.parent_games, // Same as Parents for now
-        }
-    }
-
-    /// Get pre-sorted indices jika tersedia
-    pub fn get_sorted(&self, column: &str, ascending: bool) -> Option<&[usize]> {
-        let key = SortKey {
-            column: column.to_string(),
-            ascending,
-        };
-        self.sorted_indices.get(&key).map(|v| v.as_slice())
-    }
-
-    /// Cache search result untuk reuse
-    pub fn cache_search(&mut self, query: &str, results: Vec<usize>) {
-        // Limit cache size untuk prevent memory bloat
-        if self.search_cache.len() >= self.max_cache_size {
-            // Remove oldest entry (simple FIFO)
-            if let Some(first_key) = self.search_cache.keys().next().cloned() {
-                self.search_cache.remove(&first_key);
-            }
-        }
-        self.search_cache.insert(query.to_string(), results);
-    }
-
-    /// Get cached search result
-    pub fn get_cached_search(&self, query: &str) -> Option<&[usize]> {
-        self.search_cache.get(query).map(|v| v.as_slice())
-    }
-
-    /// Clear search cache
-    pub fn clear_cache(&mut self) {
-        self.search_cache.clear();
-    }
-
-    /// Update favorites list saat favorites berubah
-    pub fn update_favorites(&mut self, games: &[Game], favorites: &HashSet<String>) {
-        self.favorite_games.clear();
-        for (idx, game) in games.iter().enumerate() {
-            if favorites.contains(&game.name) {
-                self.favorite_games.push(idx);
-            }
-        }
-    }
-}
-
-// PerformanceMonitor untuk tracking FPS dan lag
-pub struct PerformanceMonitor {
-    frame_times: VecDeque<Duration>,
-    last_frame: Instant,
-    slow_frame_threshold: Duration,
-    pub frame_count: u64,
-    total_time: Duration,
-    // Tambahan untuk better monitoring
-    last_fps_calculation: Instant,
-    cached_fps: f32,
-}
-
-impl PerformanceMonitor {
-    pub fn new() -> Self {
-        Self {
-            frame_times: VecDeque::with_capacity(120), // Track 2 seconds at 60fps
-            last_frame: Instant::now(),
-            slow_frame_threshold: Duration::from_millis(33), // Target 30fps minimum
-            frame_count: 0,
-            total_time: Duration::ZERO,
-            last_fps_calculation: Instant::now(),
-            cached_fps: 60.0,
-        }
-    }
-
-    /// Call at frame start
-    pub fn frame_start(&mut self) {
-        let now = Instant::now();
-        let frame_time = now - self.last_frame;
-        self.last_frame = now;
-
-        self.frame_times.push_back(frame_time);
-        if self.frame_times.len() > 120 {
-            self.frame_times.pop_front();
-        }
-
-        self.frame_count += 1;
-        self.total_time += frame_time;
-    }
-
-    /// Get average FPS - cached untuk performance
-    pub fn get_average_fps(&mut self) -> f32 {
-        // Only recalculate FPS every second
-        if self.last_fps_calculation.elapsed() >= Duration::from_secs(1) {
-            if !self.frame_times.is_empty() {
-                let avg_frame_time = self.frame_times.iter()
-                    .sum::<Duration>() / self.frame_times.len() as u32;
-                
-                if avg_frame_time.as_secs_f32() > 0.0 {
-                    self.cached_fps = 1.0 / avg_frame_time.as_secs_f32();
-                } else {
-                    self.cached_fps = 60.0; // Default to 60 FPS if calculation fails
-                }
-                self.last_fps_calculation = Instant::now();
-            }
-        }
-        
-        self.cached_fps
-    }
-
-    /// Check if experiencing lag
-    pub fn is_lagging(&self) -> bool {
-        if let Some(last_frame) = self.frame_times.back() {
-            *last_frame > self.slow_frame_threshold
-        } else {
-            false
-        }
-    }
-
-    /// Get lag spike count
-    pub fn get_lag_spike_count(&self) -> usize {
-        self.frame_times.iter()
-        .filter(|&&time| time > self.slow_frame_threshold)
-        .count()
-    }
-
-    /// Reset monitor
-    pub fn reset(&mut self) {
-        self.frame_times.clear();
-        self.frame_count = 0;
-        self.total_time = Duration::ZERO;
-        self.last_frame = Instant::now();
-    }
-}

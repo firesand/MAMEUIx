@@ -5,7 +5,7 @@
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use crate::models::{Game, FilterSettings, FilterCategory, GameIndex, RomStatus, SortColumn, RomSetType, GameStats, VisibleColumns, ColumnWidths};
-use crate::hardware_filter::HardwareFilter;
+use crate::utils::hardware_filter::HardwareFilter;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -48,8 +48,8 @@ pub struct GameList {
 pub struct RowData {
     pub game_idx: usize,      // Index di games array
     pub is_clone: bool,       // Apakah ini clone row
-    pub indent_level: u8,     // Level indentasi (0 = parent, 1 = clone)
-    pub parent_idx: Option<usize>, // Index parent jika ini clone
+    pub indent_level: u32,    // Indentation level for hierarchy
+    pub parent_idx: Option<usize>, // Parent row index if this is a clone
 }
 
 impl GameList {
@@ -641,7 +641,7 @@ impl GameList {
                 if !game.is_clone && should_expand {
                     if let Some(index) = game_index {
                         // O(1) clone lookup thanks to GameIndex!
-                        for &clone_idx in index.get_clones(&game.name) {
+                        for clone_idx in index.get_clones(&game.name) {
                             self.expanded_rows_cache.push(RowData {
                                 game_idx: clone_idx,
                                 is_clone: true,
@@ -1142,16 +1142,7 @@ impl GameList {
         ui.separator();
     }
 
-    /// Toggle sort dan invalidate cache
-    fn toggle_sort(&mut self, column: SortColumn) {
-        if self.sort_column == column {
-            self.sort_ascending = !self.sort_ascending;
-        } else {
-            self.sort_column = column;
-            self.sort_ascending = true;
-        }
-        self.invalidate_cache();
-    }
+
 
     /// Calculate hash untuk cache invalidation
     fn calculate_filter_hash(
@@ -1224,50 +1215,5 @@ impl GameList {
         }
     }
 
-    /// Get filtered games based on ROM set type and user preferences
-    fn get_filtered_games(&self, games: &[Game], filter_settings: &FilterSettings) -> Vec<usize> {
-        let mut filtered_indices = Vec::new();
-        
-        for (idx, game) in games.iter().enumerate() {
-            if self.should_show_game(game, filter_settings) {
-                filtered_indices.push(idx);
-            }
-        }
-        
-        filtered_indices
-    }
 
-    /// Determine if a game should be shown based on ROM set type and settings
-    fn should_show_game(&self, game: &Game, filter_settings: &FilterSettings) -> bool {
-        match filter_settings.rom_set_type {
-            RomSetType::NonMerged => {
-                // Non-Merged: Show all games by default, or only parents if requested
-                if filter_settings.show_clones_in_split {
-                    true // Show all games
-                } else {
-                    !game.is_clone // Show only parents
-                }
-            },
-            RomSetType::Split => {
-                // Split: Show parents + clones based on user preference
-                if filter_settings.show_clones_in_split {
-                    true // Show all games
-                } else {
-                    !game.is_clone // Show only parents
-                }
-            },
-            RomSetType::Merged => {
-                // Merged: Show only parents (clones are included in parent archives)
-                if filter_settings.show_clones_in_merged {
-                    true // User wants to see clones (unusual for merged sets)
-                } else {
-                    !game.is_clone // Show only parents
-                }
-            },
-            RomSetType::Unknown => {
-                // Unknown: Default to showing all games
-                true
-            }
-        }
-    }
 }

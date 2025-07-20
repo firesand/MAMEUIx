@@ -2,10 +2,8 @@ mod models;
 mod ui;
 mod mame;
 mod config;
-mod rom_utils;
-mod graphics;
-mod ini_utils;
-mod hardware_filter;
+mod app;
+mod utils;
 
 use eframe::egui;
 use anyhow::Result;
@@ -20,6 +18,6 @@ fn main() -> Result<()> {
     eframe::run_native(
         "MAMEUIx",
         options,
-        Box::new(|cc| Ok(Box::new(ui::MameApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(app::MameApp::new(cc)))),
     ).map_err(|e| anyhow::anyhow!("Failed to run app: {}", e))
 }

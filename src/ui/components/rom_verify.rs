@@ -85,10 +85,7 @@ impl RomVerifyDialog {
         self.window_open = true;
     }
     
-    // New method to close the window
-    pub fn close(&mut self) {
-        self.window_open = false;
-    }
+
     
     // New method to check if window is open
     pub fn is_open(&self) -> bool {
@@ -398,12 +395,7 @@ impl RomVerifyDialog {
         }
     }
 
-    // Keep the original show method for backward compatibility
-    pub fn show(&mut self, ctx: &egui::Context, open: &mut bool, config: &AppConfig, games: &[Game]) {
-        self.window_open = *open;
-        self.show_window(ctx, config, games);
-        *open = self.window_open;
-    }
+
 
     fn start_verification(&mut self, config: &AppConfig, games: &[Game], specific_game: Option<&str>) {
         if let Some(mame) = config.mame_executables.get(config.selected_mame_index) {

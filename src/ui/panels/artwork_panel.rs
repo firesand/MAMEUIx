@@ -2,7 +2,7 @@
 use eframe::egui;
 use crate::models::Game;
 use std::path::PathBuf;
-use super::artwork_loader::{ArtworkLoader, ArtworkType};
+use crate::ui::panels::artwork_loader::{ArtworkLoader, ArtworkType};
 
 pub struct ArtworkPanel {
     // Any state the artwork panel needs can go here

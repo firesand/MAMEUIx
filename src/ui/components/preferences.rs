@@ -3,7 +3,6 @@ use eframe::egui;
 use crate::models::{Preferences, Theme};
 
 pub struct PreferencesDialog {
-    selected_tab: PreferencesTab,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -15,7 +14,6 @@ enum PreferencesTab {
 impl Default for PreferencesDialog {
     fn default() -> Self {
         Self {
-            selected_tab: PreferencesTab::General,
         }
     }
 }
@@ -52,7 +50,7 @@ impl PreferencesDialog {
                     Self::show_general_tab_static(ui, prefs, has_catver_ini);
                 }
                 PreferencesTab::Display => {
-                    Self::show_display_tab_static(ui, prefs, theme);
+                    Self::show_display_tab_static(ui, prefs, theme, ctx);
                 }
             }
 
@@ -152,7 +150,7 @@ impl PreferencesDialog {
         });
     }
     
-    fn show_display_tab_static(ui: &mut egui::Ui, prefs: &mut Preferences, theme: &mut Theme) {
+    fn show_display_tab_static(ui: &mut egui::Ui, prefs: &mut Preferences, theme: &mut Theme, ctx: &egui::Context) {
         // Display preferences
         ui.group(|ui| {
             ui.label("Display Settings");
@@ -188,6 +186,14 @@ impl PreferencesDialog {
             ui.label("Theme Selection");
             ui.label("Choose your preferred visual theme:");
             
+            // Show current theme preview
+            ui.horizontal(|ui| {
+                ui.label("Current theme:");
+                ui.colored_label(egui::Color32::from_rgb(0, 123, 255), theme.display_name());
+            });
+            
+            ui.add_space(5.0);
+            
             // Create a grid layout for theme selection
             ui.columns(2, |columns| {
                 let themes = [
@@ -209,9 +215,30 @@ impl PreferencesDialog {
                     
                     columns[column].horizontal(|ui| {
                         if ui.radio(is_selected, theme_option.display_name()).clicked() {
+                            println!("Theme changed to: {}", theme_option.display_name());
                             *theme = theme_option.clone();
+                            // Apply the theme immediately
+                            theme_option.apply(ctx);
+                            // Force a repaint to see the changes
+                            ctx.request_repaint();
+                            println!("Theme applied and repaint requested");
                         }
                     });
+                }
+            });
+            
+            // Add a test button to verify theme application
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if ui.button("🔄 Test Theme Application").clicked() {
+                    println!("Testing theme application for: {}", theme.display_name());
+                    theme.apply(ctx);
+                    ctx.request_repaint();
+                }
+                if ui.button("🎨 Apply Current Theme").clicked() {
+                    println!("Applying current theme: {}", theme.display_name());
+                    theme.apply(ctx);
+                    ctx.request_repaint();
                 }
             });
         });
