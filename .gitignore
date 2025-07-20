@@ -1,7 +1,6 @@
 # Rust build artifacts
 /target/
 **/target/
-Cargo.lock
 
 # IDE and editor files
 .vscode/
@@ -56,27 +55,12 @@ node_modules/
 *.tmp
 *.temp
 
-# MAME specific files
-*.zip
-*.tar.gz
+# Build artifacts and packages
 *.pkg.tar.zst
-*.spec
-mameuix.1
-mameuix.desktop
-PKGBUILD
-
-# Documentation files (keep README.md)
-*.md
-!README.md
-
-# Configuration and data files
-cfg/
-nvram/
-screenshot/
-diff/
-debian/mameuix/
-MAMEUI-inifiles/
-pS_CatVer_277/
+*.tar.gz
+*.zip
+pkg/
+src/
 
 # Test files
 test_*
@@ -84,5 +68,25 @@ listxml.txt
 mame_command_list.txt
 mame_help.txt
 
+# Development directories
+diff/
+nvram/
+pS_CatVer_277/
+MAMEUI-inifiles/
+
 # Workspace files
-*.code-workspace 
+*.code-workspace
+
+# Development scripts (keep only essential ones)
+build-*.sh
+install-*.sh
+generate-icons.sh
+uninstall.sh
+test-install.sh
+
+# Development documentation
+*SUMMARY.md
+*IMPLEMENTATION.md
+*GUIDE.md
+*PLAN.md
+RELEASE_*.md 
