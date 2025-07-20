@@ -6,8 +6,8 @@ pkgdesc="Modern GUI frontend for MAME arcade emulator"
 arch=('x86_64')
 url="https://github.com/firesand/MAMEUIx"
 license=('MIT')
-depends=('mame>=0.200' 'gtk3' 'webkit2gtk' 'zstd')
-makedepends=('rust' 'cargo' 'pkgconf' 'openssl' 'gtk3' 'webkit2gtk' 'zstd')
+depends=('mame>=0.200')
+makedepends=('rust' 'pkgconf' 'zstd')
 source=("$pkgname-$pkgver.tar.gz")
 sha256sums=('SKIP')
 
@@ -21,7 +21,6 @@ build() {
 }
 
 package() {
-    
     # Install binary
     cd "$srcdir/$pkgname-$pkgver"
     install -Dm755 target/release/mameuix "$pkgdir/usr/bin/mameuix"
