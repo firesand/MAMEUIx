@@ -78,6 +78,7 @@ MAMEUI-inifiles/
 
 # Development scripts (keep only essential ones)
 build-*.sh
+!build-arch-package.sh
 install-*.sh
 generate-icons.sh
 uninstall.sh
