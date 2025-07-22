@@ -71,10 +71,11 @@ impl GamePropertiesDialog {
         
         egui::Window::new(title)
             .open(open)
-            .default_size([500.0, 450.0])
-            .min_size([450.0, 350.0])
-            .max_size([800.0, 700.0])
+            .default_size([600.0, 550.0])
+            .min_size([500.0, 400.0])
+            .max_size([1200.0, 900.0])
             .resizable(true)
+            .collapsible(false)
             .show(ctx, |ui| {
                 // Main tabs
                 ui.horizontal(|ui| {
@@ -104,7 +105,7 @@ impl GamePropertiesDialog {
                 // Tab content
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, true])
-                    .max_height(300.0)
+                    .max_height(ui.available_height() - 100.0) // Dynamic height based on available space
                     .show(ui, |ui| {
                         match self.selected_tab {
                             PropertiesTab::Display => self.show_display_tab(ui),
@@ -143,6 +144,9 @@ impl GamePropertiesDialog {
         if apply_clicked {
             self.apply_changes(config);
         }
+        
+        // Note: Window size and position are automatically saved by egui
+        // when the window is resized or moved
         
         apply_clicked
     }

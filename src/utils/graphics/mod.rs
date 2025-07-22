@@ -391,5 +391,6 @@ void main() {
 "#;
 }
 
+pub mod enhanced_validator;
 pub mod shader_manager;
 pub use shader_manager::{ShaderManager, BGFXManager};

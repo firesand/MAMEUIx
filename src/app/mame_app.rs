@@ -213,7 +213,7 @@ impl MameApp {
         // Clear oversized search cache using GameIndexManager
         let (cache_size, max_size) = self.game_index_manager.get_cache_stats();
         if cache_size > max_size {
-            self.game_index_manager.clear_search_cache();
+            GameIndexManager::clear_regex_cache();
         }
     }
 
@@ -738,58 +738,70 @@ impl eframe::App for MameApp {
             }
         }
 
-            // Cleanup resources periodically (not every frame!)
-            if self.icon_manager.last_icon_cleanup.elapsed() > Duration::from_secs(120) {
-                self.cleanup_resources();
-            }
+        // Cleanup resources periodically (not every frame!)
+        if self.icon_manager.last_icon_cleanup.elapsed() > Duration::from_secs(120) {
+            self.cleanup_resources();
+        }
 
-            // Save column widths periodically (every 5 seconds)
-            if self.last_column_save.elapsed() > Duration::from_secs(5) {
-                self.save_config();
-                self.last_column_save = Instant::now();
-            }
+        // Save column widths periodically (every 5 seconds)
+        if self.last_column_save.elapsed() > Duration::from_secs(5) {
+            self.save_config();
+            self.last_column_save = Instant::now();
+        }
 
-            // Smart repaint scheduling
-            if needs_repaint || (self.loading_stage == LoadingStage::LoadingMame ||
-                self.loading_stage == LoadingStage::ScanningRoms) {
-                ctx.request_repaint_after(Duration::from_millis(100));
-                }
+        // Smart repaint scheduling
+        if needs_repaint || (self.loading_stage == LoadingStage::LoadingMame ||
+            self.loading_stage == LoadingStage::ScanningRoms) {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
 
-                // Apply theme on first frame and when needed
-                if !self.theme_applied {
-                    println!("Applying initial theme: {}", self.config.theme.display_name());
-                    self.config.theme.apply(ctx);
-                    self.theme_applied = true;
-                }
+        // Apply theme on first frame and when needed
+        if !self.theme_applied {
+            println!("Applying initial theme: {}", self.config.theme.display_name());
+            self.config.theme.apply(ctx);
+            self.theme_applied = true;
+        }
 
-            // Initialize resources once
-            if self.icon_manager.default_icon_texture.is_none() && self.config.show_rom_icons {
-                self.init_default_icon(ctx);
-            }
+        // Initialize resources once
+        if self.icon_manager.default_icon_texture.is_none() && self.config.show_rom_icons {
+            self.init_default_icon(ctx);
+        }
 
-            // Update running games periodically
-            if self.performance_manager.frame_count % 30 == 0 {
-                self.check_running_games();
-            }
+        // Update running games periodically
+        if self.performance_manager.frame_count % 30 == 0 {
+            self.check_running_games();
+        }
 
-            // Process icons with adaptive rate
-            if self.config.preferences.performance.enable_lazy_icons {
-                self.process_icon_queue(ctx);
-            }
+        // Process icons with adaptive rate
+        if self.config.preferences.performance.enable_lazy_icons {
+            self.process_icon_queue(ctx);
+        }
 
-                // Show toolbar
-                self.show_toolbar(ctx);
-
-            // Sidebar
-            egui::SidePanel::left("sidebar")
-            .resizable(true)
-            .default_width(200.0)
+        // IMPROVED LAYOUT: Modern, spacious design
+        // Top toolbar with better spacing
+        egui::TopBottomPanel::top("toolbar")
+            .exact_height(60.0) // Increased height for better spacing
             .show(ctx, |ui| {
+                ui.add_space(8.0); // Add top padding
+                self.show_toolbar(ctx);
+                ui.add_space(8.0); // Add bottom padding
+            });
+
+        // Left sidebar with improved styling - ENHANCED: More flexible resizing
+        egui::SidePanel::left("sidebar")
+            .resizable(true)
+            .default_width(280.0) // Default width for better readability
+            .min_width(100.0) // ENHANCED: Much smaller minimum for maximum flexibility
+            .max_width(500.0) // ENHANCED: Larger maximum for wide sidebars
+            .show(ctx, |ui| {
+                ui.add_space(12.0); // Add top padding
+                
                 let old_filter = self.selected_filter;
                 let old_search = self.config.filter_settings.search_text.clone();
                 let old_category = self.config.filter_settings.catver_category.clone();
                 let old_hidden_categories_len = self.config.hidden_categories.len();
                 let old_apply_hidden_categories = self.config.filter_settings.apply_hidden_categories;
+                
                 self.sidebar.show(
                     ui, 
                     &mut self.selected_filter, 
@@ -816,259 +828,303 @@ impl eframe::App for MameApp {
                     }
                 }
 
-                // Show performance info in debug mode
+                // Show performance info in debug mode with better styling
                 if self.config.preferences.show_fps {
+                    ui.add_space(16.0);
                     ui.separator();
-                    ui.label("Performance:");
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("Performance").heading().color(egui::Color32::from_rgb(64, 156, 255)));
                     self.performance_manager.show_debug_info(ui);
-
                 }
+                
+                ui.add_space(12.0); // Add bottom padding
             });
 
-            // Artwork panel
-            egui::SidePanel::right("artwork")
-                .resizable(true)
-                .default_width(300.0)
-                .show(ctx, |ui| {
-                    // Split the panel vertically
-                    let available_height = ui.available_height();
-                    let artwork_height = available_height * 0.5; // 50% for artwork
-                    let history_height = available_height * 0.5; // 50% for history
-                    
-                    // Top half - Artwork panel
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), artwork_height),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| {
-                            self.artwork_panel.show(
-                                ui,
-                                &self.selected_game,
-                                &self.games,
-                                &self.config.extra_asset_dirs,
-                                &self.config
-                            );
-                        }
-                    );
-                    
-                    ui.separator();
-                    
-                    // Bottom half - History panel
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), history_height),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| {
-                            // Update history panel with selected game
-                            if let Some(idx) = self.selected_game {
-                                if let Some(game) = self.games.get(idx) {
-                                    self.history_panel.set_selected_game(Some(game.name.clone()), Some(game.name.clone()), &self.config);
-                                }
-                            } else {
-                                self.history_panel.set_selected_game(None, None, &self.config);
-                            }
-                            
-                            self.history_panel.show(ui, &self.config);
-                        }
-                    );
-            });
-
-            // Main content
-            egui::CentralPanel::default().show(ctx, |ui| {
-                match self.loading_stage {
-                    LoadingStage::LoadingMame => {
-                        ui.centered_and_justified(|ui| {
-                            ui.heading("Loading MAME Database");
-                            ui.add_space(20.0);
-                            ui.spinner();
-                            ui.add_space(20.0);
-                            ui.label("Scanning MAME for available games...");
-                            ui.label("This may take 10-30 seconds for 40,000+ games");
-
-                            if let Some(start_time) = self.loading_start_time {
-                                let elapsed = start_time.elapsed().as_secs();
-                                ui.add_space(10.0);
-                                ui.label(format!("Time elapsed: {} seconds", elapsed));
-                            }
-                        });
+        // Right panel with improved layout - ENHANCED: Much more flexible resizing
+        egui::SidePanel::right("artwork")
+            .resizable(true)
+            .default_width(350.0) // Default width
+            .min_width(100.0) // ENHANCED: Much smaller minimum for maximum flexibility
+            .max_width(1000.0) // ENHANCED: Much larger maximum for wide panels
+            .show(ctx, |ui| {
+                ui.add_space(12.0); // Add top padding
+                
+                // Split the panel vertically with better proportions
+                // ENHANCED: Give history panel more space for MAME info content
+                let available_height = ui.available_height();
+                let artwork_height = available_height * 0.45; // 45% for artwork (reduced from 60%)
+                let history_height = available_height * 0.55; // 55% for history (increased from 40%)
+                
+                // Top section - Artwork panel
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), artwork_height),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                        ui.label(egui::RichText::new("Game Artwork").heading().color(egui::Color32::from_rgb(64, 156, 255)));
+                        ui.add_space(8.0);
+                        self.artwork_panel.show(
+                            ui,
+                            &self.selected_game,
+                            &self.games,
+                            &self.config.extra_asset_dirs,
+                            &self.config
+                        );
                     }
-
-                    LoadingStage::ScanningRoms => {
-                        ui.centered_and_justified(|ui| {
-                            ui.heading("Scanning ROM Files");
-                            ui.add_space(20.0);
-                            ui.spinner();
-                            ui.add_space(20.0);
-
-                            let (current, total) = self.loading_progress;
-                            if total > 0 {
-                                let progress = current as f32 / total as f32;
-                                ui.add(egui::ProgressBar::new(progress)
-                                .text(format!("{}/{} files", current, total))
-                                .desired_width(300.0));
-                            } else {
-                                ui.label("Checking ROM directories for available games...");
+                );
+                
+                ui.add_space(16.0);
+                ui.separator();
+                ui.add_space(16.0);
+                
+                // Bottom section - History panel
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), history_height),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                        ui.label(egui::RichText::new("Game History").heading().color(egui::Color32::from_rgb(64, 156, 255)));
+                        ui.add_space(8.0);
+                        
+                        // Update history panel with selected game
+                        if let Some(idx) = self.selected_game {
+                            if let Some(game) = self.games.get(idx) {
+                                self.history_panel.set_selected_game(Some(game.name.clone()), Some(game.name.clone()), &self.config);
                             }
+                        } else {
+                            self.history_panel.set_selected_game(None, None, &self.config);
+                        }
+                        
+                        self.history_panel.show(ui, &self.config);
+                    }
+                );
+                
+                ui.add_space(12.0); // Add bottom padding
+            });
 
+        // Main content area with improved styling
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.add_space(12.0); // Add top padding
+            
+            match self.loading_stage {
+                LoadingStage::LoadingMame => {
+                    ui.centered_and_justified(|ui| {
+                        ui.add_space(40.0);
+                        ui.heading(egui::RichText::new("Loading MAME Database").heading().size(24.0));
+                        ui.add_space(20.0);
+                        ui.spinner();
+                        ui.add_space(20.0);
+                        ui.label(egui::RichText::new("Scanning MAME for available games...").size(16.0));
+                        ui.label(egui::RichText::new("This may take 10-30 seconds for 40,000+ games").weak());
+
+                        if let Some(start_time) = self.loading_start_time {
+                            let elapsed = start_time.elapsed().as_secs();
                             ui.add_space(10.0);
-                            ui.label(format!("Scanning {} ROM directories", self.config.rom_paths.len()));
-                        });
-                    }
+                            ui.label(format!("Time elapsed: {} seconds", elapsed));
+                        }
+                    });
+                }
 
-                    LoadingStage::Error => {
+                LoadingStage::ScanningRoms => {
+                    ui.centered_and_justified(|ui| {
+                        ui.add_space(40.0);
+                        ui.heading(egui::RichText::new("Scanning ROM Files").heading().size(24.0));
+                        ui.add_space(20.0);
+                        ui.spinner();
+                        ui.add_space(20.0);
+
+                        let (current, total) = self.loading_progress;
+                        if total > 0 {
+                            let progress = current as f32 / total as f32;
+                            ui.add(egui::ProgressBar::new(progress)
+                                .text(format!("{}/{} files", current, total))
+                                .desired_width(400.0)); // Increased width
+                        } else {
+                            ui.label(egui::RichText::new("Checking ROM directories for available games...").size(16.0));
+                        }
+
+                        ui.add_space(10.0);
+                        ui.label(format!("Scanning {} ROM directories", self.config.rom_paths.len()));
+                    });
+                }
+
+                LoadingStage::Error => {
+                    ui.centered_and_justified(|ui| {
+                        ui.add_space(40.0);
+                        ui.heading(egui::RichText::new("⚠ Loading Error").heading().size(24.0).color(egui::Color32::RED));
+                        ui.add_space(20.0);
+                        ui.label(egui::RichText::new("Failed to load game data. Please check:").size(16.0));
+                        ui.label("• MAME executable is correctly configured");
+                        ui.label("• MAME executable has proper permissions");
+                        ui.label("• ROM directories are accessible");
+                        ui.add_space(20.0);
+                        if ui.button(egui::RichText::new("Open Directories Settings").size(16.0)).clicked() {
+                            self.dialog_manager.open_dialog(DialogType::Directories);
+                        }
+                    });
+                }
+
+                _ => {
+                    if self.games.is_empty() && !self.config.rom_paths.is_empty() &&
+                        self.loading_stage == LoadingStage::Complete {
                         ui.centered_and_justified(|ui| {
-                            ui.heading("⚠ Loading Error");
+                            ui.add_space(40.0);
+                            ui.heading(egui::RichText::new("No games found").heading().size(24.0));
+                            ui.add_space(10.0);
+                            ui.label(egui::RichText::new("ROM directories were scanned but no matching games were found.").size(16.0));
+                            ui.label("Please check:");
+                            ui.label("• ROM files are in .zip format");
+                            ui.label("• ROM files have correct names (e.g., pacman.zip)");
+                            ui.label("• ROM directories contain actual game files");
                             ui.add_space(20.0);
-                            ui.label("Failed to load game data. Please check:");
-                            ui.label("• MAME executable is correctly configured");
-                            ui.label("• MAME executable has proper permissions");
-                            ui.label("• ROM directories are accessible");
-                            ui.add_space(20.0);
-                            if ui.button("Open Directories Settings").clicked() {
+                            if ui.button(egui::RichText::new("Configure Directories").size(16.0)).clicked() {
                                 self.dialog_manager.open_dialog(DialogType::Directories);
                             }
                         });
-                    }
-
-                    _ => {
-                        if self.games.is_empty() && !self.config.rom_paths.is_empty() &&
-                            self.loading_stage == LoadingStage::Complete {
-                                ui.centered_and_justified(|ui| {
-                                    ui.heading("No games found");
-                                    ui.add_space(10.0);
-                                    ui.label("ROM directories were scanned but no matching games were found.");
-                                    ui.label("Please check:");
-                                    ui.label("• ROM files are in .zip format");
-                                    ui.label("• ROM files have correct names (e.g., pacman.zip)");
-                                    ui.label("• ROM directories contain actual game files");
-                                    ui.add_space(20.0);
-                                    if ui.button("Configure Directories").clicked() {
-                                        self.dialog_manager.open_dialog(DialogType::Directories);
-                                    }
-                                });
-                            } else if self.games.is_empty() && self.loading_stage == LoadingStage::Idle {
-                                ui.centered_and_justified(|ui| {
-                                    ui.heading("Welcome to MAMEUIx");
-                                    ui.add_space(10.0);
-                                    ui.label("To get started:");
-                                    ui.label("1. Configure your MAME executable");
-                                    ui.label("2. Add ROM directories");
-                                    ui.label("3. Click OK to scan for games");
-                                    ui.add_space(20.0);
-                                    if ui.button("Configure Directories").clicked() {
-                                        self.dialog_manager.open_dialog(DialogType::Directories);
-                                    }
-                                });
-                            } else {
-                                // CRITICAL: Update filter cache BEFORE showing game list
-                                if self.game_index_manager.is_cache_dirty() {
-                                    self.update_filtered_games_cache();
-                                }
-                                
-                                // Queue icons for visible games before showing the list
-                                if self.config.show_rom_icons {
-                                    // Get visible range from game list
-                                    let visible_start = self.game_list.visible_start;
-                                    let visible_end = self.game_list.visible_end;
-                                    
-                                    // Extended range for pre-loading (load 10 games before and after visible range)
-                                    let preload_start = visible_start.saturating_sub(10);
-                                    let preload_end = (visible_end + 10).min(self.game_list.expanded_rows_cache.len());
-                                    
-                                    // Collect game names to queue with priority
-                                    let mut high_priority_games = Vec::new();
-                                    let mut low_priority_games = Vec::new();
-                                    
-                                    // Process all games in extended range
-                                    if let Some(rows) = self.game_list.expanded_rows_cache.get(preload_start..preload_end) {
-                                        for (idx, row_data) in rows.iter().enumerate() {
-                                            if let Some(game) = self.games.get(row_data.game_idx) {
-                                                let absolute_idx = preload_start + idx;
-                                                
-                                                // High priority for visible games
-                                                if absolute_idx >= visible_start && absolute_idx < visible_end {
-                                                    high_priority_games.push(game.name.clone());
-                                                } else {
-                                                    // Low priority for pre-load games
-                                                    low_priority_games.push(game.name.clone());
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Queue high priority games first (visible games)
-                                    for game_name in high_priority_games {
-                                        self.queue_icon_load(game_name);
-                                    }
-                                    
-                                    // Then queue low priority games (pre-load)
-                                    for game_name in low_priority_games {
-                                        self.queue_icon_load(game_name);
-                                    }
-                                }
-                                
-                                // Show game list with optimizations
-                                let (double_clicked, favorite_toggled) = self.game_list.show(
-                                    ui,
-                                    &self.games,
-                                    &self.config.filter_settings,
-                                    &mut self.selected_game,
-                                    &mut self.expanded_parents,
-                                    &self.config.favorite_games,
-                                    &mut self.icon_manager.rom_icons,
-                                    self.config.show_rom_icons,
-                                    self.config.icon_size,
-                                    self.game_index_manager.game_index.as_ref(),
-                                    self.selected_filter,
-                                    &mut self.config.column_widths,
-                                    &self.config.preferences.visible_columns,
-                                    self.icon_manager.default_icon_texture.as_ref(),
-                                    &self.config.game_stats,
-                                    None, // hardware_filter - not available here
-                                    self.config.catver_ini_path.is_some(),
-                                    Some(self.game_index_manager.get_filtered_games()), // Pass pre-filtered indices
-                                );
-                                
-                                // Handle favorite toggle
-                                if let Some(game_name) = favorite_toggled {
-                                    self.toggle_favorite(&game_name);
-                                }
-                                
-                                // Handle double-click to launch game
-                                if double_clicked {
-                                    if let Some(idx) = self.selected_game {
-                                        if let Some(game) = self.games.get(idx) {
-                                            if let Ok(child) = crate::mame::launch_game(&game.name, &self.config) {
-                                                self.running_games.insert(game.name.clone(), (child, Instant::now()));
-                                            }
+                    } else if self.games.is_empty() && self.loading_stage == LoadingStage::Idle {
+                        ui.centered_and_justified(|ui| {
+                            ui.add_space(40.0);
+                            ui.heading(egui::RichText::new("Welcome to MAMEUIx").heading().size(28.0));
+                            ui.add_space(20.0);
+                            ui.label(egui::RichText::new("To get started:").size(18.0));
+                            ui.label("1. Configure your MAME executable");
+                            ui.label("2. Add ROM directories");
+                            ui.label("3. Click OK to scan for games");
+                            ui.add_space(20.0);
+                            if ui.button(egui::RichText::new("Configure Directories").size(16.0)).clicked() {
+                                self.dialog_manager.open_dialog(DialogType::Directories);
+                            }
+                        });
+                    } else {
+                        // CRITICAL: Update filter cache BEFORE showing game list
+                        if self.game_index_manager.is_cache_dirty() {
+                            self.update_filtered_games_cache();
+                        }
+                        
+                        // Queue icons for visible games before showing the list
+                        if self.config.show_rom_icons {
+                            // Get visible range from game list
+                            let visible_start = self.game_list.visible_start;
+                            let visible_end = self.game_list.visible_end;
+                            
+                            // Extended range for pre-loading (load 10 games before and after visible range)
+                            let preload_start = visible_start.saturating_sub(10);
+                            let preload_end = (visible_end + 10).min(self.game_list.expanded_rows_cache.len());
+                            
+                            // Collect game names to queue with priority
+                            let mut high_priority_games = Vec::new();
+                            let mut low_priority_games = Vec::new();
+                            
+                            // Process all games in extended range
+                            if let Some(rows) = self.game_list.expanded_rows_cache.get(preload_start..preload_end) {
+                                for (idx, row_data) in rows.iter().enumerate() {
+                                    if let Some(game) = self.games.get(row_data.game_idx) {
+                                        let absolute_idx = preload_start + idx;
+                                        
+                                        // High priority for visible games
+                                        if absolute_idx >= visible_start && absolute_idx < visible_end {
+                                            high_priority_games.push(game.name.clone());
+                                        } else {
+                                            // Low priority for pre-load games
+                                            low_priority_games.push(game.name.clone());
                                         }
                                     }
                                 }
                             }
+                            
+                            // Queue high priority games first (visible games)
+                            for game_name in high_priority_games {
+                                self.queue_icon_load(game_name);
+                            }
+                            
+                            // Then queue low priority games (pre-load)
+                            for game_name in low_priority_games {
+                                self.queue_icon_load(game_name);
+                            }
+                        }
+                        
+                        // Show game list with improved styling
+                        let (double_clicked, favorite_toggled, properties_requested) = self.game_list.show(
+                            ui,
+                            &self.games,
+                            &self.config.filter_settings,
+                            &mut self.selected_game,
+                            &mut self.expanded_parents,
+                            &self.config.favorite_games,
+                            &mut self.icon_manager.rom_icons,
+                            self.config.show_rom_icons,
+                            self.config.icon_size,
+                            self.game_index_manager.game_index.as_ref(),
+                            self.selected_filter,
+                            &mut self.config.column_widths,
+                            &self.config.preferences.visible_columns,
+                            self.icon_manager.default_icon_texture.as_ref(),
+                            &self.config.game_stats,
+                            None, // hardware_filter - not available here
+                            self.config.catver_ini_path.is_some(),
+                            Some(self.game_index_manager.get_filtered_games()), // Pass pre-filtered indices
+                        );
+                        
+                        // Handle favorite toggle
+                        if let Some(game_name) = favorite_toggled {
+                            self.toggle_favorite(&game_name);
+                        }
+                        
+                        // Handle properties request
+                        if properties_requested {
+                            if let Some(selected_idx) = self.selected_game {
+                                if let Some(game) = self.games.get(selected_idx) {
+                                    // Open the game properties dialog
+                                    let dialog = crate::ui::components::game_properties::GamePropertiesDialog::new_with_config(
+                                        Some(game), 
+                                        &self.config
+                                    );
+                                    self.dialog_manager.set_game_properties_dialog(Some(dialog));
+                                    self.dialog_manager.open_dialog(crate::ui::DialogType::GameProperties);
+                                }
+                            }
+                        }
+                        
+                        // Handle double-click to launch game
+                        if double_clicked {
+                            if let Some(idx) = self.selected_game {
+                                if let Some(game) = self.games.get(idx) {
+                                    if let Ok(child) = crate::mame::launch_game(&game.name, &self.config) {
+                                        self.running_games.insert(game.name.clone(), (child, Instant::now()));
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            });
+            }
+            
+            ui.add_space(12.0); // Add bottom padding
+        });
 
-            // Status bar
-            egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+        // Improved status bar with better styling
+        egui::TopBottomPanel::bottom("status_bar")
+            .exact_height(40.0) // Increased height
+            .show(ctx, |ui| {
+                ui.add_space(8.0); // Add top padding
                 ui.horizontal(|ui| {
                     match self.loading_stage {
                         LoadingStage::LoadingMame => {
-                            ui.label("Loading MAME database...");
+                            ui.label(egui::RichText::new("Loading MAME database...").size(14.0));
                             ui.spinner();
                         }
                         LoadingStage::ScanningRoms => {
-                            ui.label("Scanning ROM files...");
+                            ui.label(egui::RichText::new("Scanning ROM files...").size(14.0));
                             ui.spinner();
                         }
                         LoadingStage::Complete => {
-                            ui.label(format!("{} games loaded", self.games.len()));
+                            ui.label(egui::RichText::new(format!("{} games loaded", self.games.len())).size(14.0));
                         }
                         _ => {
-                            ui.label(format!("{} games", self.games.len()));
+                            ui.label(egui::RichText::new(format!("{} games", self.games.len())).size(14.0));
                             if !self.games.is_empty() {
                                 let available = self.games.iter()
                                 .filter(|g| matches!(g.status, RomStatus::Available))
                                 .count();
-                                ui.label(format!("({} available)", available));
+                                ui.label(egui::RichText::new(format!("({} available)", available)).weak());
                             }
 
                             // Show filtered count if filter active
@@ -1076,13 +1132,12 @@ impl eframe::App for MameApp {
                             if !filtered_games.is_empty() &&
                                 filtered_games.len() < self.games.len() {
                                     ui.separator();
-                                    ui.label(format!("Showing {} filtered",
-                                                     filtered_games.len()));
+                                    ui.label(egui::RichText::new(format!("Showing {} filtered", filtered_games.len())).weak());
                                 }
                         }
                     }
 
-                    // Performance info
+                    // Performance info with better styling
                     if self.config.preferences.show_fps {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let fps = self.performance_manager.get_average_fps();
@@ -1093,31 +1148,32 @@ impl eframe::App for MameApp {
                             } else {
                                 egui::Color32::GREEN
                             };
-                            ui.colored_label(color, format!("FPS: {:.1}", fps));
+                            ui.colored_label(color, egui::RichText::new(format!("FPS: {:.1}", fps)).size(14.0));
                         });
                     }
                 });
+                ui.add_space(8.0); // Add bottom padding
             });
 
-            // Handle dialogs using DialogManager
-            let dialog_actions = self.dialog_manager.render_dialogs(
-                ctx,
-                &mut self.config,
-                &self.games,
-                self.selected_game,
-                self.category_manager.as_ref(),
-                &mut self.need_reload_after_dialog,
-            );
-            
-            // Process dialog actions
-            for action in dialog_actions {
-                match action {
-                    DialogAction::SaveConfig => self.save_config(),
-                    DialogAction::StartInitialLoad => self.start_initial_load(),
-                    DialogAction::ReloadCategories => self.reload_categories(),
-                    DialogAction::OnDirectoriesChanged => self.on_directories_changed(),
-                }
+        // Handle dialogs using DialogManager
+        let dialog_actions = self.dialog_manager.render_dialogs(
+            ctx,
+            &mut self.config,
+            &self.games,
+            self.selected_game,
+            self.category_manager.as_ref(),
+            &mut self.need_reload_after_dialog,
+        );
+        
+        // Process dialog actions
+        for action in dialog_actions {
+            match action {
+                DialogAction::SaveConfig => self.save_config(),
+                DialogAction::StartInitialLoad => self.start_initial_load(),
+                DialogAction::ReloadCategories => self.reload_categories(),
+                DialogAction::OnDirectoriesChanged => self.on_directories_changed(),
             }
+        }
     }
 }
 

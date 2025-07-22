@@ -116,6 +116,10 @@ pub enum SearchMode {
     Cpu,
     Device,
     Sound,
+    // Enhanced search modes
+    FuzzySearch,    // Fuzzy matching search
+    FullText,       // Full-text search across all fields
+    Regex,          // Regular expression search
 }
 
 impl Default for SearchMode {

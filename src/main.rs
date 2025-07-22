@@ -4,6 +4,7 @@ mod mame;
 mod config;
 mod app;
 mod utils;
+mod embedded_shaders;
 
 use eframe::egui;
 use anyhow::Result;

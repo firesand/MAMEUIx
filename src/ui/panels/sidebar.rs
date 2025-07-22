@@ -54,17 +54,33 @@ impl Sidebar {
                 SearchMode::Cpu => "CPU",
                 SearchMode::Device => "Device",
                 SearchMode::Sound => "Sound",
+                SearchMode::FuzzySearch => "🔍 Fuzzy Search",
+                SearchMode::FullText => "📄 Full-Text Search",
+                SearchMode::Regex => "🔤 Regex Search",
             })
             .show_ui(ui, |ui| {
+                ui.label("🔸 Basic Search");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::GameTitle, "Game Title");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Manufacturer, "Manufacturer");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::RomFileName, "ROM File Name");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Year, "Year");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Status, "Status");
                 ui.separator();
+                ui.label("🔧 Hardware");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Cpu, "CPU");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Device, "Device");
                 ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Sound, "Sound");
+                ui.separator();
+                ui.label("⚡ Enhanced Search");
+                if ui.selectable_value(&mut filter_settings.search_mode, SearchMode::FuzzySearch, "🔍 Fuzzy Search").on_hover_text("Finds matches even with typos or partial spelling").clicked() {
+                    // Fuzzy search selected
+                }
+                if ui.selectable_value(&mut filter_settings.search_mode, SearchMode::FullText, "📄 Full-Text Search").on_hover_text("Search across all game information simultaneously").clicked() {
+                    // Full-text search selected
+                }
+                if ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Regex, "🔤 Regex Search").on_hover_text("Use regular expressions for advanced pattern matching").clicked() {
+                    // Regex search selected
+                }
             });
         });
 
@@ -75,6 +91,40 @@ impl Sidebar {
                 // Search text changed, will trigger filter update in main window
             }
         });
+
+        // Search performance info (only show for enhanced modes)
+        match filter_settings.search_mode {
+            SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                ui.horizontal(|ui| {
+                    ui.label("💡");
+                    ui.colored_label(egui::Color32::from_rgb(100, 150, 255), "Enhanced search active");
+                });
+                
+                // Search tips based on mode
+                match filter_settings.search_mode {
+                    SearchMode::FuzzySearch => {
+                        ui.horizontal(|ui| {
+                            ui.label("💬");
+                            ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Try: 'strt fgtr' for 'Street Fighter'");
+                        });
+                    }
+                    SearchMode::FullText => {
+                        ui.horizontal(|ui| {
+                            ui.label("💬");
+                            ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Searches all fields simultaneously");
+                        });
+                    }
+                    SearchMode::Regex => {
+                        ui.horizontal(|ui| {
+                            ui.label("💬");
+                            ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Try: '^Street.*Fighter$'");
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
 
         ui.separator();
 

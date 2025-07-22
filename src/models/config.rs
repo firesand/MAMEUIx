@@ -6,6 +6,26 @@ use std::collections::{HashMap, HashSet};
 use crate::utils::graphics::GraphicsConfig;
 use super::{GameStats, Preferences, FilterSettings, SortColumn, SortDirection};
 
+// Window size and position settings for dialogs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowSettings {
+    pub width: f32,
+    pub height: f32,
+    pub pos_x: Option<f32>,
+    pub pos_y: Option<f32>,
+}
+
+impl Default for WindowSettings {
+    fn default() -> Self {
+        Self {
+            width: 600.0,
+            height: 550.0,
+            pos_x: None,
+            pos_y: None,
+        }
+    }
+}
+
 // MameExecutable represents a MAME emulator executable
 // Unlike simple paths, this contains metadata about each MAME version
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +52,7 @@ pub enum Theme {
     MidnightBlack,   // Pure black theme
     ForestGreen,     // Nature-inspired green theme
     RetroAmber,      // Vintage amber theme
+    ModernSpacious,  // Modern spacious theme with better spacing
 }
 
 
@@ -49,6 +70,7 @@ impl Theme {
             Theme::MidnightBlack => "Midnight Black",
             Theme::ForestGreen => "Forest Green",
             Theme::RetroAmber => "Retro Amber",
+            Theme::ModernSpacious => "Modern Spacious",
         }
     }
 
@@ -254,6 +276,29 @@ impl Theme {
                 v.faint_bg_color = egui::Color32::from_rgb(55, 45, 25);
                 v
             }
+            Theme::ModernSpacious => {
+                let mut v = egui::Visuals::dark();
+                // Modern blue accent colors with better contrast
+                v.hyperlink_color = egui::Color32::from_rgb(64, 156, 255);
+                v.widgets.active.bg_fill = egui::Color32::from_rgb(64, 156, 255);
+                v.widgets.hovered.bg_fill = egui::Color32::from_rgb(52, 126, 205);
+                v.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(45, 45, 55);
+                v.widgets.inactive.bg_fill = egui::Color32::from_rgb(55, 55, 65);
+                v.widgets.open.bg_fill = egui::Color32::from_rgb(64, 156, 255);
+                // Selection colors - more visible and modern
+                v.selection.bg_fill = egui::Color32::from_rgb(70, 90, 120);
+                v.selection.stroke.color = egui::Color32::from_rgb(64, 156, 255);
+                // Text colors for better visibility
+                v.override_text_color = Some(egui::Color32::from_rgb(240, 240, 250));
+                // Window and panel backgrounds - more spacious feeling
+                v.panel_fill = egui::Color32::from_rgb(40, 40, 50);
+                v.window_fill = egui::Color32::from_rgb(35, 35, 45);
+                v.faint_bg_color = egui::Color32::from_rgb(50, 50, 60);
+                // Improved spacing and borders - using available fields
+                v.window_shadow.blur = 8;
+                v.window_shadow.offset = [2, 2];
+                v
+            }
         };
         
         // Apply the visuals
@@ -263,7 +308,7 @@ impl Theme {
 
 impl Default for Theme {
     fn default() -> Self {
-        Theme::DarkBlue
+        Theme::ModernSpacious
     }
 }
 
@@ -287,38 +332,38 @@ pub struct ColumnWidths {
 
 impl ColumnWidths {
     pub fn reset_to_defaults(&mut self) {
-        self.expand = 25.0;
-        self.favorite = 25.0;
-        self.icon = 40.0;
-        self.status = 30.0;
-        self.game = 300.0;
-        self.play_count = 60.0;
-        self.manufacturer = 200.0;
-        self.year = 60.0;
-        self.driver = 80.0;
-        self.driver_status = 120.0;
-        self.category = 100.0;
-        self.rom = 80.0;
-        self.chd = 60.0;
+        self.expand = 30.0;
+        self.favorite = 35.0;
+        self.icon = 50.0;
+        self.status = 40.0;
+        self.game = 350.0;
+        self.play_count = 80.0;
+        self.manufacturer = 250.0;
+        self.year = 80.0;
+        self.driver = 120.0;
+        self.driver_status = 150.0;
+        self.category = 150.0;
+        self.rom = 100.0;
+        self.chd = 80.0;
     }
 }
 
 impl Default for ColumnWidths {
     fn default() -> Self {
         Self {
-            expand: 25.0,       // Default width for expand column
-            favorite: 25.0,     // Default width for favorite column
-            icon: 40.0,         // Default width for icon column
-            status: 30.0,       // Default width for status column
-            game: 300.0,        // Default width for game column
-            play_count: 60.0,   // Default width for play count column
-            manufacturer: 200.0, // Default width for manufacturer column
-            year: 60.0,         // Default width for year column
-            driver: 80.0,       // Default width for driver column
-            driver_status: 120.0, // Default width for driver status column
-            category: 100.0,    // Default width for category column
-            rom: 80.0,          // Default width for ROM column
-            chd: 60.0,          // Default width for CHD column
+            expand: 30.0,       // Increased default width for expand column
+            favorite: 35.0,     // Increased default width for favorite column
+            icon: 50.0,         // Increased default width for icon column
+            status: 40.0,       // Increased default width for status column
+            game: 350.0,        // Increased default width for game column
+            play_count: 80.0,   // Increased default width for play count column
+            manufacturer: 250.0, // Increased default width for manufacturer column
+            year: 80.0,         // Increased default width for year column
+            driver: 120.0,      // Increased default width for driver column
+            driver_status: 150.0, // Increased default width for driver status column
+            category: 150.0,    // Increased default width for category column
+            rom: 100.0,         // Increased default width for ROM column
+            chd: 80.0,          // Increased default width for CHD column
         }
     }
 }
@@ -452,6 +497,13 @@ struct AppConfigToml {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bgfx_path: Option<PathBuf>,
 
+    // Smart directory memory - remembers last used directory per category
+    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
+    pub last_directories: HashMap<String, PathBuf>,
+
+    // Window settings for dialogs
+    pub game_properties_window: WindowSettings,
+
     pub preferences: Preferences,
 }
 
@@ -541,6 +593,12 @@ pub struct AppConfig {
     pub graphics_config: GraphicsConfig, // Graphics backend configuration
     pub bgfx_path: Option<PathBuf>,      // BGFX shader path
 
+    // Smart directory memory - remembers last used directory per category
+    pub last_directories: HashMap<String, PathBuf>, // Category -> Last directory
+
+    // Window settings for dialogs
+    pub game_properties_window: WindowSettings, // Game properties dialog window settings
+
     pub preferences: Preferences,
 }
 
@@ -605,6 +663,8 @@ impl AppConfig {
             assume_merged_sets: self.assume_merged_sets,
             graphics_config: self.graphics_config.clone(),
             bgfx_path: self.bgfx_path.clone(),
+            last_directories: self.last_directories.clone(),
+            game_properties_window: self.game_properties_window.clone(),
             preferences: self.preferences.clone(),
         }
     }
@@ -669,6 +729,8 @@ impl AppConfig {
             assume_merged_sets: toml.assume_merged_sets,
             graphics_config: toml.graphics_config,
             bgfx_path: toml.bgfx_path,
+            last_directories: toml.last_directories,
+            game_properties_window: toml.game_properties_window,
             preferences: toml.preferences,
         }
     }
@@ -775,6 +837,12 @@ impl Default for AppConfig {
             // Default graphics settings
             graphics_config: GraphicsConfig::default(),
             bgfx_path: None,
+
+            // Initialize empty smart directory memory
+            last_directories: HashMap::new(),
+            
+            // Default window settings
+            game_properties_window: WindowSettings::default(),
     
             preferences: Preferences::default(),  // Add this line
         }

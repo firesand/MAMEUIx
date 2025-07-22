@@ -149,11 +149,13 @@ impl HistoryPanel {
     pub fn show(&mut self, ui: &mut egui::Ui, _config: &AppConfig) {
         ui.group(|ui| {
             ui.heading("Game Information");
+            ui.add_space(8.0); // Add some spacing after heading
             
             // Add tab selector if a game is selected
             if self.current_game.is_some() && !self.is_loading {
                 ui.separator();
                 ui.horizontal(|ui| {
+                    ui.add_space(4.0); // Add left padding
                     if ui.selectable_label(matches!(self.selected_tab, HistoryTab::History), "History").clicked() {
                         self.selected_tab = HistoryTab::History;
                     }
@@ -165,12 +167,15 @@ impl HistoryPanel {
                     if ui.selectable_label(matches!(self.selected_tab, HistoryTab::Other), "Other").clicked() {
                         self.selected_tab = HistoryTab::Other;
                     }
+                    ui.add_space(4.0); // Add right padding
                 });
                 ui.separator();
+                ui.add_space(4.0); // Add spacing after tabs
             }
             
             egui::ScrollArea::vertical()
-                .auto_shrink([false; 2])
+                .auto_shrink([false, true]) // Allow vertical shrinking but not horizontal
+                .max_height(ui.available_height() - 50.0) // Use most of available height
                 .show(ui, |ui| {
                     if self.is_loading {
                         ui.centered_and_justified(|ui| {
@@ -201,9 +206,12 @@ impl HistoryPanel {
                             }
                         } else {
                             // Display the content for the selected tab
+                            // ENHANCED: Better text display with improved formatting
                             ui.add(egui::TextEdit::multiline(&mut content.as_str())
                                 .desired_width(f32::INFINITY)
-                                .font(egui::TextStyle::Monospace));
+                                .desired_rows(20) // Show more rows by default
+                                .font(egui::TextStyle::Monospace)
+                                .text_color(ui.style().visuals.text_color()));
                         }
                     } else {
                         ui.label("Select a game to view its history and information.");

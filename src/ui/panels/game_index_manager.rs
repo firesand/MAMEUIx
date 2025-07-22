@@ -3,6 +3,7 @@
 
 use crate::models::*;
 use crate::mame::CategoryLoader;
+use crate::utils::enhanced_search::{EnhancedSearchEngine, SearchConfig, SearchStats};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use rayon::prelude::*;
@@ -17,6 +18,9 @@ pub struct GameIndexManager {
     // Search management
     pub search_debounce_timer: Option<Instant>,
     pub pending_search: Option<String>,
+    
+    // Enhanced search engine
+    pub enhanced_search: Option<EnhancedSearchEngine>,
     
     // Category management
     pub category_loader: Option<CategoryLoader>,
@@ -36,6 +40,7 @@ impl GameIndexManager {
             last_filter_update: Instant::now(),
             search_debounce_timer: None,
             pending_search: None,
+            enhanced_search: Some(EnhancedSearchEngine::new(SearchConfig::default())),
             category_loader: None,
             category_manager: None,
             search_debounce_ms: 300, // Default 300ms debounce
@@ -71,6 +76,13 @@ impl GameIndexManager {
 
         let elapsed = start.elapsed();
         println!("Game index built in {:.2}s", elapsed.as_secs_f32());
+
+        // Initialize enhanced search engine with games data
+        if let Some(ref mut search_engine) = self.enhanced_search {
+            if let Err(e) = search_engine.initialize_fulltext_index(games) {
+                eprintln!("Warning: Failed to initialize full-text search: {}", e);
+            }
+        }
 
         // Force filter update with new index
         self.filter_cache_dirty = true;
@@ -252,13 +264,49 @@ impl GameIndexManager {
         .collect()
     }
 
-    /// OPTIMIZED: Apply search filter with parallel processing
+    /// ENHANCED: Apply search filter with multiple search strategies
     fn apply_search_filter_optimized(
         &mut self,
         games: &[Game],
         search_text: &str,
         search_mode: &SearchMode,
     ) {
+        // Use enhanced search for special modes
+        match search_mode {
+            SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                if let Some(ref mut search_engine) = self.enhanced_search {
+                    match search_engine.enhanced_search(games, search_text, search_mode) {
+                        Ok(results) => {
+                            // Filter current cache to only include enhanced search results
+                            let result_set: HashSet<usize> = results.into_iter().collect();
+                            self.filtered_games_cache.retain(|&idx| result_set.contains(&idx));
+                            return;
+                        }
+                        Err(e) => {
+                            eprintln!("Enhanced search failed: {}, falling back to basic search", e);
+                            // Fall through to basic search
+                        }
+                    }
+                }
+            }
+            _ => {
+                // For regular search modes, try enhanced search first as it's often better
+                if let Some(ref mut search_engine) = self.enhanced_search {
+                    match search_engine.enhanced_search(games, search_text, search_mode) {
+                        Ok(results) => {
+                            let result_set: HashSet<usize> = results.into_iter().collect();
+                            self.filtered_games_cache.retain(|&idx| result_set.contains(&idx));
+                            return;
+                        }
+                        Err(_) => {
+                            // Fall through to basic search if enhanced search fails
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: Original basic search implementation
         let search_lower = search_text.to_lowercase();
 
         // Use parallel processing for large datasets (huge speedup!)
@@ -291,6 +339,10 @@ impl GameIndexManager {
                         }
                         SearchMode::Sound => {
                             game.category.to_lowercase().contains(&search_lower)
+                        }
+                        // Enhanced search modes shouldn't reach here, but just in case
+                        SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                            game.description.to_lowercase().contains(&search_lower)
                         }
                     }
                 } else {
@@ -327,6 +379,10 @@ impl GameIndexManager {
                         }
                         SearchMode::Sound => {
                             game.category.to_lowercase().contains(&search_lower)
+                        }
+                        // Enhanced search modes shouldn't reach here, but just in case
+                        SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                            game.description.to_lowercase().contains(&search_lower)
                         }
                     }
                 } else {
@@ -391,13 +447,7 @@ impl GameIndexManager {
         self.filter_cache_dirty = true;
     }
 
-    /// Clear search cache
-    pub fn clear_search_cache(&mut self) {
-        if let Some(index) = &mut self.game_index {
-            index.clear_cache();
-            println!("Cleared search cache");
-        }
-    }
+
 
     /// Get search cache statistics
     pub fn get_cache_stats(&self) -> (usize, usize) {
@@ -414,6 +464,28 @@ impl GameIndexManager {
             index.update_favorites(games, favorites);
         }
         self.filter_cache_dirty = true;
+    }
+
+    /// Configure enhanced search settings
+    pub fn configure_enhanced_search(&mut self, config: SearchConfig) {
+        if let Some(ref mut search_engine) = self.enhanced_search {
+            search_engine.update_config(config);
+        }
+    }
+
+    /// Get enhanced search statistics
+    pub fn get_enhanced_search_stats(&self) -> Option<SearchStats> {
+        self.enhanced_search.as_ref().map(|engine| engine.get_stats())
+    }
+
+    /// Clear regex cache to free memory
+    pub fn clear_regex_cache() {
+        EnhancedSearchEngine::clear_regex_cache();
+    }
+
+    /// Check if enhanced search is available
+    pub fn has_enhanced_search(&self) -> bool {
+        self.enhanced_search.is_some()
     }
 
     /// Jump to game starting with character

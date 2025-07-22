@@ -59,7 +59,7 @@ impl GameList {
             sort_ascending: true,
             visible_start: 0,
             visible_end: 50,
-            row_height: 24.0, // Pixels per row
+            row_height: 36.0, // Increased pixels per row for better spacing
             last_viewport: None,
             filtered_indices_cache: Vec::new(),
             expanded_rows_cache: Vec::new(),
@@ -77,7 +77,7 @@ impl GameList {
     }
 
     /// Main show function - entry point untuk rendering
-    /// Returns (double_clicked, favorite_toggled_game)
+    /// Returns (double_clicked, favorite_toggled_game, properties_requested)
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -98,7 +98,7 @@ impl GameList {
         hardware_filter: Option<&HardwareFilter>,
         has_catver: bool,
         pre_filtered_indices: Option<&[usize]>,
-    ) -> (bool, Option<String>) {
+    ) -> (bool, Option<String>, bool) {
         // Remove aggressive frame skipping - it's causing glitches
         // Let egui handle frame pacing instead
 
@@ -166,7 +166,7 @@ impl GameList {
                 });
             });
             
-            return (false, None);
+            return (false, None, false);
         }
 
         // Show stats untuk large collections
@@ -190,7 +190,7 @@ impl GameList {
         );
 
         // Create a child UI with the allocated rect to ensure full height usage
-        let (double_clicked, favorite_toggled) = ui.allocate_new_ui(
+        let (double_clicked, favorite_toggled, properties_requested) = ui.allocate_new_ui(
             egui::UiBuilder::new().max_rect(rect),
             |ui| {
                 // Main content area dengan PROPER virtual scrolling
@@ -214,11 +214,11 @@ impl GameList {
             }
         ).inner;
         
-        (double_clicked, favorite_toggled)
+        (double_clicked, favorite_toggled, properties_requested)
     }
 
     /// Render table dengan TRUE virtual scrolling
-    /// Returns (double_clicked, favorite_toggled_game)
+    /// Returns (double_clicked, favorite_toggled_game, properties_requested)
     // In src/ui/game_list.rs
 
     fn render_virtual_table(
@@ -238,98 +238,112 @@ impl GameList {
         default_icon: Option<&egui::TextureHandle>,
         game_stats: &HashMap<String, GameStats>,
         has_catver: bool,
-    ) -> (bool, Option<String>) {
+    ) -> (bool, Option<String>, bool) {
         let mut double_clicked = false;
         let mut favorite_toggled: Option<String> = None;
+        let mut properties_requested = false;
 
         let total_rows = self.expanded_rows_cache.len();
-        let icon_width = if show_icons { 32.0 } else { 0.0 };
-        let status_width = 25.0; // Status column is always shown
+        let icon_width = if show_icons { 40.0 } else { 0.0 }; // Increased icon width
+        let status_width = 30.0; // Increased status column width
 
         // Capture header styling colors before creating the table
         let header_bg_color = ui.visuals().extreme_bg_color;
         let header_text_color = ui.visuals().strong_text_color();
 
-        // Build table with ALL columns resizable and persistent widths
+        // IMPROVED: Build table with better spacing and styling
         let mut table = egui_extras::TableBuilder::new(ui)
             .striped(true)
             .resizable(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .column(Column::initial(column_widths.expand)
                 .resizable(true)
-                .clip(true))
+                .clip(true)
+                .at_least(10.0)) // ENHANCED: Much smaller minimum width for expand column
             .column(Column::initial(column_widths.favorite)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(15.0)); // ENHANCED: Much smaller minimum width for favorite column
 
         if show_icons {
             table = table.column(Column::initial(column_widths.icon)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(20.0)); // ENHANCED: Much smaller minimum width for icon column
         }
         
         // Status column is always shown
         table = table.column(Column::initial(column_widths.status)
             .resizable(true)
-            .clip(true));
+            .clip(true)
+            .at_least(15.0)); // ENHANCED: Much smaller minimum width for status column
 
-        // Game name column
-        table = table.column(Column::initial(column_widths.game)
+        // Game name column - make it wider by default
+        table = table.column(Column::initial(column_widths.game.max(200.0)) // Ensure minimum width
             .resizable(true)
-            .clip(true));
+            .clip(true)
+            .at_least(50.0)); // ENHANCED: Much smaller minimum width for game name
 
         if visible_columns.play_count {
             table = table.column(Column::initial(column_widths.play_count)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(30.0)); // ENHANCED: Much smaller minimum width for play count
         }
         if visible_columns.manufacturer {
             table = table.column(Column::initial(column_widths.manufacturer)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(40.0)); // ENHANCED: Much smaller minimum width for manufacturer
         }
         if visible_columns.year {
             table = table.column(Column::initial(column_widths.year)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(25.0)); // ENHANCED: Much smaller minimum width for year
         }
         if visible_columns.driver {
             table = table.column(Column::initial(column_widths.driver)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(40.0)); // ENHANCED: Much smaller minimum width for driver
         }
         if visible_columns.driver_status {
             table = table.column(Column::initial(column_widths.driver_status)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(40.0)); // ENHANCED: Much smaller minimum width for driver status
         }
         if visible_columns.category {
             table = table.column(Column::initial(column_widths.category)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(40.0)); // ENHANCED: Much smaller minimum width for category
         }
         if visible_columns.rom {
             table = table.column(Column::initial(column_widths.rom)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(30.0)); // ENHANCED: Much smaller minimum width for rom
         }
         if visible_columns.chd {
             table = table.column(Column::initial(column_widths.chd)
                 .resizable(true)
-                .clip(true));
+                .clip(true)
+                .at_least(30.0)); // ENHANCED: Much smaller minimum width for chd
         }
 
         // Capture the table response to get column width changes
         let response = table
-            .header(24.0, |mut header| {
+            .header(32.0, |mut header| { // Increased header height for better spacing
                 // Helper closure to render bold header text with background
                 let render_header = |ui: &mut egui::Ui, text: &str| {
-                    // Add background fill
+                    // Add background fill with rounded corners
                     let rect = ui.available_rect_before_wrap();
-                    ui.painter().rect_filled(rect, 0.0, header_bg_color);
+                    ui.painter().rect_filled(rect, 4.0, header_bg_color); // Rounded corners
                     
-                    // Render bold text
-                    ui.label(egui::RichText::new(text).strong().color(header_text_color));
+                    // Render bold text with better styling
+                    ui.label(egui::RichText::new(text).strong().color(header_text_color).size(14.0));
                 };
                 
                 // Header columns with bold text and solid background
@@ -347,7 +361,12 @@ impl GameList {
                 });
 
                 if visible_columns.play_count {
-                    header.col(|ui| { render_header(ui, "Plays"); });
+                    header.col(|ui| { 
+                        // ENHANCED: Make Plays column header more prominent
+                        let rect = ui.available_rect_before_wrap();
+                        ui.painter().rect_filled(rect, 4.0, header_bg_color);
+                        ui.label(egui::RichText::new("Plays").strong().color(header_text_color).size(14.0));
+                    });
                 }
                 if visible_columns.manufacturer {
                     header.col(|ui| { render_header(ui, "Manufacturer"); });
@@ -384,11 +403,11 @@ impl GameList {
                     // body.scroll_to_row(target_row, Some(egui::Align::Center));
                 }
 
-                body.rows(self.row_height, total_rows, |mut row| {
+                body.rows(self.row_height.max(32.0), total_rows, |mut row| { // Increased minimum row height
                     let row_idx = row.index();
                     if let Some(row_data) = self.expanded_rows_cache.get(row_idx).cloned() {
                         if let Some(game) = games.get(row_data.game_idx) {
-                            let (row_double_clicked, row_favorite_toggled) = self.render_single_row(
+                            let (row_double_clicked, row_favorite_toggled, row_properties_requested) = self.render_single_row(
                                 &mut row,
                                 game,
                                 &row_data,
@@ -410,6 +429,9 @@ impl GameList {
                             if let Some(game_name) = row_favorite_toggled {
                                 favorite_toggled = Some(game_name);
                             }
+                            if row_properties_requested {
+                                properties_requested = true;
+                            }
                         }
                     }
                 });
@@ -419,11 +441,11 @@ impl GameList {
         // For now, columns are resizable but widths are not automatically saved
         // Column widths are still saved in config and restored on startup
 
-        (double_clicked, favorite_toggled)
+        (double_clicked, favorite_toggled, properties_requested)
     }
 
     /// Render single row - dipanggil HANYA untuk visible rows
-    /// Returns (double_clicked, favorite_toggled_game)
+    /// Returns (double_clicked, favorite_toggled_game, properties_requested)
     fn render_single_row(
         &mut self,
         row: &mut egui_extras::TableRow,
@@ -439,11 +461,12 @@ impl GameList {
         visible_columns: &VisibleColumns,
         default_icon: Option<&egui::TextureHandle>,
         game_stats: &HashMap<String, GameStats>,
-    ) -> (bool, Option<String>) {
+    ) -> (bool, Option<String>, bool) {
         let is_selected = selected.map_or(false, |s| s == row_data.game_idx);
         let is_favorite = favorites.contains(&game.name);
         let mut double_clicked = false;
         let mut favorite_toggled = None;
+        let mut properties_requested = false;
 
         // Expand/collapse button
         row.col(|ui| {
@@ -490,7 +513,7 @@ impl GameList {
             ui.label(game.status.to_icon());
         });
 
-        // Game name dengan indentasi untuk clones
+        // Game name dengan indentasi untuk clones - IMPROVED: Brighter and bold text
         row.col(|ui| {
             let name = if row_data.is_clone {
                 format!("  └─ {}", game.description)
@@ -498,7 +521,21 @@ impl GameList {
                 game.description.clone()
             };
 
-            let response = ui.selectable_label(is_selected, name);
+            // IMPROVED: Use RichText for better styling with brighter, bold text
+            let text_color = if is_selected {
+                egui::Color32::from_rgb(255, 255, 255) // Bright white for selected
+            } else {
+                egui::Color32::from_rgb(240, 240, 250) // Bright light gray for better contrast
+            };
+
+            let response = ui.selectable_label(
+                is_selected, 
+                egui::RichText::new(name)
+                    .strong() // Bold text
+                    .color(text_color)
+                    .size(14.0) // Slightly larger font
+            );
+            
             if response.clicked() {
                 *selected = Some(row_data.game_idx);
             }
@@ -510,16 +547,53 @@ impl GameList {
                 *selected = Some(row_data.game_idx);
                 double_clicked = true;
             }
+
+            // Right-click context menu
+            response.context_menu(|ui| {
+                ui.label(format!("Actions for: {}", game.description));
+                ui.separator();
+                
+                if ui.button("🚀 Play Game").clicked() {
+                    *selected = Some(row_data.game_idx);
+                    double_clicked = true;
+                    ui.close_menu();
+                }
+                
+                if ui.button("⚙️ Properties...").clicked() {
+                    *selected = Some(row_data.game_idx);
+                    properties_requested = true;
+                    ui.close_menu();
+                }
+                
+                ui.separator();
+                
+                let star_text = if is_favorite { "☆ Remove from Favorites" } else { "★ Add to Favorites" };
+                if ui.button(star_text).clicked() {
+                    favorite_toggled = Some(game.name.clone());
+                    ui.close_menu();
+                }
+            });
         });
 
-        // Play Count (optional)
+        // Play Count (optional) - ENHANCED: Better styling
         if visible_columns.play_count {
             row.col(|ui| {
                 // Get play count from game stats
                 let play_count = game_stats.get(&game.name)
                     .map(|stats| stats.play_count)
                     .unwrap_or(0);
-                ui.label(play_count.to_string());
+                
+                // ENHANCED: Better styling for play count
+                let play_count_text = if play_count == 0 {
+                    "0".to_string()
+                } else {
+                    play_count.to_string()
+                };
+                
+                // Use RichText for better styling
+                ui.label(egui::RichText::new(play_count_text)
+                    .color(egui::Color32::from_rgb(200, 200, 220)) // Slightly brighter
+                    .size(13.0)); // Consistent font size
             });
         }
 
@@ -585,7 +659,7 @@ impl GameList {
             });
         }
         
-        (double_clicked, favorite_toggled)
+        (double_clicked, favorite_toggled, properties_requested)
     }
 
     /// Update cache dengan filtered dan expanded games
@@ -791,6 +865,13 @@ impl GameList {
                                     false
                                 }
                             }
+                            // Enhanced search modes are handled by GameIndexManager
+                            crate::models::filters::SearchMode::FuzzySearch | 
+                            crate::models::filters::SearchMode::FullText | 
+                            crate::models::filters::SearchMode::Regex => {
+                                // These are handled by enhanced search in GameIndexManager
+                                game.description.to_lowercase().contains(&search_lower)
+                            }
                         }
                     } else {
                         false
@@ -837,6 +918,13 @@ impl GameList {
                                 } else {
                                     false
                                 }
+                            }
+                            // Enhanced search modes are handled by GameIndexManager
+                            crate::models::filters::SearchMode::FuzzySearch | 
+                            crate::models::filters::SearchMode::FullText | 
+                            crate::models::filters::SearchMode::Regex => {
+                                // These are handled by enhanced search in GameIndexManager
+                                game.description.to_lowercase().contains(&search_lower)
                             }
                         }
                     } else {
@@ -1099,6 +1187,13 @@ impl GameList {
                         } else {
                             false
                         }
+                    }
+                    // Enhanced search modes are handled by GameIndexManager
+                    crate::models::filters::SearchMode::FuzzySearch | 
+                    crate::models::filters::SearchMode::FullText | 
+                    crate::models::filters::SearchMode::Regex => {
+                        // These are handled by enhanced search in GameIndexManager
+                        game.description.to_lowercase().contains(&search_lower)
                     }
                 };
                 if !matches {

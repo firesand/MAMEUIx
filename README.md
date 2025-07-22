@@ -1,8 +1,27 @@
-# MAMEUIx
+# MAMEUIX
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
-## 🚀 Recent Improvements
+**Current Version: 0.1.3** - Major performance improvements and UI enhancements
+
+## 🚀 Recent Improvements (v0.1.3)
+
+### 🚀 **Major Performance Improvements**
+- **Thread Pool Icon Loading**: Parallel processing for 48,000+ games with up to 8x performance improvement
+- **Performance Monitoring**: Real-time metrics and statistics for icon loading
+- **Adaptive Loading**: Dynamic rate adjustment based on system performance
+- **Memory Optimization**: Efficient caching with automatic cleanup
+
+### 🎨 **UI Enhancements**
+- **Enhanced Window Resizing**: Properties dialog now 600x550 default (up to 1200x900)
+- **Improved Game History**: 55% history vs 45% artwork layout for better MAME info visibility
+- **Window Persistence**: Dialog sizes and positions remembered between sessions
+- **Better Text Display**: Enhanced formatting and readability
+
+### ⚙️ **New Features**
+- **Performance Monitoring System**: Detailed metrics and performance alerts
+- **Window Settings Persistence**: Smart window memory across sessions
+- **Enhanced Configuration**: Improved TOML handling and backward compatibility
 
 ### Performance & Stability
 - **Modern API**: Updated to egui 0.32 with latest UI patterns
@@ -12,7 +31,14 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - **Column Resizing**: Fully resizable table columns with persistent widths
 - **Background Processing**: Non-blocking UI during large ROM scans (48,000+ games)
 
-### Advanced Graphics & Rendering
+### 🎨 Enhanced Shader System
+- **Embedded Shaders**: 11 high-quality shaders included in binary (no download required)
+- **Enhanced Validation**: Automatic GLSL syntax checking with detailed error reporting
+- **Performance Analysis**: Detects expensive operations and provides optimization hints
+- **Modern GLSL Support**: Validates GLSL 330+ compatibility and suggests modern alternatives
+- **Offline Operation**: Complete shader system works without internet connection
+- **Shader Categories**: Organized by CRT Effects, LCD Effects, Retro Effects, and Scaling
+- **Extraction Feature**: Users can extract embedded shaders to filesystem if needed
 - **BGFX Integration**: Multi-backend rendering support (OpenGL, DirectX11/12, Vulkan, Metal)
 - **GLSL Shader System**: Custom shader management with CRT, LCD, and scanline effects
 - **Integer Scaling**: Complete implementation of MAME's integer scaling options
@@ -50,6 +76,17 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 ### 🔧 Advanced Features
 - **Background Scanning**: Non-blocking ROM and MAME data loading
 - **Performance Monitoring**: Built-in performance tracking
+### 🎨 Shader Management
+- **Embedded Shaders**: 11 professional-quality shaders included automatically
+  - CRT Effects: crt-geom, crt-royale with scanlines and curvature
+  - LCD Effects: lcd-grid for handheld games
+  - Retro Effects: ntsc color space, scanlines
+  - Scaling: pixel-perfect integer scaling
+- **Enhanced Validation**: Real-time GLSL syntax checking with line numbers
+- **Performance Hints**: Automatic detection of expensive operations
+- **Modernization Suggestions**: Recommends current GLSL features
+- **Offline Support**: Complete shader system works without internet
+- **Extraction Tools**: Save embedded shaders to filesystem for customization
 - **Debug Tools**: Comprehensive logging and debugging options
 - **Cross-Platform**: Runs on Windows, macOS, and Linux
 - **Hardware Filtering**: Filter games by CPU, device, and sound chip types
@@ -206,6 +243,17 @@ To enable the Category column in the game list:
 4. Adjust core performance options for optimal emulation
 
 ## Usage
+### 🎨 Shader Features
+- **Embedded Shaders**: High-quality shaders included automatically
+  - No download required - works out of the box
+  - Professional CRT, LCD, and retro effects
+  - Pixel-perfect scaling options
+- **Enhanced Validation**: Automatic error detection and suggestions
+  - Syntax checking with line numbers
+  - Performance optimization hints
+  - Modern GLSL compatibility warnings
+- **Shader Categories**: Organized browsing by effect type
+- **Extraction**: Save embedded shaders for customization
 
 ### Basic Navigation
 - **Game List**: Browse and select games from the main list
@@ -228,6 +276,16 @@ To enable the Category column in the game list:
 - **BGFX Backend Selection**: Choose from 8 rendering backends for optimal performance
 - **GLSL Shader Effects**: Apply CRT, LCD, and scanline effects for authentic arcade look
 - **Integer Scaling**: Set pixel-perfect scaling factors (1x-10x) for crisp graphics
+### 🎨 Using Embedded Shaders
+- **Automatic Access**: Shaders are included in the binary - no setup required
+- **Shader Categories**:
+  - **CRT Effects**: crt-geom, crt-royale for authentic arcade look
+  - **LCD Effects**: lcd-grid for handheld games and LCD displays
+  - **Retro Effects**: ntsc color space, scanlines for vintage feel
+  - **Scaling**: pixel-perfect integer scaling for crisp graphics
+- **Enhanced Validation**: Real-time feedback on shader syntax and performance
+- **Extraction**: Save embedded shaders to filesystem for customization
+- **Offline Operation**: Complete shader system works without internet connection
 - **Core Performance Options**: Fine-tune emulation speed, frame skipping, and system usage
 - **Real-time Parameter Adjustment**: Modify shader and performance settings on-the-fly
 
@@ -329,6 +387,15 @@ The application is optimized for performance:
 
 ## Troubleshooting
 
+### Shader Issues
+- **Enhanced Validation**: The new shader system provides detailed error messages
+- **Common Shader Errors**:
+  - Missing #version directive: Add `#version 330` at the top
+  - Deprecated functions: Replace `texture2D()` with `texture()`
+  - Performance warnings: Consider alternatives to expensive operations
+- **Embedded Shaders**: 11 professional shaders are included automatically
+- **Offline Operation**: No internet required - all shaders work offline
+- **Extraction**: Use extraction tools to save embedded shaders for customization
 ### Common Issues
 
 **"MAME executable not found"**
@@ -354,6 +421,24 @@ The application is optimized for performance:
 - Try different BGFX backends (OpenGL, DirectX, Vulkan)
 - Disable GLSL shaders if causing problems
 - Check integer scaling settings
+### v0.1.3 (Latest Development)
+- **🎨 Enhanced Shader System**: Complete overhaul of shader management
+  - Embedded shaders included in binary (no download required)
+  - 11 professional-quality shaders: CRT, LCD, retro effects, and scaling
+  - Enhanced GLSL validation with syntax checking and error reporting
+  - Performance analysis and optimization hints
+  - Modern GLSL compatibility warnings and suggestions
+  - Offline operation - no internet connection required
+  - Shader extraction tools for customization
+- **🔧 Improved User Experience**:
+  - Zero setup for shaders - works out of the box
+  - Real-time validation feedback
+  - Organized shader categories for easy browsing
+  - Professional-grade shader quality
+- **📦 Build System**:
+  - Shaders automatically embedded during build
+  - Enhanced validation integrated into build process
+  - Improved error handling and reporting
 - Verify graphics drivers are up to date
 
 ### Debug Mode

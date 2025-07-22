@@ -4,16 +4,60 @@ use crate::models::{AppConfig, MameExecutable};
 use std::path::PathBuf;
 use std::process::Command;
 
+// Smart directory memory categories
+const CATEGORY_ROM: &str = "rom_directories";
+const CATEGORY_SAMPLE: &str = "sample_directories";
+const CATEGORY_ARTWORK: &str = "artwork_extra";
+const CATEGORY_SUPPORT_FILES: &str = "support_files";
+const CATEGORY_DAT_FILES: &str = "dat_files";
+const CATEGORY_INTERNAL_FOLDERS: &str = "internal_folders";
+
+// Structure to collect directory updates for smart memory
+#[derive(Default)]
+struct DirectoryUpdates {
+    updates: Vec<(String, PathBuf)>,
+}
+
+impl DirectoryUpdates {
+    fn add_update(&mut self, category: &str, path: &PathBuf) {
+        if let Some(parent) = path.parent() {
+            self.updates.push((category.to_string(), parent.to_path_buf()));
+        }
+    }
+    
+    fn apply_to_config(&self, config: &mut AppConfig) {
+        for (category, path) in &self.updates {
+            config.last_directories.insert(category.clone(), path.clone());
+        }
+    }
+}
+
 /// DirectoriesDialog menangani konfigurasi berbagai file path
 /// Versi ini melacak perubahan dan memberitahu main window saat reload diperlukan
 pub struct DirectoriesDialog;
 
 impl DirectoriesDialog {
+    /// Get last used directory for a category, or default to current directory
+    fn get_last_directory(config: &AppConfig, category: &str) -> Option<PathBuf> {
+        config.last_directories.get(category).cloned()
+    }
+    
+    /// Save last used directory for a category
+    fn save_last_directory(config: &mut AppConfig, category: &str, path: &PathBuf) {
+        if let Some(parent) = path.parent() {
+            config.last_directories.insert(category.to_string(), parent.to_path_buf());
+        }
+    }
+
     /// Menampilkan dialog konfigurasi directories utama
     /// Mengembalikan true jika ada perubahan yang memerlukan reload
     pub fn show(ctx: &egui::Context, config: &mut AppConfig, open: &mut bool) -> bool {
         let mut close = false;
         let mut changes_made = false;
+        let mut directory_updates = DirectoryUpdates::default();
+        
+        // Take snapshot of last_directories for read operations
+        let last_directories_snapshot = config.last_directories.clone();
 
         // Simpan state awal untuk deteksi perubahan
         let initial_mame_count = config.mame_executables.len();
@@ -71,7 +115,7 @@ impl DirectoriesDialog {
                         ui.label("Folders containing your game ROM files");
                         ui.add_space(5.0);
 
-                        if Self::path_list(ui, &mut config.rom_paths, "roms") {
+                                                    if Self::path_list(ui, &mut config.rom_paths, "roms", &last_directories_snapshot, &mut directory_updates) {
                             changes_made = true;
                         }
                     });
@@ -85,56 +129,56 @@ impl DirectoriesDialog {
                         .max_height(400.0)
                         .show(ui, |ui| {
                             // Artwork path
-                            if Self::optional_path_field(ui, "Artwork", "Game artwork files", &mut config.artwork_path) {
+                            if Self::optional_path_field(ui, "Artwork", "Game artwork files", &mut config.artwork_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Snap path
-                            if Self::optional_path_field(ui, "Snap", "Game screenshots", &mut config.snap_path) {
+                            if Self::optional_path_field(ui, "Snap", "Game screenshots", &mut config.snap_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Cabinet path
-                            if Self::optional_path_field(ui, "Cabinet", "Cabinet artwork", &mut config.cabinet_path) {
+                            if Self::optional_path_field(ui, "Cabinet", "Cabinet artwork", &mut config.cabinet_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Title path
-                            if Self::optional_path_field(ui, "Title", "Title screens", &mut config.title_path) {
+                            if Self::optional_path_field(ui, "Title", "Title screens", &mut config.title_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Flyer path
-                            if Self::optional_path_field(ui, "Flyer", "Promotional flyers", &mut config.flyer_path) {
+                            if Self::optional_path_field(ui, "Flyer", "Promotional flyers", &mut config.flyer_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Marquee path
-                            if Self::optional_path_field(ui, "Marquees", "Marquee artwork", &mut config.marquee_path) {
+                            if Self::optional_path_field(ui, "Marquees", "Marquee artwork", &mut config.marquee_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Cheats path
-                            if Self::optional_path_field(ui, "Cheats", "Cheat files", &mut config.cheats_path) {
+                            if Self::optional_path_field(ui, "Cheats", "Cheat files", &mut config.cheats_path, &last_directories_snapshot, CATEGORY_SUPPORT_FILES, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Icons path
-                            if Self::optional_path_field(ui, "Icons", "Game icon files", &mut config.icons_path) {
+                            if Self::optional_path_field(ui, "Icons", "Game icon files", &mut config.icons_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
                                 changes_made = true;
                             }
                         });
@@ -155,7 +199,7 @@ impl DirectoriesDialog {
                                     "The catver.ini file is required to display game categories"
                                 );
                                 
-                                if Self::optional_file_field(ui, "Catver INI", "Game category information (catver.ini)", &mut config.catver_ini_path, Some(&["ini"])) {
+                                if Self::optional_file_field(ui, "Catver INI", "Game category information (catver.ini)", &mut config.catver_ini_path, Some(&["ini"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
                                     changes_made = true;
                                 }
                             });
@@ -165,35 +209,35 @@ impl DirectoriesDialog {
                             ui.add_space(10.0);
                             
                             // History path
-                            if Self::optional_file_field(ui, "History", "Game history information", &mut config.history_path, Some(&["xml"])) {
+                            if Self::optional_file_field(ui, "History", "Game history information", &mut config.history_path, Some(&["xml"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // mameinfo.dat path
-                            if Self::optional_file_field(ui, "MAME Info DAT", "Detailed game information", &mut config.mameinfo_dat_path, Some(&["dat"])) {
+                            if Self::optional_file_field(ui, "MAME Info DAT", "Detailed game information", &mut config.mameinfo_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // hiscore.dat path
-                            if Self::optional_file_field(ui, "High Score DAT", "High score information", &mut config.hiscore_dat_path, Some(&["dat"])) {
+                            if Self::optional_file_field(ui, "High Score DAT", "High score information", &mut config.hiscore_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // gameinit.dat path
-                            if Self::optional_file_field(ui, "Game Init DAT", "Game initialization data", &mut config.gameinit_dat_path, Some(&["dat"])) {
+                            if Self::optional_file_field(ui, "Game Init DAT", "Game initialization data", &mut config.gameinit_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // command.dat path
-                            if Self::optional_file_field(ui, "Command DAT", "Game command information", &mut config.command_dat_path, Some(&["dat"])) {
+                            if Self::optional_file_field(ui, "Command DAT", "Game command information", &mut config.command_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
                                 changes_made = true;
                             }
                         });
@@ -211,14 +255,14 @@ impl DirectoriesDialog {
                         .max_height(400.0)
                         .show(ui, |ui| {
                             // Configuration files directory
-                            if Self::optional_path_field(ui, "Configuration Files (cfg)", "MAME configuration files directory", &mut config.cfg_path) {
+                            if Self::optional_path_field(ui, "Configuration Files (cfg)", "MAME configuration files directory", &mut config.cfg_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // NVRAM directory
-                            if Self::optional_path_field(ui, "NVRAM", "Non-volatile RAM directory", &mut config.nvram_path) {
+                            if Self::optional_path_field(ui, "NVRAM", "Non-volatile RAM directory", &mut config.nvram_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
@@ -229,28 +273,28 @@ impl DirectoriesDialog {
                             ui.add_space(10.0);
                             
                             // Input configuration directory
-                            if Self::optional_path_field(ui, "Input Configuration (input)", "Input configuration files directory", &mut config.input_path) {
+                            if Self::optional_path_field(ui, "Input Configuration (input)", "Input configuration files directory", &mut config.input_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Save state directory
-                            if Self::optional_path_field(ui, "Save States (state)", "Save state files directory", &mut config.state_path) {
+                            if Self::optional_path_field(ui, "Save States (state)", "Save state files directory", &mut config.state_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Hard disk diff directory
-                            if Self::optional_path_field(ui, "Hard Disk Diffs (diff)", "Hard disk diff files directory", &mut config.diff_path) {
+                            if Self::optional_path_field(ui, "Hard Disk Diffs (diff)", "Hard disk diff files directory", &mut config.diff_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
                                 changes_made = true;
                             }
                             
                             ui.add_space(10.0);
                             
                             // Comment files directory
-                            if Self::optional_path_field(ui, "Comment Files (comment)", "Comment files directory", &mut config.comment_path) {
+                            if Self::optional_path_field(ui, "Comment Files (comment)", "Comment files directory", &mut config.comment_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
                                 changes_made = true;
                             }
                         });
@@ -291,6 +335,9 @@ impl DirectoriesDialog {
         if close {
             *open = false;
         }
+
+        // Apply directory updates to config for smart memory
+        directory_updates.apply_to_config(config);
 
         // Return apakah ada perubahan DAN user klik OK
         close && changes_made
@@ -478,7 +525,7 @@ impl DirectoriesDialog {
 
     /// Handle path lists - return true jika dimodifikasi
     /// PERBAIKAN: Menghindari move error dengan careful borrowing
-    fn path_list(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, id: &str) -> bool {
+    fn path_list(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, id: &str, last_directories: &std::collections::HashMap<String, PathBuf>, updates: &mut DirectoryUpdates) -> bool {
         let mut modified = false;
         let scroll_id = format!("path_scroll_{}", id);
 
@@ -536,18 +583,32 @@ impl DirectoriesDialog {
 
                     // Browse button
                     if ui.button("Browse...").clicked() {
-                        if let Some(folder) = rfd::FileDialog::new()
+                        // Determine category for smart directory memory
+                        let category = match id {
+                            "roms" => CATEGORY_ROM,
+                            "samples" => CATEGORY_SAMPLE,
+                            _ => CATEGORY_ROM, // Default fallback
+                        };
+                        
+                        let mut dialog = rfd::FileDialog::new()
                             .set_title(&format!("Select {} Directory",
                                                 match id {
                                                     "roms" => "ROM",
                                                     "samples" => "Sample",
                                                     _ => "Directory"
-                                                }))
-                            .pick_folder()
-                            {
-                                *path = folder;
-                                modified = true;
-                            }
+                                                }));
+                        
+                        // Set starting directory based on smart memory
+                        if let Some(last_dir) = last_directories.get(category) {
+                            dialog = dialog.set_directory(last_dir);
+                        }
+                        
+                        if let Some(folder) = dialog.pick_folder() {
+                            // Save directory for smart memory
+                            updates.add_update(category, &folder);
+                            *path = folder;
+                            modified = true;
+                        }
                     }
 
                     // Remove button
@@ -579,7 +640,7 @@ impl DirectoriesDialog {
     }
     
     /// Handle optional single path field - returns true if modified
-    fn optional_path_field(ui: &mut egui::Ui, label: &str, description: &str, path: &mut Option<PathBuf>) -> bool {
+    fn optional_path_field(ui: &mut egui::Ui, label: &str, description: &str, path: &mut Option<PathBuf>, last_directories: &std::collections::HashMap<String, PathBuf>, category: &str, updates: &mut DirectoryUpdates) -> bool {
         let mut modified = false;
         
         ui.group(|ui| {
@@ -616,10 +677,17 @@ impl DirectoriesDialog {
                 
                 // Browse button
                 if ui.button("Browse...").clicked() {
-                    if let Some(folder) = rfd::FileDialog::new()
-                        .set_title(&format!("Select {} Directory", label))
-                        .pick_folder()
-                    {
+                    let mut dialog = rfd::FileDialog::new()
+                        .set_title(&format!("Select {} Directory", label));
+                    
+                    // Set starting directory based on smart memory
+                    if let Some(last_dir) = last_directories.get(category) {
+                        dialog = dialog.set_directory(last_dir);
+                    }
+                    
+                    if let Some(folder) = dialog.pick_folder() {
+                        // Save directory for smart memory
+                        updates.add_update(category, &folder);
                         *path = Some(folder);
                         modified = true;
                     }
@@ -646,7 +714,7 @@ impl DirectoriesDialog {
     }
     
     /// Handle optional single file field - returns true if modified
-    fn optional_file_field(ui: &mut egui::Ui, label: &str, description: &str, path: &mut Option<PathBuf>, extensions: Option<&[&str]>) -> bool {
+    fn optional_file_field(ui: &mut egui::Ui, label: &str, description: &str, path: &mut Option<PathBuf>, extensions: Option<&[&str]>, last_directories: &std::collections::HashMap<String, PathBuf>, category: &str, updates: &mut DirectoryUpdates) -> bool {
         let mut modified = false;
         
         ui.group(|ui| {
@@ -697,14 +765,18 @@ impl DirectoriesDialog {
                         dialog = dialog.add_filter("All files", &["*"]);
                     }
                     
-                    // Set starting directory if path exists
-                    if let Some(existing_path) = path.as_ref() {
+                    // Set starting directory based on smart memory or existing path
+                    if let Some(last_dir) = last_directories.get(category) {
+                        dialog = dialog.set_directory(last_dir);
+                    } else if let Some(existing_path) = path.as_ref() {
                         if let Some(parent) = existing_path.parent() {
                             dialog = dialog.set_directory(parent);
                         }
                     }
                     
                     if let Some(file) = dialog.pick_file() {
+                        // Save directory for smart memory
+                        updates.add_update(category, &file);
                         *path = Some(file);
                         modified = true;
                     }
