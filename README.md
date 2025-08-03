@@ -137,16 +137,16 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 ## Screenshots
 
 ### Main Interface
-![Main UI](assets/Screenshot_20250713_163905.png)
+![Main Window](screenshot/Main_Window.png)
 
-### Directories Selection
-![Directories Dialog](assets/Screenshot_20250713_163924.png)
+### Advanced Settings
+![Advanced Settings](screenshot/Advanced_Settings.png)
 
-### Preferences Dialog
-![Preferences Dialog](assets/Screenshot_20250713_163936.png)
+### Modern Directories UI
+![New UI Directories](screenshot/NewUI_Directories.png)
 
-### Video Settings
-![Video Settings](assets/Screenshot_20250713_163949.png)
+### CLRMamePro Lite Mode - ROM Verification
+![ROM Audit](screenshot/ROMs_audit.png)
 
 ## System Requirements
 
