@@ -4,13 +4,16 @@
 use eframe::egui;
 use crate::models::*;
 use crate::ui::components::mame_finder::{MameFinderDialog, FoundMame};
-use crate::ui::components::rom_verify::RomVerifyDialog;
+use crate::ui::components::rom_verify::{RomVerifyDialog, VerificationManager};
 use crate::ui::components::game_properties::GamePropertiesDialog;
 use crate::ui::components::directories::DirectoriesDialog;
+use crate::ui::components::directories_paths::DirectoriesPathsDialog;
 use crate::ui::components::preferences::PreferencesDialog;
 use crate::ui::components::hidden_categories::HiddenCategoriesDialog;
 use crate::ui::components::rom_info::RomInfoDialog;
+use crate::ui::components::advanced_mame_settings::AdvancedMameSettingsDialog;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Actions that dialogs can trigger
 #[derive(Debug, Clone)]
@@ -25,6 +28,7 @@ pub enum DialogAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DialogType {
     Directories,
+    DirectoriesPaths,  // New modern UI dialog
     Preferences,
     RomInfo,
     About,
@@ -33,6 +37,7 @@ pub enum DialogType {
     ManualMame,
     GameProperties,
     RomVerify,
+    AdvancedMameSettings,
 }
 
 /// Dialog state management
@@ -44,6 +49,8 @@ pub struct DialogManager {
     found_mame_executables: Vec<FoundMame>,
     rom_verify_dialog: RomVerifyDialog,
     game_properties_dialog: Option<GamePropertiesDialog>,
+    advanced_mame_settings_dialog: Option<AdvancedMameSettingsDialog>,
+    directories_paths_dialog: Option<DirectoriesPathsDialog>,
     
     // Callback for when dialogs need to trigger actions
     on_dialog_closed: Option<Box<dyn Fn(DialogType, bool) + Send + Sync>>,
@@ -56,6 +63,7 @@ impl DialogManager {
         // Initialize all dialog states to false
         for dialog_type in [
             DialogType::Directories,
+            DialogType::DirectoriesPaths,
             DialogType::Preferences,
             DialogType::RomInfo,
             DialogType::About,
@@ -63,6 +71,7 @@ impl DialogManager {
             DialogType::MameFinder,
             DialogType::ManualMame,
             DialogType::GameProperties,
+            DialogType::AdvancedMameSettings,
         ] {
             dialog_states.insert(dialog_type, false);
         }
@@ -72,6 +81,8 @@ impl DialogManager {
             found_mame_executables: Vec::new(),
             rom_verify_dialog: RomVerifyDialog::default(),
             game_properties_dialog: None,
+            advanced_mame_settings_dialog: None,
+            directories_paths_dialog: None,
             on_dialog_closed: None,
         }
     }
@@ -136,9 +147,19 @@ impl DialogManager {
         self.game_properties_dialog = dialog;
     }
     
+    /// Set advanced MAME settings dialog
+    pub fn set_advanced_mame_settings_dialog(&mut self, dialog: Option<AdvancedMameSettingsDialog>) {
+        self.advanced_mame_settings_dialog = dialog;
+    }
+    
     /// Get ROM verify dialog reference
     pub fn rom_verify_dialog(&mut self) -> &mut RomVerifyDialog {
         &mut self.rom_verify_dialog
+    }
+
+    /// Get verification manager reference
+    pub fn verification_manager(&self) -> Arc<VerificationManager> {
+        self.rom_verify_dialog.verification_manager()
     }
     
     /// Render all open dialogs
@@ -275,72 +296,96 @@ impl DialogManager {
             }
         }
         
+        // Advanced MAME Settings Dialog
+        if self.is_dialog_open(DialogType::AdvancedMameSettings) {
+            if let Some(dialog) = &mut self.advanced_mame_settings_dialog {
+                if dialog.show(ctx, self.dialog_states.get_mut(&DialogType::AdvancedMameSettings).unwrap(), config) {
+                    // Settings were applied
+                    actions.push(DialogAction::SaveConfig);
+                }
+            }
+        }
+        
+        // Directories & Paths Dialog (New modern UI)
+        if self.is_dialog_open(DialogType::DirectoriesPaths) {
+            // Create dialog if it doesn't exist
+            if self.directories_paths_dialog.is_none() {
+                self.directories_paths_dialog = Some(DirectoriesPathsDialog::new(config));
+            }
+            
+            if let Some(dialog) = &mut self.directories_paths_dialog {
+                let changed = dialog.show(ctx, config, self.dialog_states.get_mut(&DialogType::DirectoriesPaths).unwrap());
+                
+                // Check if dialog was closed
+                if !self.is_dialog_open(DialogType::DirectoriesPaths) {
+                    // Always save config when dialog is closed
+                    actions.push(DialogAction::SaveConfig);
+                    
+                    if changed {
+                        // Reload everything if changes were made
+                        *need_reload_after_dialog = true;
+                        actions.push(DialogAction::OnDirectoriesChanged);
+                    }
+                    
+                    // Clear the dialog instance
+                    self.directories_paths_dialog = None;
+                }
+            }
+        }
+        
         actions
     }
-    
-    /// Render the about dialog
+
     fn render_about_dialog(&mut self, ctx: &egui::Context) {
-        let mut should_close = false;
-        egui::Window::new("About MAMEUIx")
+        egui::Window::new("About MAMEuix")
             .open(self.dialog_states.get_mut(&DialogType::About).unwrap())
+            .default_size([500.0, 450.0])
             .resizable(false)
-            .collapsible(false)
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.heading("MAMEUIx");
-                    ui.label("A modern, fast MAME frontend built with Rust and egui");
-                    ui.label("Version 0.1.2");
-                    ui.add_space(15.0);
-                    
-                    ui.label("🎮 Core Features:");
-                    ui.label("• Lightning-fast game browsing and filtering");
-                    ui.label("• Advanced ROM verification and management");
-                    ui.label("• Category support with catver.ini integration");
-                    ui.label("• Favorites system and detailed play history");
-                    ui.label("• Comprehensive artwork display (marquee, flyer, title, cabinet)");
-                    ui.label("• Real-time performance monitoring and optimization");
-                    ui.label("• Multiple MAME version support");
-                    ui.label("• Plugin support (hiscore, cheats, autofire)");
-                    
+                    ui.heading("MAMEuix");
+                    ui.label("A modern MAME frontend with enhanced features");
                     ui.add_space(10.0);
-                    ui.label("🎨 User Interface:");
-                    ui.label("• Modern, responsive GUI with multiple themes");
-                    ui.label("• Customizable column layouts and sorting");
-                    ui.label("• Advanced filtering by category, manufacturer, year");
-                    ui.label("• Game properties and launch configuration");
-                    ui.label("• Integrated ROM verification and audit tools");
-                    
-                    ui.add_space(10.0);
-                    ui.label("⚡ Performance:");
-                    ui.label("• Optimized for large ROM collections (50,000+ games)");
-                    ui.label("• Efficient memory management and caching");
-                    ui.label("• Background loading and scanning");
-                    ui.label("• Hardware-accelerated graphics support");
-                    
-                    ui.add_space(10.0);
-                    ui.label("🔧 Built with:");
-                    ui.label("• Rust (performance and safety)");
-                    ui.label("• egui (immediate mode GUI framework)");
-                    ui.label("• MAME XML parsing and integration");
-                    ui.label("• Cross-platform compatibility");
-                    
-                    ui.add_space(15.0);
-                    ui.label("📝 License: MIT License");
-                    ui.label("🌐 Project: Open source MAME frontend");
-                    
+                    ui.label("Version: 0.1.4");
+                    ui.label("Built with Rust and egui");
                     ui.add_space(20.0);
-                    if ui.button("Close").clicked() {
-                        should_close = true;
-                    }
+                    
+                    ui.label(egui::RichText::new("🎮 Core Features").heading());
+                    ui.label("• Fast game scanning and filtering (48,000+ games)");
+                    ui.label("• Enhanced search capabilities with real-time results");
+                    ui.label("• Customizable UI themes (10 beautiful themes)");
+                    ui.label("• Plugin support (hiscore, cheat, autofire)");
+                    ui.label("• Virtual scrolling for smooth performance");
+                    ui.add_space(10.0);
+                    
+                    ui.label(egui::RichText::new("🔍 ROM Verification - CLRMamePro Lite").heading());
+                    ui.label("• Real-time verification status with progress tracking");
+                    ui.label("• Color-coded game list (Green=Verified, Red=Failed, Yellow=Warning)");
+                    ui.label("• Bulk actions: Find missing ROMs (No-Intro integration)");
+                    ui.label("• Export reports in Text, CSV, and HTML formats");
+                    ui.label("• Pause/Resume/Stop verification controls");
+                    ui.label("• Detailed statistics and ETA calculations");
+                    ui.add_space(10.0);
+                    
+                    ui.label(egui::RichText::new("🎨 Graphics & Performance").heading());
+                    ui.label("• BGFX multi-backend support (8 rendering backends)");
+                    ui.label("• Embedded GLSL shaders (11 professional effects)");
+                    ui.label("• Integer scaling for pixel-perfect display");
+                    ui.label("• Core performance options and real-time configuration");
+                    ui.label("• Hardware filtering by CPU, device, and sound chip");
+                    ui.add_space(10.0);
+                    
+                    ui.label(egui::RichText::new("⚙️ Advanced Features").heading());
+                    ui.label("• Thread pool icon loading with 8x performance improvement");
+                    ui.label("• Performance monitoring and adaptive loading");
+                    ui.label("• Column width persistence and resizable tables");
+                    ui.label("• Category support with catver.ini integration");
+                    ui.label("• CHD game support and artwork display");
                 });
             });
-        
-        if should_close {
-            self.close_dialog(DialogType::About);
-        }
     }
     
-    /// Initialize MAME finder dialog state
+    /// Initialize MAME finder dialog
     pub fn initialize_mame_finder(&mut self, config: &AppConfig) -> bool {
         if config.mame_executables.is_empty() {
             println!("First launch detected - searching for MAME executables...");
@@ -367,6 +412,7 @@ impl DialogManager {
     pub fn close_all_dialogs(&mut self) {
         for dialog_type in [
             DialogType::Directories,
+            DialogType::DirectoriesPaths,
             DialogType::Preferences,
             DialogType::RomInfo,
             DialogType::About,
@@ -374,6 +420,7 @@ impl DialogManager {
             DialogType::MameFinder,
             DialogType::ManualMame,
             DialogType::GameProperties,
+            DialogType::AdvancedMameSettings,
         ] {
             self.close_dialog(dialog_type);
         }

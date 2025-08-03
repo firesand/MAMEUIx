@@ -1,0 +1,704 @@
+use eframe::egui;
+use crate::models::game_properties::*;
+use crate::models::AppConfig;
+
+pub struct AdvancedMameSettingsDialog {
+    properties: GameProperties,
+    original_properties: GameProperties,
+    selected_tab: SettingsTab,
+    is_dirty: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum SettingsTab {
+    Display,
+    Advanced,
+    Screen,
+    Sound,
+    Miscellaneous,
+    SDLDrivers,
+    OSDInput,
+}
+
+impl AdvancedMameSettingsDialog {
+    pub fn new(config: &AppConfig) -> Self {
+        let properties = config.default_game_properties.clone();
+        Self {
+            original_properties: properties.clone(),
+            properties,
+            selected_tab: SettingsTab::Display,
+            is_dirty: false,
+        }
+    }
+
+    pub fn show(&mut self, ctx: &egui::Context, open: &mut bool, config: &mut AppConfig) -> bool {
+        let mut apply_changes = false;
+        let mut should_close = false;
+
+        // Create window with modern dark theme styling similar to mockup
+        egui::Window::new("⚙️ Advanced MAME Settings")
+            .open(open)
+            .default_size([760.0, 600.0])  // More reasonable height
+            .min_size([700.0, 500.0])      // Reasonable min height
+            .resizable(true)
+            .show(ctx, |ui| {
+                // Calculate available height untuk konten
+                let total_height = ui.available_height();
+                let footer_height = 60.0; // Space untuk buttons dan separator
+                let content_height = total_height - footer_height;
+                
+                // Main container dengan fixed height
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), content_height),
+                    egui::Layout::left_to_right(egui::Align::TOP),
+                    |ui| {
+                        // Left sidebar with tab navigation
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(150.0, content_height),
+                            egui::Layout::top_down(egui::Align::LEFT),
+                            |ui| {
+                                ui.add_space(10.0);
+                                
+                                // Tab buttons styled like the mockup
+                                self.render_sidebar_tab(ui, SettingsTab::Display, "Display");
+                                self.render_sidebar_tab(ui, SettingsTab::Advanced, "Advanced");
+                                self.render_sidebar_tab(ui, SettingsTab::Screen, "Screen");
+                                self.render_sidebar_tab(ui, SettingsTab::Sound, "Sound");
+                                self.render_sidebar_tab(ui, SettingsTab::Miscellaneous, "Miscellaneous");
+                                self.render_sidebar_tab(ui, SettingsTab::SDLDrivers, "SDL Drivers");
+                                self.render_sidebar_tab(ui, SettingsTab::OSDInput, "OSD/Input");
+                            }
+                        );
+                        
+                        // Vertical separator
+                        ui.separator();
+                        
+                        // Right content area - gunakan seluruh ruang yang tersedia
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), content_height),
+                            egui::Layout::top_down(egui::Align::LEFT),
+                            |ui| {
+                                ui.add_space(10.0);
+                                
+                                // Content based on selected tab
+                                egui::ScrollArea::vertical()
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        match self.selected_tab {
+                                            SettingsTab::Display => self.show_display_tab(ui),
+                                            SettingsTab::Advanced => self.show_advanced_tab(ui),
+                                            SettingsTab::Screen => self.show_screen_tab(ui),
+                                            SettingsTab::Sound => self.show_sound_tab(ui),
+                                            SettingsTab::Miscellaneous => self.show_miscellaneous_tab(ui),
+                                            SettingsTab::SDLDrivers => self.show_sdl_drivers_tab(ui),
+                                            SettingsTab::OSDInput => self.show_osd_input_tab(ui),
+                                        }
+                                    });
+                            }
+                        );
+                    }
+                );
+                
+                // Footer area dengan fixed position
+                ui.separator();
+                
+                // Bottom buttons aligned to right
+                ui.horizontal(|ui| {
+                    ui.add_space(ui.available_width() - 220.0);
+                    
+                    if ui.button("Cancel").clicked() {
+                        self.properties = self.original_properties.clone();
+                        should_close = true;
+                    }
+                    
+                    if ui.add_enabled(self.is_dirty, egui::Button::new("Apply")).clicked() {
+                        config.default_game_properties = self.properties.clone();
+                        self.original_properties = self.properties.clone();
+                        self.is_dirty = false;
+                        apply_changes = true;
+                    }
+                    
+                    if ui.button("OK").clicked() {
+                        config.default_game_properties = self.properties.clone();
+                        should_close = true;
+                        apply_changes = true;
+                    }
+                });
+            });
+
+        // Close window if needed
+        if should_close {
+            *open = false;
+        }
+        
+        // Track changes whenever any property is modified
+        // This is a simplified approach since GameProperties doesn't implement PartialEq
+        
+        apply_changes
+    }
+
+    fn render_sidebar_tab(&mut self, ui: &mut egui::Ui, tab: SettingsTab, label: &str) {
+        let is_selected = self.selected_tab == tab;
+        
+        // Style similar to mockup - blue background for selected
+        let response = ui.add(
+            egui::Button::new(label)
+                .fill(if is_selected {
+                    egui::Color32::from_rgb(76, 139, 245) // Blue for selected
+                } else {
+                    egui::Color32::TRANSPARENT
+                })
+                .min_size(egui::vec2(140.0, 35.0))
+        );
+
+        if response.clicked() {
+            self.selected_tab = tab;
+        }
+    }
+
+    fn show_display_tab(&mut self, ui: &mut egui::Ui) {
+        let display = &mut self.properties.display;
+
+        ui.heading("Display Options");
+        ui.add_space(10.0);
+
+        // Checkboxes matching the mockup
+        ui.checkbox(&mut display.run_in_window, "Run in a window");
+        ui.checkbox(&mut display.start_out_maximized, "Start out maximized");
+        ui.checkbox(&mut display.enforce_aspect_ratio, "Enforce aspect ratio");
+        ui.checkbox(&mut display.throttle, "Throttle");
+
+        ui.add_space(15.0);
+
+        // Video Mode dropdown
+        ui.horizontal(|ui| {
+            ui.label("Video Mode:");
+            ui.add_space(10.0);
+            egui::ComboBox::from_id_salt("video_mode")
+                .selected_text(display.video_mode.to_string())
+                .width(200.0)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut display.video_mode, VideoMode::Auto, "Auto");
+                    ui.selectable_value(&mut display.video_mode, VideoMode::OpenGL, "OpenGL");
+                    ui.selectable_value(&mut display.video_mode, VideoMode::Direct3D, "Direct3D");
+                    ui.selectable_value(&mut display.video_mode, VideoMode::BGFX, "BGFX");
+                    ui.selectable_value(&mut display.video_mode, VideoMode::Software, "Software");
+                });
+        });
+
+        ui.add_space(10.0);
+
+        // Bitmap prescaling
+        ui.horizontal(|ui| {
+            ui.label("Bitmap prescaling:");
+            ui.add_space(10.0);
+            ui.add(egui::DragValue::new(&mut display.bitmap_prescaling)
+                .speed(1.0)
+                .range(1..=8));
+        });
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        // Additional display options
+        ui.heading("Color Adjustments");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Gamma Correction:");
+            ui.add(egui::Slider::new(&mut display.gamma_correction, 0.1..=3.0)
+                .text("1.00"));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Brightness Correction:");
+            ui.add(egui::Slider::new(&mut display.brightness_correction, 0.1..=2.0)
+                .text("1.00"));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Contrast Correction:");
+            ui.add(egui::Slider::new(&mut display.contrast_correction, 0.1..=2.0)
+                .text("1.00"));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Pause Brightness:");
+            ui.add(egui::Slider::new(&mut display.pause_brightness, 0.0..=1.0)
+                .text("0.65"));
+        });
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        // Rotation and flipping
+        ui.heading("Screen Orientation");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Rotation:");
+            egui::ComboBox::from_id_salt("rotation")
+                .selected_text(display.rotation.to_string())
+                .width(150.0)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut display.rotation, RotationMode::Default, "Default");
+                    ui.selectable_value(&mut display.rotation, RotationMode::Rotate0, "0");
+                    ui.selectable_value(&mut display.rotation, RotationMode::Rotate90, "90");
+                    ui.selectable_value(&mut display.rotation, RotationMode::Rotate180, "180");
+                    ui.selectable_value(&mut display.rotation, RotationMode::Rotate270, "270");
+                });
+        });
+
+        ui.checkbox(&mut display.flip_screen_upside_down, "Flip screen upside-down");
+        ui.checkbox(&mut display.flip_screen_left_right, "Flip screen left-right");
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        // Integer scaling options
+        ui.heading("Integer Scaling Options");
+        ui.add_space(10.0);
+
+        ui.checkbox(&mut display.use_non_integer_scaling, 
+                   "Allow non-integer scaling ratios");
+        
+        if display.use_non_integer_scaling {
+            ui.indent("stretch_options", |ui| {
+                ui.checkbox(&mut display.stretch_only_x_axis, 
+                           "Allow non-integer stretch on X axis only");
+                ui.checkbox(&mut display.stretch_only_y_axis, 
+                           "Allow non-integer stretch on Y axis only");
+            });
+        }
+
+        ui.checkbox(&mut display.auto_select_stretch_axis, 
+                   "Auto-select stretch axis based on game orientation");
+        ui.checkbox(&mut display.overscan_on_targets, 
+                   "Allow overscan on integer scaled targets");
+
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Horizontal scale factor:");
+            ui.add(egui::DragValue::new(&mut display.horizontal_scale_factor)
+                .speed(1)
+                .range(0..=10)
+                .suffix("x"));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Vertical scale factor:");
+            ui.add(egui::DragValue::new(&mut display.vertical_scale_factor)
+                .speed(1)
+                .range(0..=10)
+                .suffix("x"));
+        });
+    }
+
+    fn show_advanced_tab(&mut self, ui: &mut egui::Ui) {
+        let advanced = &mut self.properties.advanced;
+
+        ui.heading("Advanced Options");
+        ui.add_space(10.0);
+
+        // OpenGL settings
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("OpenGL Settings").strong());
+            ui.add_space(5.0);
+            
+            ui.checkbox(&mut advanced.enable_glsl, "Enable GLSL shaders");
+            ui.checkbox(&mut advanced.force_power_of_two_textures, "Force power-of-two textures");
+            ui.checkbox(&mut advanced.dont_use_gl_arb_texture_rectangle, 
+                       "Don't use GL_ARB_texture_rectangle");
+            ui.checkbox(&mut advanced.enable_vbo, "Enable VBO (Vertex Buffer Objects)");
+            ui.checkbox(&mut advanced.enable_pbo, "Enable PBO (Pixel Buffer Objects)");
+            
+            if advanced.enable_glsl {
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.label("GLSL Filter:");
+                    egui::ComboBox::from_id_salt("glsl_filter")
+                        .selected_text(match advanced.glsl_filter {
+                            GLSLFilter::Plain => "Plain",
+                            GLSLFilter::Bilinear => "Bilinear",
+                            GLSLFilter::Bicubic => "Bicubic",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut advanced.glsl_filter, 
+                                              GLSLFilter::Plain, "Plain");
+                            ui.selectable_value(&mut advanced.glsl_filter, 
+                                              GLSLFilter::Bilinear, "Bilinear (default)");
+                            ui.selectable_value(&mut advanced.glsl_filter, 
+                                              GLSLFilter::Bicubic, "Bicubic");
+                        });
+                });
+            }
+        });
+
+        ui.add_space(15.0);
+
+        // BGFX settings
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("BGFX Settings").strong());
+            ui.add_space(5.0);
+            
+            ui.horizontal(|ui| {
+                ui.label("Backend:");
+                egui::ComboBox::from_id_salt("bgfx_backend")
+                    .selected_text(advanced.bgfx_settings.backend.to_string())
+                    .show_ui(ui, |ui| {
+                        for backend in BGFXBackend::available_backends() {
+                            let label = match backend {
+                                BGFXBackend::Auto => "Auto-detect",
+                                BGFXBackend::D3D9 => "Direct3D 9",
+                                BGFXBackend::D3D11 => "Direct3D 11", 
+                                BGFXBackend::D3D12 => "Direct3D 12",
+                                BGFXBackend::OpenGL => "OpenGL",
+                                BGFXBackend::Metal => "Metal",
+                                BGFXBackend::Vulkan => "Vulkan",
+                            };
+                            ui.selectable_value(
+                                &mut advanced.bgfx_settings.backend,
+                                backend,
+                                label
+                            );
+                        }
+                    });
+            });
+            
+            ui.add_space(5.0);
+            
+            ui.horizontal(|ui| {
+                ui.label("Screen Chains:");
+                ui.text_edit_singleline(&mut advanced.bgfx_settings.screen_chains);
+            });
+            
+            ui.checkbox(&mut advanced.bgfx_settings.enable_debug, "Enable BGFX debug statistics");
+        });
+    }
+
+    fn show_screen_tab(&mut self, ui: &mut egui::Ui) {
+        let screen = &mut self.properties.screen;
+
+        ui.heading("Screen Options");
+        ui.add_space(10.0);
+
+        ui.checkbox(&mut screen.triple_buffering, "Triple buffering");
+        ui.checkbox(&mut screen.sync_to_monitor_refresh, "Sync to monitor refresh");
+        ui.checkbox(&mut screen.wait_for_vertical_sync, "Wait for vertical sync");
+        ui.checkbox(&mut screen.refresh_speed, "Refresh speed");
+        ui.checkbox(&mut screen.low_latency, "Low latency");
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        ui.heading("Frame Skipping");
+        ui.add_space(10.0);
+
+        ui.radio_value(&mut screen.frame_skipping.automatic, true, "Automatic");
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut screen.frame_skipping.automatic, false, "Draw every frame");
+            ui.add(egui::DragValue::new(&mut screen.frame_skipping.draw_every_frame)
+                .speed(1)
+                .range(1..=10));
+        });
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        ui.heading("Performance Options");
+        ui.add_space(10.0);
+
+        ui.checkbox(&mut screen.auto_frameskip, "Auto-frameskip (maintain emulation speed)");
+        
+        ui.horizontal(|ui| {
+            ui.label("Frameskip value:");
+            ui.add(egui::DragValue::new(&mut screen.frameskip_value)
+                .speed(1)
+                .range(0..=10));
+        });
+
+        ui.checkbox(&mut screen.sleep_when_idle, "Sleep when idle");
+
+        ui.add_space(15.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Emulation speed:");
+            let speed = screen.emulation_speed;
+            ui.add(egui::Slider::new(&mut screen.emulation_speed, 0.1..=2.0)
+                .text(format!("{:.1}", speed)));
+        });
+    }
+
+    fn show_sound_tab(&mut self, ui: &mut egui::Ui) {
+        let sound = &mut self.properties.sound;
+
+        ui.heading("Sound Options");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Sound Mode:");
+            egui::ComboBox::from_id_salt("sound_mode")
+                .selected_text(sound.sound_mode.to_string())
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut sound.sound_mode, SoundMode::Auto, "Auto");
+                    ui.selectable_value(&mut sound.sound_mode, SoundMode::SDL, "SDL");
+                    ui.selectable_value(&mut sound.sound_mode, SoundMode::PortAudio, "PortAudio");
+                    ui.selectable_value(&mut sound.sound_mode, SoundMode::PulseAudio, "PulseAudio");
+                    ui.selectable_value(&mut sound.sound_mode, SoundMode::None, "None");
+                });
+        });
+
+        ui.add_space(10.0);
+
+        ui.checkbox(&mut sound.use_samples, "Use samples");
+
+        ui.horizontal(|ui| {
+            ui.label("Sample rate:");
+            egui::ComboBox::from_id_salt("sample_rate")
+                .selected_text(format!("{}", sound.sample_rate))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut sound.sample_rate, 11025, "11025");
+                    ui.selectable_value(&mut sound.sample_rate, 22050, "22050");
+                    ui.selectable_value(&mut sound.sample_rate, 44100, "44100");
+                    ui.selectable_value(&mut sound.sample_rate, 48000, "48000");
+                });
+        });
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Volume attenuation:");
+            let volume = sound.volume_attenuation;
+            ui.add(egui::Slider::new(&mut sound.volume_attenuation, -32..=0)
+                .text(format!("{}dB", volume)));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Audio latency:");
+            let latency = sound.audio_latency;
+            ui.add(egui::Slider::new(&mut sound.audio_latency, 0.0..=5.0)
+                .text(format!("{:.1}", latency)));
+        });
+    }
+
+    fn show_miscellaneous_tab(&mut self, ui: &mut egui::Ui) {
+        let misc = &mut self.properties.miscellaneous;
+
+        ui.heading("Miscellaneous Options");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Number of screens:");
+            ui.add(egui::DragValue::new(&mut misc.num_screens)
+                .speed(1)
+                .range(1..=4));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Screen Number:");
+            egui::ComboBox::from_id_salt("screen_number")
+                .selected_text(match &misc.screen_number {
+                    ScreenSelection::Default => "Default".to_string(),
+                    ScreenSelection::Screen(n) => format!("Screen {}", n),
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut misc.screen_number, 
+                                      ScreenSelection::Default, "Default");
+                    for i in 1..=4 {
+                        ui.selectable_value(&mut misc.screen_number, 
+                                          ScreenSelection::Screen(i), 
+                                          format!("Screen {}", i));
+                    }
+                });
+        });
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        ui.heading("Performance");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Number of processors:");
+            
+            let mut use_custom = misc.num_processors.is_some();
+            if ui.checkbox(&mut use_custom, "Override system default").changed() {
+                if use_custom {
+                    let cpu_count = std::thread::available_parallelism()
+                        .map(|n| n.get() as u32)
+                        .unwrap_or(4);
+                    misc.num_processors = Some(cpu_count);
+                } else {
+                    misc.num_processors = None;
+                }
+            }
+            
+            if let Some(num_procs) = &mut misc.num_processors {
+                ui.add(egui::DragValue::new(num_procs)
+                    .speed(1)
+                    .range(1..=64)
+                    .suffix(" cores"));
+            }
+        });
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        ui.heading("Screen Resolution");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            ui.label("Resolution:");
+            egui::ComboBox::from_id_salt("resolution")
+                .selected_text(match &misc.resolution {
+                    Resolution::Auto => "Auto".to_string(),
+                    Resolution::Custom(w, h) => format!("{}x{}", w, h),
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut misc.resolution, Resolution::Auto, "Auto");
+                    ui.selectable_value(&mut misc.resolution, Resolution::Custom(640, 480), "640x480");
+                    ui.selectable_value(&mut misc.resolution, Resolution::Custom(800, 600), "800x600");
+                    ui.selectable_value(&mut misc.resolution, Resolution::Custom(1024, 768), "1024x768");
+                    ui.selectable_value(&mut misc.resolution, Resolution::Custom(1280, 720), "1280x720");
+                    ui.selectable_value(&mut misc.resolution, Resolution::Custom(1920, 1080), "1920x1080");
+                });
+        });
+
+        ui.checkbox(&mut misc.switch_resolutions_to_fit, "Switch resolutions to fit");
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(15.0);
+
+        ui.heading("Custom Arguments");
+        ui.add_space(10.0);
+
+        ui.label("Additional MAME command line arguments:");
+        ui.add(egui::TextEdit::multiline(&mut misc.custom_args)
+            .desired_rows(3)
+            .hint_text("e.g., -bench 60 -monitorprovider sdl"));
+    }
+
+    fn show_sdl_drivers_tab(&mut self, ui: &mut egui::Ui) {
+        let sdl_options = &mut self.properties.sdl_options;
+
+        ui.heading("SDL Driver Options");
+        ui.add_space(10.0);
+
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Performance Monitoring").strong());
+            ui.checkbox(&mut sdl_options.show_video_fps, "Show SDL video FPS");
+        });
+
+        ui.add_space(15.0);
+
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Video Options").strong());
+            ui.add_space(5.0);
+            
+            ui.checkbox(&mut sdl_options.center_horizontal, "Center horizontally");
+            ui.checkbox(&mut sdl_options.center_vertical, "Center vertically");
+            
+            ui.add_space(5.0);
+            
+            ui.horizontal(|ui| {
+                ui.label("Scale mode:");
+                egui::ComboBox::from_id_salt("sdl_scale_mode")
+                    .selected_text(sdl_options.scale_mode.to_string())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut sdl_options.scale_mode, SDLScaleMode::None, "None");
+                        ui.selectable_value(&mut sdl_options.scale_mode, SDLScaleMode::HWBlit, "Hardware Blit");
+                        ui.selectable_value(&mut sdl_options.scale_mode, SDLScaleMode::HWBest, "Hardware Best");
+                        ui.selectable_value(&mut sdl_options.scale_mode, SDLScaleMode::YV12, "YV12");
+                        ui.selectable_value(&mut sdl_options.scale_mode, SDLScaleMode::YUY2, "YUY2");
+                        ui.selectable_value(&mut sdl_options.scale_mode, SDLScaleMode::YV12x2, "YV12 x2");
+                        ui.selectable_value(&mut sdl_options.scale_mode, SDLScaleMode::YUY2x2, "YUY2 x2");
+                    });
+            });
+        });
+
+        ui.add_space(15.0);
+
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Input Options").strong());
+            ui.add_space(5.0);
+            
+            ui.checkbox(&mut sdl_options.enable_touch, "Enable touch input");
+            ui.checkbox(&mut sdl_options.sixaxis_support, "PS3 Sixaxis controller support");
+            ui.checkbox(&mut sdl_options.dual_lightgun, "Dual lightgun support");
+        });
+    }
+
+    fn show_osd_input_tab(&mut self, ui: &mut egui::Ui) {
+        let osd = &mut self.properties.osd_options;
+
+        ui.heading("OSD/Input Options");
+        ui.add_space(10.0);
+
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Input Mapping").strong());
+            ui.add_space(5.0);
+            
+            ui.horizontal(|ui| {
+                ui.label("UI Mode Key:");
+                let mut key_str = osd.ui_mode_key.clone().unwrap_or_else(|| "SCRLOCK".to_string());
+                if ui.text_edit_singleline(&mut key_str).changed() {
+                    osd.ui_mode_key = if key_str.is_empty() || key_str == "SCRLOCK" {
+                        None
+                    } else {
+                        Some(key_str)
+                    };
+                }
+            });
+            
+            ui.checkbox(&mut osd.background_input, "Keep input when window loses focus");
+        });
+
+        ui.add_space(15.0);
+
+        ui.group(|ui| {
+            ui.label(egui::RichText::new("Input Providers").strong());
+            ui.add_space(5.0);
+            
+            ui.horizontal(|ui| {
+                ui.label("Keyboard:");
+                ui.radio_value(&mut osd.keyboard_provider, OSDProvider::Auto, "Auto");
+                ui.radio_value(&mut osd.keyboard_provider, OSDProvider::SDL, "SDL");
+                ui.radio_value(&mut osd.keyboard_provider, OSDProvider::None, "None");
+            });
+            
+            ui.horizontal(|ui| {
+                ui.label("Mouse:");
+                ui.radio_value(&mut osd.mouse_provider, OSDProvider::Auto, "Auto");
+                ui.radio_value(&mut osd.mouse_provider, OSDProvider::SDL, "SDL");
+                ui.radio_value(&mut osd.mouse_provider, OSDProvider::None, "None");
+            });
+            
+            ui.horizontal(|ui| {
+                ui.label("Lightgun:");
+                ui.radio_value(&mut osd.lightgun_provider, LightgunProvider::Auto, "Auto");
+                ui.radio_value(&mut osd.lightgun_provider, LightgunProvider::SDL, "SDL");
+                ui.radio_value(&mut osd.lightgun_provider, LightgunProvider::X11, "X11");
+                ui.radio_value(&mut osd.lightgun_provider, LightgunProvider::None, "None");
+            });
+            
+            ui.horizontal(|ui| {
+                ui.label("Joystick:");
+                ui.radio_value(&mut osd.joystick_provider, JoystickProvider::Auto, "Auto");
+                ui.radio_value(&mut osd.joystick_provider, JoystickProvider::SDLGame, "SDL Game");
+                ui.radio_value(&mut osd.joystick_provider, JoystickProvider::SDLJoy, "SDL Joy");
+                ui.radio_value(&mut osd.joystick_provider, JoystickProvider::None, "None");
+            });
+        });
+    }
+}

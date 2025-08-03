@@ -12,7 +12,10 @@ use anyhow::Result;
 fn main() -> Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-        .with_inner_size([1200.0, 800.0]),
+            .with_inner_size([1200.0, 800.0])
+            .with_decorations(true) // Keep decorations for window movement/resize
+            .with_resizable(true)
+            .with_transparent(false), // Disable transparency
         ..Default::default()
     };
 

@@ -49,6 +49,65 @@ impl DirectoriesDialog {
         }
     }
 
+    // Helper function to create option groups matching HTML style
+    fn render_option_group(ui: &mut egui::Ui, title: Option<&str>, content: impl FnOnce(&mut egui::Ui)) {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+
+            if let Some(title) = title {
+                ui.label(egui::RichText::new(title).strong().size(16.0).color(egui::Color32::from_rgb(100, 181, 246)));
+                ui.add_space(12.0);
+            }
+
+            content(ui);
+        });
+    }
+
+    // Helper function to render option item matching HTML style
+    fn render_option_item(
+        ui: &mut egui::Ui,
+        name: &str,
+        description: &str,
+        content: impl FnOnce(&mut egui::Ui)
+    ) {
+        // Use a fixed height for consistent vertical alignment
+        let row_height = 50.0;
+        
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), row_height),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                // Left side - option name and description (fixed width)
+                let left_width = ui.available_width() * 0.6; // 60% for labels
+                ui.allocate_ui_with_layout(
+                    egui::vec2(left_width, ui.available_height()),
+                    egui::Layout::top_down_justified(egui::Align::LEFT),
+                    |ui| {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new(name).monospace().size(15.0));
+                        ui.label(egui::RichText::new(description)
+                            .size(14.0)
+                            .color(egui::Color32::from_rgb(160, 160, 160)));
+                    }
+                );
+
+                // Add some spacing between left and right
+                ui.add_space(20.0);
+
+                // Right side - control (remaining width)
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), ui.available_height()),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        content(ui);
+                    }
+                );
+            }
+        );
+
+        ui.add_space(16.0);
+    }
+
     /// Menampilkan dialog konfigurasi directories utama
     /// Mengembalikan true jika ada perubahan yang memerlukan reload
     pub fn show(ctx: &egui::Context, config: &mut AppConfig, open: &mut bool) -> bool {
@@ -66,271 +125,372 @@ impl DirectoriesDialog {
         let initial_catver_path = config.catver_ini_path.clone();
 
         egui::Window::new("Directories Selection")
-        .default_size([650.0, 450.0])
-        .open(open)
-        .show(ctx, |ui| {
-            // Tab state
-            let mut selected_tab = ui.data_mut(|d| d.get_temp::<usize>(ui.id()).unwrap_or(0));
-            
-            // Navigasi tab-like
-            ui.horizontal(|ui| {
-                if ui.selectable_label(selected_tab == 0, "MAME Paths").clicked() {
-                    selected_tab = 0;
-                }
-                if ui.selectable_label(selected_tab == 1, "MAME Support Files").clicked() {
-                    selected_tab = 1;
-                }
-                if ui.selectable_label(selected_tab == 2, "History, INI's and DAT's Files").clicked() {
-                    selected_tab = 2;
-                }
-                if ui.selectable_label(selected_tab == 3, "MAME Internal Folders").clicked() {
-                    selected_tab = 3;
-                }
-            });
-            
-            // Store selected tab
-            ui.data_mut(|d| d.insert_temp(ui.id(), selected_tab));
-
-            ui.separator();
-
-            match selected_tab {
-                0 => {
-                    // MAME Paths tab
-                    // MAME Executables section
-                    ui.group(|ui| {
-                        ui.label("MAME Executables");
-                        ui.label("These are the MAME emulator programs that will run your games");
-                        ui.add_space(5.0);
-
-                        if Self::executable_list(ui, &mut config.mame_executables, "mame_exe") {
-                            changes_made = true;
-                        }
-                    });
-
-                    ui.add_space(10.0);
-
-                    // ROM Paths section
-                    ui.group(|ui| {
-                        ui.label("ROM Directories");
-                        ui.label("Folders containing your game ROM files");
-                        ui.add_space(5.0);
-
-                                                    if Self::path_list(ui, &mut config.rom_paths, "roms", &last_directories_snapshot, &mut directory_updates) {
-                            changes_made = true;
-                        }
-                    });
-                }
-                1 => {
-                    // MAME Support Files tab
-                    ui.label("Configure paths for MAME support files:");
-                    ui.add_space(10.0);
-                    
-                    egui::ScrollArea::vertical()
-                        .max_height(400.0)
-                        .show(ui, |ui| {
-                            // Artwork path
-                            if Self::optional_path_field(ui, "Artwork", "Game artwork files", &mut config.artwork_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
-                                changes_made = true;
-                            }
+            .default_size([800.0, 700.0])  // Lebih tinggi untuk menampung semua opsi
+            .min_size([700.0, 600.0])
+            .resizable(true)
+            .open(open)
+            .show(ctx, |ui| {
+                // Tab state
+                let mut selected_tab = ui.data_mut(|d| d.get_temp::<usize>(ui.id()).unwrap_or(0));
+                
+                // Main container dengan horizontal layout untuk sidebar + content
+                ui.horizontal(|ui| {
+                    // Left sidebar
+                    ui.vertical(|ui| {
+                        ui.set_width(260.0); // Increased width for 4K displays
+                        
+                        // Style untuk sidebar background
+                        ui.painter().rect_filled(
+                            ui.available_rect_before_wrap(),
+                            0.0,
+                            egui::Color32::from_gray(25), // Darker background untuk sidebar
+                        );
+                        
+                        ui.add_space(10.0);
+                        
+                        // Sidebar items
+                        let categories = [
+                            ("MAME Paths", 0),
+                            ("MAME Support Files", 1),
+                            ("History, INI's & DAT's Files", 2),
+                            ("MAME Internal Folders", 3),
+                        ];
+                        
+                        for (label, idx) in categories {
+                            let is_selected = selected_tab == idx;
                             
-                            ui.add_space(10.0);
+                            // Custom styling untuk sidebar items
+                            let response = ui.allocate_response(
+                                egui::Vec2::new(240.0, 40.0), // Increased size
+                                egui::Sense::click()
+                            );
                             
-                            // Snap path
-                            if Self::optional_path_field(ui, "Snap", "Game screenshots", &mut config.snap_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
-                                changes_made = true;
-                            }
+                            let rect = response.rect;
+                            let text_color = if is_selected {
+                                egui::Color32::WHITE
+                            } else if response.hovered() {
+                                egui::Color32::from_gray(220)
+                            } else {
+                                egui::Color32::from_gray(160)
+                            };
                             
-                            ui.add_space(10.0);
-                            
-                            // Cabinet path
-                            if Self::optional_path_field(ui, "Cabinet", "Cabinet artwork", &mut config.cabinet_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Title path
-                            if Self::optional_path_field(ui, "Title", "Title screens", &mut config.title_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Flyer path
-                            if Self::optional_path_field(ui, "Flyer", "Promotional flyers", &mut config.flyer_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Marquee path
-                            if Self::optional_path_field(ui, "Marquees", "Marquee artwork", &mut config.marquee_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Cheats path
-                            if Self::optional_path_field(ui, "Cheats", "Cheat files", &mut config.cheats_path, &last_directories_snapshot, CATEGORY_SUPPORT_FILES, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Icons path
-                            if Self::optional_path_field(ui, "Icons", "Game icon files", &mut config.icons_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                        });
-                }
-                2 => {
-                    // History, INI's and DAT's Files tab
-                    ui.label("Configure paths for MAME history, INI and DAT files:");
-                    ui.add_space(10.0);
-                    
-                    egui::ScrollArea::vertical()
-                        .max_height(400.0)
-                        .show(ui, |ui| {
-                            // Catver.ini path (for category support)
-                            ui.push_id("catver_section", |ui| {
-                                ui.label("Category Support");
-                                ui.colored_label(
-                                    egui::Color32::from_rgb(200, 200, 100),
-                                    "The catver.ini file is required to display game categories"
+                            // Background untuk selected/hover
+                            if is_selected {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    6.0,
+                                    egui::Color32::from_rgb(76, 139, 245), // Accent color
                                 );
-                                
-                                if Self::optional_file_field(ui, "Catver INI", "Game category information (catver.ini)", &mut config.catver_ini_path, Some(&["ini"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
-                                    changes_made = true;
-                                }
-                            });
-                            
-                            ui.add_space(20.0);
-                            ui.separator();
-                            ui.add_space(10.0);
-                            
-                            // History path
-                            if Self::optional_file_field(ui, "History", "Game history information", &mut config.history_path, Some(&["xml"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
-                                changes_made = true;
+                            } else if response.hovered() {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    6.0,
+                                    egui::Color32::from_gray(40),
+                                );
                             }
                             
-                            ui.add_space(10.0);
+                            // Draw text with larger font size
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                label,
+                                egui::FontId::proportional(15.0), // Increased from 14.0
+                                text_color,
+                            );
                             
-                            // mameinfo.dat path
-                            if Self::optional_file_field(ui, "MAME Info DAT", "Detailed game information", &mut config.mameinfo_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
-                                changes_made = true;
+                            if response.clicked() {
+                                selected_tab = idx;
                             }
-                            
-                            ui.add_space(10.0);
-                            
-                            // hiscore.dat path
-                            if Self::optional_file_field(ui, "High Score DAT", "High score information", &mut config.hiscore_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // gameinit.dat path
-                            if Self::optional_file_field(ui, "Game Init DAT", "Game initialization data", &mut config.gameinit_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // command.dat path
-                            if Self::optional_file_field(ui, "Command DAT", "Game command information", &mut config.command_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                        });
-                }
-                3 => {
-                    // MAME Internal Folders tab
-                    ui.label("Configure MAME internal folders (these override MAME's default locations):");
-                    ui.colored_label(
-                        egui::Color32::from_rgb(200, 200, 100),
-                        "Note: These folders are used by MAME for saving configuration, high scores, save states, etc."
-                    );
-                    ui.add_space(10.0);
+                        }
+                    });
                     
-                    egui::ScrollArea::vertical()
-                        .max_height(400.0)
-                        .show(ui, |ui| {
-                            // Configuration files directory
-                            if Self::optional_path_field(ui, "Configuration Files (cfg)", "MAME configuration files directory", &mut config.cfg_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // NVRAM directory
-                            if Self::optional_path_field(ui, "NVRAM", "Non-volatile RAM directory", &mut config.nvram_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
+                    // Vertical separator
+                    ui.separator();
+                    
+                    // Right content area
+                    ui.vertical(|ui| {
+                        ui.set_min_width(550.0);
+                        
+                        // Content berdasarkan selected tab
+                        match selected_tab {
+                            0 => {
+                                // MAME Paths tab
+                                ui.horizontal(|ui| {
+                                    ui.add_space(20.0);  // Consistent left padding
+                                    ui.vertical(|ui| {
+                                        ui.heading(egui::RichText::new("MAME Paths").size(20.0));
+                                        ui.label(egui::RichText::new("Configure MAME executable and ROM directories").size(15.0));
+                                        ui.add_space(20.0);
+                                        
+                                        // MAME Executables section
+                                        Self::render_option_group(ui, Some("MAME Executables"), |ui| {
+                                            ui.label(egui::RichText::new("These are the MAME emulator programs that will run your games").size(15.0));
+                                            ui.add_space(5.0);
 
-                            
-                            ui.add_space(10.0);
-                            
-                            // Input configuration directory
-                            if Self::optional_path_field(ui, "Input Configuration (input)", "Input configuration files directory", &mut config.input_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Save state directory
-                            if Self::optional_path_field(ui, "Save States (state)", "Save state files directory", &mut config.state_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Hard disk diff directory
-                            if Self::optional_path_field(ui, "Hard Disk Diffs (diff)", "Hard disk diff files directory", &mut config.diff_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                            
-                            ui.add_space(10.0);
-                            
-                            // Comment files directory
-                            if Self::optional_path_field(ui, "Comment Files (comment)", "Comment files directory", &mut config.comment_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
-                                changes_made = true;
-                            }
-                        });
-                }
-                _ => {}
-            }
+                                            if Self::executable_list(ui, &mut config.mame_executables, "mame_exe") {
+                                                changes_made = true;
+                                            }
+                                        });
 
-            ui.separator();
+                                        ui.add_space(20.0);
 
-            // Dialog buttons
-            ui.horizontal(|ui| {
-                if ui.button("Cancel").clicked() {
-                    close = true;
-                    // Jangan simpan perubahan saat cancel
-                    changes_made = false;
-                }
+                                        // ROM Paths section
+                                        Self::render_option_group(ui, Some("ROM Directories"), |ui| {
+                                            ui.label(egui::RichText::new("Folders containing your game ROM files").size(15.0));
+                                            ui.add_space(5.0);
 
-                if ui.button("OK").clicked() {
-                    close = true;
-                    // Cek jika jumlah berubah atau catver.ini path berubah
-                    if config.mame_executables.len() != initial_mame_count ||
-                        config.rom_paths.len() != initial_rom_count ||
-                        config.sample_paths.len() != initial_sample_count ||
-                        config.catver_ini_path != initial_catver_path {
-                            changes_made = true;
+                                            if Self::path_list(ui, &mut config.rom_paths, "roms", &last_directories_snapshot, &mut directory_updates) {
+                                                changes_made = true;
+                                            }
+                                        });
+                                    });
+                                });
+                            }
+                            1 => {
+                                // MAME Support Files tab
+                                ui.horizontal(|ui| {
+                                    ui.add_space(20.0);  // Consistent left padding
+                                    ui.vertical(|ui| {
+                                        ui.heading(egui::RichText::new("MAME Support Files").size(20.0));
+                                        ui.label(egui::RichText::new("Configure paths for MAME support files:").size(15.0));
+                                        ui.add_space(20.0);
+                                        
+                                        let scroll_height = ui.available_height() - 50.0;
+                                        
+                                        egui::ScrollArea::vertical()
+                                            .max_height(scroll_height)
+                                            .auto_shrink([false, false])
+                                            .show(ui, |ui| {
+                                                // Artwork path
+                                                if Self::optional_path_field(ui, "Artwork", "Game artwork files", &mut config.artwork_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Snap path
+                                                if Self::optional_path_field(ui, "Snap", "Game screenshots", &mut config.snap_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Cabinet path
+                                                if Self::optional_path_field(ui, "Cabinet", "Cabinet artwork", &mut config.cabinet_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Title path
+                                                if Self::optional_path_field(ui, "Title", "Title screens", &mut config.title_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Flyer path
+                                                if Self::optional_path_field(ui, "Flyer", "Promotional flyers", &mut config.flyer_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Marquee path
+                                                if Self::optional_path_field(ui, "Marquees", "Marquee artwork", &mut config.marquee_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Cheats path
+                                                if Self::optional_path_field(ui, "Cheats", "Cheat files", &mut config.cheats_path, &last_directories_snapshot, CATEGORY_SUPPORT_FILES, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Icons path
+                                                if Self::optional_path_field(ui, "Icons", "Game icon files", &mut config.icons_path, &last_directories_snapshot, CATEGORY_ARTWORK, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(30.0);
+                                            });
+                                    });
+                                });
+                            }
+                            2 => {
+                                // History, INI's and DAT's Files tab
+                                ui.horizontal(|ui| {
+                                    ui.add_space(20.0);  // Consistent left padding
+                                    ui.vertical(|ui| {
+                                        ui.heading(egui::RichText::new("History, INI's & DAT's Files").size(20.0));
+                                        ui.label(egui::RichText::new("Configure paths for MAME history, INI and DAT files:").size(15.0));
+                                        ui.add_space(20.0);
+                                        
+                                        let scroll_height = ui.available_height() - 50.0;
+                                        
+                                        egui::ScrollArea::vertical()
+                                            .max_height(scroll_height)
+                                            .auto_shrink([false, false])
+                                            .show(ui, |ui| {
+                                                // Catver.ini path (for category support)
+                                                ui.push_id("catver_section", |ui| {
+                                                    ui.label(egui::RichText::new("Category Support").size(16.0).strong());
+                                                    ui.colored_label(
+                                                        egui::Color32::from_rgb(200, 200, 100),
+                                                        "The catver.ini file is required to display game categories"
+                                                    );
+                                                    
+                                                    if Self::optional_file_field(ui, "Catver INI", "Game category information (catver.ini)", &mut config.catver_ini_path, Some(&["ini"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
+                                                        changes_made = true;
+                                                    }
+                                                });
+                                                
+                                                ui.add_space(20.0);
+                                                ui.separator();
+                                                ui.add_space(10.0);
+                                                
+                                                // History path
+                                                if Self::optional_file_field(ui, "History", "Game history information", &mut config.history_path, Some(&["xml"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // mameinfo.dat path
+                                                if Self::optional_file_field(ui, "MAME Info DAT", "Detailed game information", &mut config.mameinfo_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // hiscore.dat path
+                                                if Self::optional_file_field(ui, "High Score DAT", "High score information", &mut config.hiscore_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // gameinit.dat path
+                                                if Self::optional_file_field(ui, "Game Init DAT", "Game initialization data", &mut config.gameinit_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // command.dat path
+                                                if Self::optional_file_field(ui, "Command DAT", "Game command information", &mut config.command_dat_path, Some(&["dat"]), &last_directories_snapshot, CATEGORY_DAT_FILES, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(30.0);
+                                            });
+                                    });
+                                });
+                            }
+                            3 => {
+                                // MAME Internal Folders tab
+                                ui.horizontal(|ui| {
+                                    ui.add_space(20.0);  // Consistent left padding
+                                    ui.vertical(|ui| {
+                                        ui.heading(egui::RichText::new("MAME Internal Folders").size(20.0));
+                                        ui.label(egui::RichText::new("Configure MAME internal folders (these override MAME's default locations):").size(15.0));
+                                        ui.colored_label(
+                                            egui::Color32::from_rgb(200, 200, 100),
+                                            "Note: These folders are used by MAME for saving configuration, high scores, save states, etc."
+                                        );
+                                        ui.add_space(20.0);
+                                        
+                                        let scroll_height = ui.available_height() - 50.0;
+                                        
+                                        egui::ScrollArea::vertical()
+                                            .max_height(scroll_height)
+                                            .auto_shrink([false, false])
+                                            .show(ui, |ui| {
+                                                // Configuration files directory
+                                                if Self::optional_path_field(ui, "Configuration Files (cfg)", "MAME configuration files directory", &mut config.cfg_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // NVRAM directory
+                                                if Self::optional_path_field(ui, "NVRAM", "Non-volatile RAM directory", &mut config.nvram_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Input configuration directory
+                                                if Self::optional_path_field(ui, "Input Configuration (input)", "Input configuration files directory", &mut config.input_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Save state directory
+                                                if Self::optional_path_field(ui, "Save States (state)", "Save state files directory", &mut config.state_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Hard disk diff directory
+                                                if Self::optional_path_field(ui, "Hard Disk Diffs (diff)", "Hard disk diff files directory", &mut config.diff_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(10.0);
+                                                
+                                                // Comment files directory
+                                                if Self::optional_path_field(ui, "Comment Files (comment)", "Comment files directory", &mut config.comment_path, &last_directories_snapshot, CATEGORY_INTERNAL_FOLDERS, &mut directory_updates) {
+                                                    changes_made = true;
+                                                }
+                                                
+                                                ui.add_space(30.0);
+                                            });
+                                    });
+                                });
+                            }
+                            _ => {}
+                        }
+                    });
+                });
+                
+                // Store selected tab
+                ui.data_mut(|d| d.insert_temp(ui.id(), selected_tab));
+
+                ui.separator();
+
+                // Dialog buttons at bottom
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("OK").clicked() {
+                        close = true;
+                        // Cek jika jumlah berubah atau catver.ini path berubah
+                        if config.mame_executables.len() != initial_mame_count ||
+                            config.rom_paths.len() != initial_rom_count ||
+                            config.sample_paths.len() != initial_sample_count ||
+                            config.catver_ini_path != initial_catver_path {
+                                changes_made = true;
+                        }
                     }
+
+                    if ui.button("Cancel").clicked() {
+                        close = true;
+                        // Jangan simpan perubahan saat cancel
+                        changes_made = false;
+                    }
+                });
+
+                // Tampilkan catatan jika ada perubahan
+                if changes_made {
+                    ui.separator();
+                    ui.colored_label(egui::Color32::YELLOW,
+                                     "ℹ Changes detected - games will be reloaded when you click OK");
                 }
             });
-
-            // Tampilkan catatan jika ada perubahan
-            if changes_made {
-                ui.separator();
-                ui.colored_label(egui::Color32::YELLOW,
-                                 "ℹ Changes detected - games will be reloaded when you click OK");
-            }
-        });
 
         if close {
             *open = false;
@@ -347,16 +507,20 @@ impl DirectoriesDialog {
     fn executable_list(ui: &mut egui::Ui, executables: &mut Vec<MameExecutable>, _id: &str) -> bool {
         let mut modified = false;
 
+        // Gunakan sebagian besar ruang yang tersedia untuk scroll area
+        let scroll_height = ui.available_height() * 0.8; // Gunakan 80% dari ruang yang tersedia
+        
         egui::ScrollArea::vertical()
-        .max_height(150.0)
+        .max_height(scroll_height)
         .show(ui, |ui| {
+            ui.add_space(20.0);
             let mut to_remove = None;
 
             for (idx, exe) in executables.iter_mut().enumerate() {
                 ui.group(|ui| {
                     // Field nama
                     ui.horizontal(|ui| {
-                        ui.label("Name:");
+                        ui.label(egui::RichText::new("Name:").size(15.0));
                         if ui.text_edit_singleline(&mut exe.name).changed() {
                             modified = true;
                         }
@@ -364,7 +528,7 @@ impl DirectoriesDialog {
 
                     // Field path dengan validasi
                     ui.horizontal(|ui| {
-                        ui.label("Path:");
+                        ui.label(egui::RichText::new("Path:").size(15.0));
                         let path_exists = std::path::Path::new(&exe.path).exists();
 
                         let response = ui.add(egui::TextEdit::singleline(&mut exe.path)
@@ -437,10 +601,10 @@ impl DirectoriesDialog {
                         if exe.version.starts_with("Error:") {
                             ui.colored_label(egui::Color32::RED, &exe.version);
                         } else {
-                            ui.label(format!("Version: {}", exe.version));
+                            ui.label(egui::RichText::new(format!("Version: {}", exe.version)).size(14.0));
                             if exe.total_games > 0 {
-                                ui.label(format!("Games: {} ({} working)",
-                                                 exe.total_games, exe.working_games));
+                                ui.label(egui::RichText::new(format!("Games: {} ({} working)",
+                                                 exe.total_games, exe.working_games)).size(14.0));
                             }
                         }
                     });
@@ -456,6 +620,8 @@ impl DirectoriesDialog {
             if let Some(idx) = to_remove {
                 executables.remove(idx);
             }
+            
+            ui.add_space(30.0);
         });
 
         // Add button
@@ -529,10 +695,14 @@ impl DirectoriesDialog {
         let mut modified = false;
         let scroll_id = format!("path_scroll_{}", id);
 
+        // Gunakan sebagian besar ruang yang tersedia untuk scroll area
+        let scroll_height = ui.available_height() * 0.8; // Gunakan 80% dari ruang yang tersedia
+        
         egui::ScrollArea::vertical()
         .id_salt(scroll_id)
-        .max_height(100.0)
+        .max_height(scroll_height)
         .show(ui, |ui| {
+            ui.add_space(20.0);
             let mut to_remove = None;
 
             for (idx, path) in paths.iter_mut().enumerate() {
@@ -546,7 +716,7 @@ impl DirectoriesDialog {
                     // Field path yang bisa diedit
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut path_str)
-                        .desired_width(450.0)
+                        .desired_width(400.0)
                         .text_color(if path_exists {
                             ui.style().visuals.text_color()
                         } else {
@@ -574,7 +744,7 @@ impl DirectoriesDialog {
                                 .unwrap_or(false)
                             })
                             .count();
-                            ui.label(format!("({} .zip files)", rom_count));
+                            ui.label(egui::RichText::new(format!("({} .zip files)", rom_count)).size(14.0));
                         }
                     } else if !was_empty && !path_str.is_empty() {
                         // Gunakan path_str yang tidak di-move
@@ -622,6 +792,8 @@ impl DirectoriesDialog {
             if let Some(idx) = to_remove {
                 paths.remove(idx);
             }
+            
+            ui.add_space(30.0);
         });
 
         // Add button
@@ -644,9 +816,9 @@ impl DirectoriesDialog {
         let mut modified = false;
         
         ui.group(|ui| {
-            ui.label(label);
-            ui.label(description);
-            ui.add_space(5.0);
+            ui.label(egui::RichText::new(label).size(15.0));
+            ui.label(egui::RichText::new(description).size(14.0));
+            ui.add_space(8.0); // Increased spacing
             
             ui.horizontal(|ui| {
                 let mut path_str = path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
@@ -718,9 +890,9 @@ impl DirectoriesDialog {
         let mut modified = false;
         
         ui.group(|ui| {
-            ui.label(label);
-            ui.label(description);
-            ui.add_space(5.0);
+            ui.label(egui::RichText::new(label).size(15.0));
+            ui.label(egui::RichText::new(description).size(14.0));
+            ui.add_space(8.0); // Increased spacing
             
             ui.horizontal(|ui| {
                 let mut path_str = path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();

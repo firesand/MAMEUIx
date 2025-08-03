@@ -35,7 +35,7 @@ if [ ! -f "PKGBUILD" ]; then
     exit 1
 fi
 
-print_status "Starting MAMEUIX v0.1.3 package build..."
+print_status "Starting MAMEUIX v0.1.4 package build..."
 
 # Clean previous builds
 print_status "Cleaning previous builds..."
@@ -84,7 +84,7 @@ print_status "Package contents:"
 tar -tf "$PACKAGE_FILE" | head -20
 echo "... (showing first 20 files)"
 
-print_success "MAMEUIX v0.1.3 package build completed successfully!"
+print_success "MAMEUIX v0.1.4 package build completed successfully!"
 print_status "Package file: $PACKAGE_FILE"
 print_status "Size: $(du -h "$PACKAGE_FILE" | cut -f1)"
 

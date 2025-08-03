@@ -1135,10 +1135,6 @@ impl MameApp {
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("MAME Manager").clicked() {
-                        ui.close();
-                    }
-                    
                     ui.separator();
                     
                     // Add ROM verification option
@@ -1177,25 +1173,13 @@ impl MameApp {
                 });
 
                 ui.menu_button("Options", |ui| {
-                    if ui.button("Directories").clicked() {
-                        self.dialog_manager.open_dialog(DialogType::Directories);
-                        ui.close();
-                    }
                     if ui.button("Preferences").clicked() {
                         self.dialog_manager.open_dialog(DialogType::Preferences);
                         ui.close();
                     }
 
                     
-                    ui.separator();
-                    
-                    if ui.button("⚙️ Default Game Properties...").clicked() {
-                        self.dialog_manager.set_game_properties_dialog(Some(GamePropertiesDialog::new_with_config(None, &self.config)));
-                        self.dialog_manager.open_dialog(DialogType::GameProperties);
-                        ui.close();
-                    }
-                    
-                    ui.separator();
+
                     
                     if ui.button("🔍 Find MAME Executables").clicked() {
                         let found_mames = MameFinderDialog::find_mame_executables();
@@ -1283,9 +1267,7 @@ impl MameApp {
                         }
                     }
 
-                    if ui.button("ℹ Properties").clicked() {
-                        self.dialog_manager.open_dialog(DialogType::RomInfo);
-                    }
+
 
                     if loading {
                         ui.add_enabled(false, egui::Button::new("🔄 Loading..."));

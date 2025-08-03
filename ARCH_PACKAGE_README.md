@@ -2,12 +2,12 @@
 
 ## Overview
 
-This directory contains the Arch Linux and CachyOS package files for MAMEUIX v0.1.3, a modern GUI frontend for the MAME arcade emulator with thread pool performance and enhanced UI.
+This directory contains the Arch Linux and CachyOS package files for MAMEUIX v0.1.4, a modern GUI frontend for the MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification.
 
 ## Package Information
 
 - **Package Name**: `mameuix`
-- **Version**: `0.1.3`
+- **Version**: `0.1.4`
 - **Architecture**: `x86_64`
 - **License**: MIT
 - **Maintainer**: edo hikmahtiar <edohikmahtiar@me.com>
@@ -77,7 +77,7 @@ makepkg -si
 ./build-arch-package.sh
 
 # Install package
-sudo pacman -U mameuix-0.1.3-1-x86_64.pkg.tar.zst
+sudo pacman -U mameuix-0.1.4-1-x86_64.pkg.tar.zst
 ```
 
 ## Package Contents
@@ -130,7 +130,7 @@ sudo pacman -S base-devel namcap
 
 4. **Validate package**:
    ```bash
-   namcap mameuix-0.1.3-1-x86_64.pkg.tar.zst
+   namcap mameuix-0.1.4-1-x86_64.pkg.tar.zst
    ```
 
 ### Automated Build
@@ -226,7 +226,7 @@ For support and issues:
 
 ## Changelog
 
-### v0.1.3
+### v0.1.4
 - **Major performance improvements** with thread pool icon loading
 - **Enhanced UI** with better window resizing and layout
 - **Performance monitoring** system

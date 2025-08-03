@@ -13,7 +13,7 @@ use super::icon_performance_monitor::IconPerformanceMonitor;
 
 // Icon loading result from background thread
 #[derive(Debug)]
-struct IconLoadResult {
+pub struct IconLoadResult {
     rom_name: String,
     icon_data: Option<Vec<u8>>,
     width: u32,

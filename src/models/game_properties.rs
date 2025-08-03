@@ -37,6 +37,9 @@ pub struct DisplayProperties {
     pub overscan_on_targets: bool,
     pub horizontal_scale_factor: u8,
     pub vertical_scale_factor: u8,
+    // Auto rotation options
+    pub auto_rotate_right: bool,  // -autoror
+    pub auto_rotate_left: bool,   // -autorol
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -260,6 +263,37 @@ pub struct MiscProperties {
     pub custom_args: String,
     // Performance options
     pub num_processors: Option<u32>,  // None means use system default, Some(n) means override
+    // Core Configuration options
+    pub write_config: bool,           // -writeconfig
+    pub auto_save: bool,              // -autosave
+    pub rewind: bool,                 // -rewind
+    pub exit_after: bool,             // -exit_after
+    pub bilinear: bool,               // -bilinear
+    pub burnin: bool,                 // -burnin
+    pub crop: bool,                   // -crop
+    // Core Input options
+    pub multi_keyboard: bool,         // -multikeyboard
+    pub multi_mouse: bool,            // -multimouse
+    pub steady_key: bool,             // -steadykey
+    pub ui_active: bool,              // -ui_active
+    pub offscreen_reload: bool,       // -offscreen_reload
+    pub contradictory: bool,           // -contradictory
+    pub natural: bool,                // -natural
+    // Core Debug options
+    pub verbose: bool,                 // -verbose
+    pub log: bool,                     // -log
+    pub oslog: bool,                   // -oslog
+    pub debug: bool,                   // -debug
+    pub update_pause: bool,            // -update_pause
+    pub debuglog: bool,                // -debuglog
+    pub drc_c: bool,                   // -drc_c
+    pub log_uml: bool,                 // -log_uml
+    pub log_native: bool,              // -log_native
+    pub cheat: bool,                   // -cheat
+    pub skip: bool,                    // -skip
+    pub confirm: bool,                 // -confirm
+    pub console: bool,                 // -console
+    pub switchres: bool,               // -switchres
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -477,6 +511,8 @@ impl Default for DisplayProperties {
             overscan_on_targets: false,
             horizontal_scale_factor: 0,
             vertical_scale_factor: 0,
+            auto_rotate_right: false,
+            auto_rotate_left: false,
         }
     }
 }
@@ -565,6 +601,35 @@ impl Default for MiscProperties {
             switch_resolutions_to_fit: false,
             custom_args: String::new(),
             num_processors: None,  // Use system default
+            write_config: false,
+            auto_save: false,
+            rewind: false,
+            exit_after: false,
+            bilinear: false,
+            burnin: false,
+            crop: false,
+            multi_keyboard: false,
+            multi_mouse: false,
+            steady_key: false,
+            ui_active: false,
+            offscreen_reload: false,
+            contradictory: false,
+            natural: false,
+            // Core Debug options
+            verbose: false,
+            log: false,
+            oslog: false,
+            debug: false,
+            update_pause: false,
+            debuglog: false,
+            drc_c: false,
+            log_uml: false,
+            log_native: false,
+            cheat: false,
+            skip: false,
+            confirm: false,
+            console: false,
+            switchres: false,
         }
     }
 } 

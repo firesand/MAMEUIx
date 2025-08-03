@@ -2,9 +2,33 @@
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
-**Current Version: 0.1.3** - Major performance improvements and UI enhancements
+**Current Version: 0.1.4** - CLRMamePro Lite Mode & Enhanced ROM Verification
 
-## 🚀 Recent Improvements (v0.1.3)
+## 🚀 Recent Improvements (v0.1.4)
+
+### 🔍 **CLRMamePro Lite Mode - ROM Verification**
+- **Professional ROM Verification**: Complete CLRMamePro-style verification system
+- **Real-time Progress Tracking**: Live "5/200 verified, 3 missing, 2 incorrect" statistics
+- **Color-coded Game List**: Visual status indicators throughout the application
+  - ✅ **Green**: Verified ROMs
+  - ❌ **Red**: Failed verification (Bad CRC)
+  - ⚠️ **Yellow**: Warnings (Missing CHD)
+  - ❓ **Gray**: Not verified yet
+- **Bulk Actions**: 
+  - **🌐 Find Missing ROMs**: Direct integration with No-Intro database
+  - **📄 Export Reports**: Multiple formats (Text, CSV, HTML) with detailed statistics
+- **Advanced Controls**: Pause/Resume/Stop verification with ETA calculations
+- **Global State Management**: Thread-safe verification status across the entire application
+- **Professional UI**: Organized panels with stats, progress, and results sections
+
+### 🎯 **Enhanced User Experience**
+- **Verification Status Integration**: Game list shows verification status in real-time
+- **Smart Background Processing**: Non-blocking verification with progress updates
+- **Comprehensive Reporting**: Detailed export reports with summary statistics
+- **No-Intro Integration**: One-click access to find missing ROMs
+- **Visual Feedback**: Color-coded backgrounds and status indicators
+
+## 🚀 Recent Improvements (v0.1.4)
 
 ### 🚀 **Major Performance Improvements**
 - **Thread Pool Icon Loading**: Parallel processing for 48,000+ games with up to 8x performance improvement
@@ -76,6 +100,14 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 ### 🔧 Advanced Features
 - **Background Scanning**: Non-blocking ROM and MAME data loading
 - **Performance Monitoring**: Built-in performance tracking
+- **ROM Verification System**: Professional CLRMamePro-style verification
+  - **Real-time Verification**: Live progress tracking with detailed statistics
+  - **Color-coded Status**: Visual indicators throughout the application
+  - **Bulk Operations**: Find missing ROMs and export comprehensive reports
+  - **Multiple Export Formats**: Text, CSV, and HTML reports with statistics
+  - **No-Intro Integration**: Direct access to ROM database for missing files
+  - **Advanced Controls**: Pause, resume, and stop verification with ETA
+  - **Global State**: Verification status persists across the entire application
 ### 🎨 Shader Management
 - **Embedded Shaders**: 11 professional-quality shaders included automatically
   - CRT Effects: crt-geom, crt-royale with scanlines and curvature
@@ -272,6 +304,17 @@ To enable the Category column in the game list:
 - **Hardware Filtering**: Filter games by CPU, device, and sound chip types
 - **Plugin Detection**: Automatic detection of MAME plugins (hiscore, cheat, autofire)
 
+### 🔍 ROM Verification Features
+- **Access Verification**: Go to **Tools** → **🔍 ROM Verification** or **🎯 Verify Selected ROM**
+- **Real-time Progress**: Watch live verification progress with detailed statistics
+- **Color-coded Status**: See verification status in the main game list status column
+- **Bulk Actions**: 
+  - Click **🌐 Find Missing ROMs** to open No-Intro database
+  - Select export format (Text/CSV/HTML) and click **📄 Export Report**
+- **Advanced Controls**: Use Pause/Resume/Stop buttons during verification
+- **Filter Results**: Use the filter box to show only specific verification results
+- **Show Issues Only**: Check "Show only issues" to focus on problematic ROMs
+
 ### Graphics & Performance Features
 - **BGFX Backend Selection**: Choose from 8 rendering backends for optimal performance
 - **GLSL Shader Effects**: Apply CRT, LCD, and scanline effects for authentic arcade look
@@ -379,13 +422,20 @@ The application is optimized for performance:
 
 ## Development Status
 
-✅ **Stable Release**: v0.1.1 is production-ready with column resizing
-🔄 **Active Development**: v0.1.2 in development with advanced graphics features
+✅ **Stable Release**: v0.1.4 is production-ready with CLRMamePro Lite Mode
+🔄 **Active Development**: v0.1.5 in development with additional features
 📦 **Packaging**: Complete Linux distribution support (Debian, RPM, Arch)
 🎯 **Roadmap**: Performance optimizations and feature enhancements
-🔧 **New Features**: BGFX/GLSL support, core performance options, integer scaling
+🔧 **New Features**: ROM verification system, BGFX/GLSL support, core performance options
 
 ## Troubleshooting
+
+### ROM Verification Issues
+- **Verification Not Starting**: Ensure MAME executable is properly configured
+- **Slow Verification**: Large ROM collections may take time; use pause/resume as needed
+- **Missing ROMs**: Use the "🌐 Find Missing ROMs" button to access No-Intro database
+- **Export Issues**: Ensure you have write permissions in the target directory
+- **Status Not Updating**: Verification status updates automatically; refresh if needed
 
 ### Shader Issues
 - **Enhanced Validation**: The new shader system provides detailed error messages
@@ -421,7 +471,7 @@ The application is optimized for performance:
 - Try different BGFX backends (OpenGL, DirectX, Vulkan)
 - Disable GLSL shaders if causing problems
 - Check integer scaling settings
-### v0.1.3 (Latest Development)
+### v0.1.4 (Latest Release)
 - **🎨 Enhanced Shader System**: Complete overhaul of shader management
   - Embedded shaders included in binary (no download required)
   - 11 professional-quality shaders: CRT, LCD, retro effects, and scaling
@@ -468,7 +518,28 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Version History
 
-### v0.1.2 (Current Development)
+### v0.1.4 (Latest Release)
+- **🔍 CLRMamePro Lite Mode**: Complete professional ROM verification system
+  - Real-time verification with live progress tracking and statistics
+  - Color-coded game list with visual status indicators throughout the application
+  - Bulk actions: Find missing ROMs (No-Intro integration) and export reports
+  - Multiple export formats: Text, CSV, and HTML with detailed statistics
+  - Advanced controls: Pause/Resume/Stop verification with ETA calculations
+  - Global state management: Thread-safe verification status across the entire application
+  - Professional UI: Organized panels with stats, progress, and results sections
+- **🎯 Enhanced User Experience**:
+  - Verification status integration in main game list
+  - Smart background processing with non-blocking verification
+  - Comprehensive reporting with summary statistics
+  - One-click No-Intro integration for finding missing ROMs
+  - Visual feedback with color-coded backgrounds and status indicators
+- **🔧 Technical Improvements**:
+  - Thread-safe verification manager with Arc<Mutex<HashMap>>
+  - Real-time status updates across the entire application
+  - Efficient state management and UI integration
+  - Professional-grade verification accuracy and reporting
+
+### v0.1.3 (Previous Release)
 - **BGFX/GLSL Integration**: Complete multi-backend graphics support
   - 8 rendering backends (Auto, OpenGL, DirectX11/12, Vulkan, Metal, Gnm, Nvn)
   - GLSL shader system with CRT, LCD, and scanline effects

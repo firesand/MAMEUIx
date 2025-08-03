@@ -1,77 +1,91 @@
 // src/ui/sidebar.rs
 use eframe::egui;
-use crate::models::{FilterCategory, FilterSettings, RomSetType, filters::SearchMode};
+use crate::models::{FilterSettings, RomSetType, filters::SearchMode};
 
 pub struct Sidebar {
-    category_search_text: String,
-    previous_category: Option<String>,  // Add this
 }
 
 impl Sidebar {
     pub fn new() -> Self {
         Self {
-            category_search_text: String::new(),
-            previous_category: None,  // Initialize
         }
     }
 
-    pub fn get_previous_category(&self) -> Option<String> {
-        self.previous_category.clone()
-    }
-
-
-
-    /// Display the sidebar with filter options
-    /// The selected_filter parameter allows the sidebar to modify which filter is active
+    /// Display the sidebar with modern accordion-style filters
     pub fn show(
-        &mut self, 
-        ui: &mut egui::Ui, 
-        selected_filter: &mut FilterCategory, 
-        filter_settings: &mut FilterSettings, 
-        category_manager: Option<&crate::models::filters::CategoryManager>,
-        hidden_categories: &mut std::collections::HashSet<String>,
-        dialog_manager: &mut crate::ui::DialogManager,
+        &mut self,
+        ui: &mut egui::Ui,
+        _selected_filter: &mut crate::models::FilterCategory,
+        filter_settings: &mut FilterSettings,
+        _category_manager: Option<&crate::models::filters::CategoryManager>,
+        _hidden_categories: &mut std::collections::HashSet<String>,
+        _dialog_manager: &mut crate::ui::DialogManager,
     ) {
-        // Store the current category before any changes
-        self.previous_category = filter_settings.catver_category.clone();
-        ui.heading("Filters");
+        // Search bar container with precise alignment
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            
+            // Search bar with magnifying glass icon
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("🔍").size(18.0));
+                
+                let search_response = ui.add(
+                    egui::TextEdit::singleline(&mut filter_settings.search_text)
+                        .desired_width(ui.available_width() - 40.0)
+                        .hint_text("Search games...")
+                        .font(egui::TextStyle::Button)
+                );
+                
+                // Animated clear button
+                if !filter_settings.search_text.is_empty() {
+                    if ui.add(
+                        egui::Button::new("✕")
+                            .fill(egui::Color32::from_rgba_premultiplied(255, 255, 255, 20))
+                            .min_size(egui::Vec2::splat(24.0))
+                    ).clicked() {
+                        filter_settings.search_text.clear();
+                    }
+                }
+            });
+        });
 
-        ui.separator();
-
-        // Search section with mode selector
-        ui.label("Search:");
-
-        // Search mode selector
-        ui.horizontal(|ui| {
-            ui.label("Search by:");
+        // Search mode container with precise alignment
+        ui.add_space(8.0);
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            
+            // Search mode label
+            ui.label(egui::RichText::new("Search Mode:").size(14.0).strong());
+            
+            // Search mode dropdown with same width as search bar
             egui::ComboBox::from_id_salt("search_mode_combo")
             .selected_text(match filter_settings.search_mode {
-                SearchMode::GameTitle => "Game Title",
-                SearchMode::Manufacturer => "Manufacturer",
-                SearchMode::RomFileName => "ROM File Name",
-                SearchMode::Year => "Year",
-                SearchMode::Status => "Status",
-                SearchMode::Cpu => "CPU",
-                SearchMode::Device => "Device",
-                SearchMode::Sound => "Sound",
+                SearchMode::GameTitle => "🎯 Game Title",
+                SearchMode::Manufacturer => "🏭 Manufacturer",
+                SearchMode::RomFileName => "📁 ROM File Name",
+                SearchMode::Year => "📅 Year",
+                SearchMode::Status => "⚙️ Status",
+                SearchMode::Cpu => "🖥️ CPU",
+                SearchMode::Device => "🔧 Device",
+                SearchMode::Sound => "🔊 Sound",
                 SearchMode::FuzzySearch => "🔍 Fuzzy Search",
                 SearchMode::FullText => "📄 Full-Text Search",
                 SearchMode::Regex => "🔤 Regex Search",
             })
             .show_ui(ui, |ui| {
-                ui.label("🔸 Basic Search");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::GameTitle, "Game Title");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Manufacturer, "Manufacturer");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::RomFileName, "ROM File Name");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Year, "Year");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Status, "Status");
+                ui.label(egui::RichText::new("🔸 Basic Search").strong());
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::GameTitle, "🎯 Game Title");
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Manufacturer, "🏭 Manufacturer");
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::RomFileName, "📁 ROM File Name");
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Year, "📅 Year");
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Status, "⚙️ Status");
                 ui.separator();
-                ui.label("🔧 Hardware");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Cpu, "CPU");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Device, "Device");
-                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Sound, "Sound");
+                ui.label(egui::RichText::new("🔧 Hardware").strong());
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Cpu, "🖥️ CPU");
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Device, "🔧 Device");
+                ui.selectable_value(&mut filter_settings.search_mode, SearchMode::Sound, "🔊 Sound");
                 ui.separator();
-                ui.label("⚡ Enhanced Search");
+                ui.label(egui::RichText::new("⚡ Enhanced Search").strong());
                 if ui.selectable_value(&mut filter_settings.search_mode, SearchMode::FuzzySearch, "🔍 Fuzzy Search").on_hover_text("Finds matches even with typos or partial spelling").clicked() {
                     // Fuzzy search selected
                 }
@@ -84,397 +98,264 @@ impl Sidebar {
             });
         });
 
-        // Search box - now properly connected to filter settings
-        ui.horizontal(|ui| {
-            ui.label("Text:");
-            if ui.text_edit_singleline(&mut filter_settings.search_text).changed() {
-                // Search text changed, will trigger filter update in main window
-            }
-        });
-
         // Search performance info (only show for enhanced modes)
         match filter_settings.search_mode {
             SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
-                ui.horizontal(|ui| {
-                    ui.label("💡");
-                    ui.colored_label(egui::Color32::from_rgb(100, 150, 255), "Enhanced search active");
+                ui.add_space(8.0);
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("💡").size(16.0));
+                        ui.colored_label(egui::Color32::from_rgb(100, 150, 255), "Enhanced search active");
+                    });
+                    
+                    // Search tips based on mode
+                    match filter_settings.search_mode {
+                        SearchMode::FuzzySearch => {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("💬").size(14.0));
+                                ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Try: 'strt fgtr' for 'Street Fighter'");
+                            });
+                        }
+                        SearchMode::FullText => {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("💬").size(14.0));
+                                ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Searches all fields simultaneously");
+                            });
+                        }
+                        SearchMode::Regex => {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("💬").size(14.0));
+                                ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Try: '^Street.*Fighter$'");
+                            });
+                        }
+                        _ => {}
+                    }
                 });
-                
-                // Search tips based on mode
-                match filter_settings.search_mode {
-                    SearchMode::FuzzySearch => {
-                        ui.horizontal(|ui| {
-                            ui.label("💬");
-                            ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Try: 'strt fgtr' for 'Street Fighter'");
-                        });
-                    }
-                    SearchMode::FullText => {
-                        ui.horizontal(|ui| {
-                            ui.label("💬");
-                            ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Searches all fields simultaneously");
-                        });
-                    }
-                    SearchMode::Regex => {
-                        ui.horizontal(|ui| {
-                            ui.label("💬");
-                            ui.colored_label(egui::Color32::from_rgb(150, 150, 150), "Try: '^Street.*Fighter$'");
-                        });
-                    }
-                    _ => {}
-                }
             }
             _ => {}
         }
 
-        ui.separator();
+        ui.add_space(16.0);
 
-        // Filter category selection
-        ui.label("Show:");
-
-        // Radio buttons for filter categories
-        ui.radio_value(selected_filter, FilterCategory::All, "All Games");
-        ui.radio_value(selected_filter, FilterCategory::Available, "Available");
-        ui.radio_value(selected_filter, FilterCategory::Missing, "Missing");
-        ui.radio_value(selected_filter, FilterCategory::Favorites, "Favorites");
-        
-        // Make Parent ROMs more prominent
-        ui.radio_value(selected_filter, FilterCategory::Parents, "Parent ROMs (no duplicates)");
-        
-        ui.radio_value(selected_filter, FilterCategory::Working, "Working");
-        ui.radio_value(selected_filter, FilterCategory::NotWorking, "Not Working");
-        ui.radio_value(selected_filter, FilterCategory::ChdGames, "CHD Games");
-
-        ui.separator();
-
-        // Clone display options
-        ui.collapsing("🔽 Clone Options", |ui| {
-            ui.checkbox(&mut filter_settings.auto_expand_clones, "Auto expand clones");
-            ui.label("ℹ When enabled, clone games will be automatically expanded under their parent games");
-        });
-
-        ui.separator();
-
-        // Category filter section
-        if let Some(category_manager) = category_manager {
-            ui.collapsing("📁 Categories", |ui| {
-                // Show total categories and games
-                ui.label(format!(
-                    "Total: {} categories, {} games",
-                    category_manager.categories.len(),
-                                 category_manager.total_games
-                ));
-                ui.separator();
-
-                // Current filter display
-                ui.horizontal(|ui| {
-                    ui.label("Current:");
-                    if let Some(ref selected_cat) = filter_settings.catver_category {
-                        ui.label(selected_cat);
-                        if ui.small_button("✖").clicked() {
-                            filter_settings.catver_category = None;
-                        }
-                    } else {
-                        ui.label("All Categories");
-                    }
-                });
-                ui.separator();
-
-                // Quick picks for popular categories
-                ui.label("Popular Categories:");
-                ui.horizontal_wrapped(|ui| {
-                    for popular_cat in Self::get_popular_categories() {
-                        let exists = category_manager.categories.values()
-                        .any(|cat| cat.display_name == popular_cat);
-                        if exists {
-                            let is_selected = filter_settings.catver_category
-                            .as_ref()
-                            .map(|c| {
-                                category_manager.categories.get(c)
-                                .map(|cat| cat.display_name == popular_cat)
-                                .unwrap_or(false)
-                            })
-                            .unwrap_or(false);
-                            if ui.selectable_label(is_selected, popular_cat).clicked() {
-                                if let Some(cat) = category_manager.categories.values()
-                                    .find(|cat| cat.display_name == popular_cat) {
-                                        filter_settings.catver_category = Some(cat.name.clone());
-                                    }
-                            }
-                        }
-                    }
-                });
-                ui.separator();
-
-                // Letter navigation bar
-                ui.horizontal_wrapped(|ui| {
-                    if ui.small_button("All").clicked() {
-                        filter_settings.catver_category = None;
-                    }
-                    ui.separator();
-                    for letter in 'A'..='Z' {
-                        if category_manager.has_categories_for_letter(letter) {
-                            ui.small_button(letter.to_string());
-                        } else {
-                            ui.add_enabled(false, egui::Button::new(letter.to_string()).small());
-                        }
-                    }
-                });
-                ui.separator();
-
-                // Category search - FIXED: Use persistent field instead of temporary data
-                ui.horizontal(|ui| {
-                    ui.label("🔍");
-                    ui.text_edit_singleline(&mut self.category_search_text);
-
-                    // Add clear button when there's text
-                    if !self.category_search_text.is_empty() {
-                        if ui.small_button("✖").clicked() {
-                            self.category_search_text.clear();
-                        }
-                    }
-                });
-
-                // Show search results count
-                if !self.category_search_text.is_empty() {
-                    let search_lower = self.category_search_text.to_lowercase();
-                    let matching_count = category_manager.categories.values()
-                    .filter(|cat| cat.display_name.to_lowercase().contains(&search_lower))
-                    .count();
-                    ui.label(format!("Found: {} categories", matching_count));
-                }
-
-                // Scrollable category list
-                egui::ScrollArea::vertical()
-                .max_height(300.0)
-                .show(ui, |ui| {
-                    let search_lower = self.category_search_text.to_lowercase();
-
-                    for letter in category_manager.get_letter_groups() {
-                        if let Some(categories) = category_manager.categories_by_letter.get(&letter) {
-                            let mut has_visible_categories = false;
-
-                            // Check if any categories in this letter group match the search
-                            if !search_lower.is_empty() {
-                                has_visible_categories = categories.iter().any(|cat_name| {
-                                    if let Some(cat) = category_manager.categories.get(cat_name) {
-                                        cat.display_name.to_lowercase().contains(&search_lower)
-                                    } else {
-                                        false
-                                    }
-                                });
-                            } else {
-                                has_visible_categories = !categories.is_empty();
-                            }
-
-                            if has_visible_categories {
-                                // Show letter group header
-                                ui.label(egui::RichText::new(format!("─── {} ───", letter))
-                                .color(egui::Color32::from_rgb(150, 150, 150))
-                                .small());
-
-                                // Show categories in this letter group
-                                for cat_name in categories {
-                                    if let Some(category) = category_manager.categories.get(cat_name) {
-                                        // Filter by search text
-                                        if search_lower.is_empty() ||
-                                            category.display_name.to_lowercase().contains(&search_lower) {
-                                                let is_selected = filter_settings.catver_category
-                                                .as_ref()
-                                                .map(|c| c == &category.name)
-                                                .unwrap_or(false);
-
-                                                let label = Self::format_category_display(category);
-
-                                                if ui.selectable_label(is_selected, label).clicked() {
-                                                    filter_settings.catver_category = Some(category.name.clone());
-                                                }
-                                            }
-                                    }
-                                }
-                                ui.add_space(5.0);
-                            }
-                        }
-                    }
-                });
-            });
-        } else {
-            ui.collapsing("📁 Categories", |ui| {
-                ui.colored_label(
-                    egui::Color32::from_rgb(255, 100, 100),
-                                 "No catver.ini loaded"
+        // Horizontal layout with Filters and radio button in one row
+        ui.horizontal(|ui| {
+            // Filters label with lightning icon
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("⚡").size(18.0).color(egui::Color32::from_rgb(255, 193, 7))); // Lightning icon in yellow
+                ui.heading(
+                    egui::RichText::new("Filters")
+                        .size(18.0)
+                        .color(egui::Color32::from_rgb(100, 150, 255)) // Blue text
+                        .strong()
                 );
-                ui.label("Configure catver.ini path in");
-                ui.label("Options → Directories → History/DAT Files");
             });
-        }
-
-        ui.separator();
-
-        // Hidden Categories section
-        if let Some(category_manager) = category_manager {
-            ui.collapsing("🚫 Hidden Categories", |ui| {
-                ui.label("Categories to hide from game list:");
-                ui.separator();
-                
-                // Toggle to apply hidden categories filter
-                ui.checkbox(&mut filter_settings.apply_hidden_categories, "Apply hidden categories filter");
-                
-                if filter_settings.apply_hidden_categories {
-                    // Show current hidden categories count
-                    ui.label(format!("Currently hiding: {} categories", hidden_categories.len()));
-                    
-                    // Quick add common categories to hide
-                    ui.label("Quick hide:");
-                    ui.horizontal_wrapped(|ui| {
-                        let common_hide = vec![
-                            "Casino", "Casino / Cards", "Casino / Reels",
-                            "Gambling / Bingo", "Gambling / Lottery", 
-                            "Mahjong", "Mature / Cards", "Mature / Mahjong"
-                        ];
-                        
-                        for cat_name in common_hide {
-                            if category_manager.categories.values()
-                                .any(|cat| cat.display_name == cat_name) {
-                                let is_hidden = hidden_categories.contains(cat_name);
-                                if ui.selectable_label(is_hidden, cat_name).clicked() {
-                                    if is_hidden {
-                                        hidden_categories.remove(cat_name);
-                                    } else {
-                                        hidden_categories.insert(cat_name.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    
-                    ui.separator();
-                    
-                    // Button to manage all hidden categories
-                    if ui.button("Manage Hidden Categories...").clicked() {
-                        // This will open a dialog - we'll implement it next
-                        dialog_manager.open_dialog(crate::ui::DialogType::HiddenCategories);
+            
+            ui.add_space(16.0);
+            
+            // Checkbox for Select/Clear All
+            let old_state = filter_settings.select_all_mode;
+            if ui.add(
+                egui::Checkbox::new(
+                    &mut filter_settings.select_all_mode,
+                    egui::RichText::new("Select / Clear All").size(14.0).color(egui::Color32::from_rgb(180, 180, 200))
+                )
+            ).clicked() {
+                // Check if state actually changed
+                if filter_settings.select_all_mode != old_state {
+                    // Apply the appropriate action based on new state
+                    if filter_settings.select_all_mode {
+                        self.select_all_filters(filter_settings);
+                    } else {
+                        self.clear_all_filters(filter_settings);
                     }
-                    
-                    // Show list of currently hidden categories
-                    if !hidden_categories.is_empty() {
-                        ui.separator();
-                        ui.label("Currently hidden:");
-                        egui::ScrollArea::vertical()
-                            .max_height(100.0)
-                            .show(ui, |ui| {
-                                let mut to_remove = Vec::new();
-                                for hidden_cat in hidden_categories.iter() {
-                                    ui.horizontal(|ui| {
-                                        ui.label(hidden_cat);
-                                        if ui.small_button("✖").clicked() {
-                                            to_remove.push(hidden_cat.clone());
-                                        }
-                                    });
-                                }
-                                for cat in to_remove {
-                                    hidden_categories.remove(&cat);
-                                }
-                            });
-                        
-                        // Clear all button
-                        if ui.button("Clear All Hidden").clicked() {
-                            hidden_categories.clear();
-                        }
-                    }
-                }
-            });
-        }
-        
-        ui.separator();
-
-        // Additional filter options
-        ui.label("Options:");
-
-        // Checkbox for hiding non-games (devices and BIOS)
-        ui.checkbox(&mut filter_settings.hide_non_games, "Hide non-games (devices/BIOS)");
-
-        self.show_rom_set_info(ui, filter_settings);
-    }
-
-    /// Get the current search text
-
-
-    /// Format category display for sidebar
-    fn format_category_display(category: &crate::models::filters::CatverCategory) -> String {
-        match category.game_count {
-            0 => category.display_name.clone(),
-            1 => format!("{} (1 game)", category.display_name),
-            n => format!("{} ({} games)", category.display_name, n),
-        }
-    }
-
-    /// Popular categories for quick access
-    fn get_popular_categories() -> Vec<&'static str> {
-        vec![
-            "Arcade",
-            "Ball & Paddle",
-            "Casino",
-            "Driving",
-            "Fighter",
-            "Maze",
-            "Platform",
-            "Puzzle",
-            "Shooter",
-            "Sports",
-        ]
-    }
-
-    fn show_rom_set_info(&self, ui: &mut egui::Ui, filter_settings: &mut FilterSettings) {
-        ui.separator();
-        
-        // ROM Set Type Detection
-        ui.collapsing("🔍 ROM Set Type", |ui| {
-            match filter_settings.rom_set_type {
-                RomSetType::NonMerged => {
-                    ui.label("📦 Non-Merged Set Detected");
-                    ui.label("ℹ Each game is independent with all required files");
-                    ui.label("💡 Tip: Use 'Parents Only' to avoid duplicates");
-                },
-                RomSetType::Split => {
-                    ui.label("✂️ Split Set Detected");
-                    ui.label("ℹ Parent contains normal data, clones contain only changes");
-                    ui.label("💡 Tip: Use 'Parents Only' to see main games");
-                },
-                RomSetType::Merged => {
-                    ui.label("🔗 Merged Set Detected");
-                    ui.label("ℹ All clones are included in parent archives");
-                    ui.label("💡 Tip: Only parent games are needed");
-                },
-                RomSetType::Unknown => {
-                    ui.label("❓ ROM Set Type Unknown");
-                    ui.label("ℹ Detection in progress...");
                 }
             }
         });
 
-        // ROM Set Type Specific Controls
-        match filter_settings.rom_set_type {
-            RomSetType::NonMerged => {
-                ui.collapsing("📦 Non-Merged Options", |ui| {
-                    ui.checkbox(&mut filter_settings.show_clones_in_split, "Show all games (parents + clones)");
-                    ui.label("ℹ When unchecked, shows only parent games to avoid duplicates");
+        ui.add_space(16.0);
+
+        // Collapsible filter sections dengan animasi
+        egui::CollapsingHeader::new(
+            egui::RichText::new("📋 Availability")
+                .size(16.0)
+                .color(egui::Color32::from_rgb(100, 200, 255))
+        )
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.add_space(8.0);
+            
+            // Custom styled checkboxes with badges
+            ui.horizontal(|ui| {
+                let mut available = filter_settings.availability_filters.show_available;
+                if ui.add(
+                    egui::Checkbox::new(&mut available, "")
+                ).clicked() {
+                    filter_settings.availability_filters.show_available = available;
+                }
+                
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("Available")
+                        .color(egui::Color32::from_rgb(76, 175, 80))
+                );
+            });
+
+            ui.horizontal(|ui| {
+                let mut unavailable = filter_settings.availability_filters.show_unavailable;
+                if ui.add(
+                    egui::Checkbox::new(&mut unavailable, "")
+                ).clicked() {
+                    filter_settings.availability_filters.show_unavailable = unavailable;
+                }
+                
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("Unavailable")
+                        .color(egui::Color32::from_rgb(244, 67, 54))
+                );
+            });
+        });
+
+        // STATUS filter section
+        egui::CollapsingHeader::new(
+            egui::RichText::new("⚙️ Status")
+                .size(16.0)
+                .color(egui::Color32::from_rgb(255, 193, 7))
+        )
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.add_space(8.0);
+            
+            ui.horizontal(|ui| {
+                let mut working = filter_settings.status_filters.show_working;
+                if ui.add(
+                    egui::Checkbox::new(&mut working, "")
+                ).clicked() {
+                    filter_settings.status_filters.show_working = working;
+                }
+                
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("Working")
+                        .color(egui::Color32::from_rgb(76, 175, 80))
+                );
+            });
+
+            ui.horizontal(|ui| {
+                let mut not_working = filter_settings.status_filters.show_not_working;
+                if ui.add(
+                    egui::Checkbox::new(&mut not_working, "")
+                ).clicked() {
+                    filter_settings.status_filters.show_not_working = not_working;
+                }
+                
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("Not Working")
+                        .color(egui::Color32::from_rgb(244, 67, 54))
+                );
+            });
+        });
+
+        egui::CollapsingHeader::new(
+            egui::RichText::new("📁 Others")
+                .size(16.0)
+                .color(egui::Color32::from_rgb(150, 255, 100))
+        )
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.add_space(8.0);
+            
+            ui.horizontal(|ui| {
+                let mut favorites = filter_settings.other_filters.show_favorites;
+                if ui.add(
+                    egui::Checkbox::new(&mut favorites, "")
+                ).clicked() {
+                    filter_settings.other_filters.show_favorites = favorites;
+                }
+                
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("Favorites")
+                        .color(egui::Color32::from_rgb(233, 30, 99))
+                );
+            });
+
+            ui.horizontal(|ui| {
+                let mut parents_only = filter_settings.other_filters.show_parents_only;
+                if ui.add(
+                    egui::Checkbox::new(&mut parents_only, "")
+                ).clicked() {
+                    filter_settings.other_filters.show_parents_only = parents_only;
+                }
+                
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("Parent ROMs")
+                        .color(egui::Color32::from_rgb(156, 39, 176))
+                );
+            });
+
+            ui.horizontal(|ui| {
+                let mut chd_games = filter_settings.other_filters.show_chd_games;
+                if ui.add(
+                    egui::Checkbox::new(&mut chd_games, "")
+                ).clicked() {
+                    filter_settings.other_filters.show_chd_games = chd_games;
+                }
+                
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("CHD Games")
+                        .color(egui::Color32::from_rgb(0, 188, 212))
+                );
+            });
+        });
+
+        ui.add_space(16.0);
+        
+        // Filter status display with modern styling
+        let active_count = filter_settings.count_active_filters();
+        if active_count > 0 {
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!("Active Filters: {}", active_count)).strong());
+                    if ui.add(
+                        egui::Button::new(egui::RichText::new("Clear").size(12.0))
+                            .fill(egui::Color32::from_rgb(244, 67, 54))
+                            .min_size(egui::Vec2::new(50.0, 24.0))
+                    ).clicked() {
+                        self.clear_all_filters(filter_settings);
+                    }
                 });
-            },
-            RomSetType::Split => {
-                ui.collapsing("✂️ Split Set Options", |ui| {
-                    ui.checkbox(&mut filter_settings.show_clones_in_split, "Show clones under parents");
-                    ui.label("ℹ When checked, clone games will be shown");
-                });
-            },
-            RomSetType::Merged => {
-                ui.collapsing("🔗 Merged Set Options", |ui| {
-                    ui.checkbox(&mut filter_settings.show_clones_in_merged, "Show clone entries (not recommended)");
-                    ui.label("ℹ Usually not needed as clones are included in parent archives");
-                });
-            },
-            RomSetType::Unknown => {
-                // No specific controls for unknown type
-            }
+            });
         }
+        
+        ui.add_space(16.0);
     }
+    
+    /// Clear all filters
+    fn clear_all_filters(&self, filters: &mut FilterSettings) {
+        // Reset to show all games
+        filters.availability_filters.show_available = false;
+        filters.availability_filters.show_unavailable = false;
+        filters.status_filters.show_working = false;
+        filters.status_filters.show_not_working = false;
+        filters.other_filters.show_favorites = false;
+        filters.other_filters.show_parents_only = false;
+        filters.other_filters.show_chd_games = false;
+    }
+    
+    /// Select all filters (might result in no games shown due to conflicting criteria)
+    fn select_all_filters(&self, filters: &mut FilterSettings) {
+        filters.availability_filters.show_available = true;
+        filters.availability_filters.show_unavailable = true;
+        filters.status_filters.show_working = true;
+        filters.status_filters.show_not_working = true;
+        filters.other_filters.show_favorites = true;
+        filters.other_filters.show_parents_only = true;
+        filters.other_filters.show_chd_games = true;
+    }
+
+
 }

@@ -1410,6 +1410,15 @@ impl GamePropertiesDialog {
             args.push("-flipx".to_string()); // Flip horizontally
         }
         
+        // Auto rotation options
+        if props.display.auto_rotate_right {
+            args.push("-autoror".to_string());
+        }
+        
+        if props.display.auto_rotate_left {
+            args.push("-autorol".to_string());
+        }
+        
         // OpenGL-specific options (when using OpenGL video mode)
         if matches!(props.display.video_mode, VideoMode::OpenGL) {
             let advanced = &props.advanced;
@@ -1569,6 +1578,121 @@ impl GamePropertiesDialog {
         if props.sound.volume_attenuation != 0 {
             args.push("-volume".to_string());
             args.push(props.sound.volume_attenuation.to_string());
+        }
+        
+        // Core Configuration options
+        if props.miscellaneous.write_config {
+            args.push("-writeconfig".to_string());
+        }
+        
+        if props.miscellaneous.auto_save {
+            args.push("-autosave".to_string());
+        }
+        
+        if props.miscellaneous.rewind {
+            args.push("-rewind".to_string());
+        }
+        
+        if props.miscellaneous.exit_after {
+            args.push("-exit_after".to_string());
+        }
+        
+        if props.miscellaneous.bilinear {
+            args.push("-bilinear".to_string());
+        }
+        
+        if props.miscellaneous.burnin {
+            args.push("-burnin".to_string());
+        }
+        
+        if props.miscellaneous.crop {
+            args.push("-crop".to_string());
+        }
+        
+        // Core Input options
+        if props.miscellaneous.multi_keyboard {
+            args.push("-multikeyboard".to_string());
+        }
+        
+        if props.miscellaneous.multi_mouse {
+            args.push("-multimouse".to_string());
+        }
+        
+        if props.miscellaneous.steady_key {
+            args.push("-steadykey".to_string());
+        }
+        
+        if props.miscellaneous.ui_active {
+            args.push("-ui_active".to_string());
+        }
+        
+        if props.miscellaneous.offscreen_reload {
+            args.push("-offscreen_reload".to_string());
+        }
+        
+        if props.miscellaneous.contradictory {
+            args.push("-joystick_contradictory".to_string());
+        }
+        
+        if props.miscellaneous.natural {
+            args.push("-natural".to_string());
+        }
+        
+        // Core Debug options
+        if props.miscellaneous.verbose {
+            args.push("-verbose".to_string());
+        }
+        
+        if props.miscellaneous.log {
+            args.push("-log".to_string());
+        }
+        
+        if props.miscellaneous.oslog {
+            args.push("-oslog".to_string());
+        }
+        
+        if props.miscellaneous.debug {
+            args.push("-debug".to_string());
+        }
+        
+        if props.miscellaneous.update_pause {
+            args.push("-update_in_pause".to_string());
+        }
+        
+        if props.miscellaneous.debuglog {
+            args.push("-debuglog".to_string());
+        }
+        
+        if props.miscellaneous.drc_c {
+            args.push("-drc_use_c".to_string());
+        }
+        
+        if props.miscellaneous.log_uml {
+            args.push("-drc_log_uml".to_string());
+        }
+        
+        if props.miscellaneous.log_native {
+            args.push("-drc_log_native".to_string());
+        }
+        
+        if props.miscellaneous.cheat {
+            args.push("-cheat".to_string());
+        }
+        
+        if props.miscellaneous.skip {
+            args.push("-skip_gameinfo".to_string());
+        }
+        
+        if props.miscellaneous.confirm {
+            args.push("-confirm_quit".to_string());
+        }
+        
+        if props.miscellaneous.console {
+            args.push("-console".to_string());
+        }
+        
+        if props.miscellaneous.switchres {
+            args.push("-switchres".to_string());
         }
         
         args

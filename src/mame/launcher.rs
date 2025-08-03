@@ -315,6 +315,130 @@ fn apply_game_properties(cmd: &mut Command, props: &crate::models::GamePropertie
         cmd.arg("-flipx"); // Flip horizontally
     }
     
+    // Auto rotation options
+    if props.display.auto_rotate_right {
+        cmd.arg("-autoror");
+    }
+    
+    if props.display.auto_rotate_left {
+        cmd.arg("-autorol");
+    }
+    
+    // Core Configuration options
+    if props.miscellaneous.write_config {
+        cmd.arg("-writeconfig");
+    }
+    
+    if props.miscellaneous.auto_save {
+        cmd.arg("-autosave");
+    }
+    
+    if props.miscellaneous.rewind {
+        cmd.arg("-rewind");
+    }
+    
+    if props.miscellaneous.exit_after {
+        cmd.arg("-exit_after");
+    }
+    
+    if props.miscellaneous.bilinear {
+        cmd.arg("-bilinear");
+    }
+    
+    if props.miscellaneous.burnin {
+        cmd.arg("-burnin");
+    }
+    
+    if props.miscellaneous.crop {
+        cmd.arg("-crop");
+    }
+    
+    // Core Input options
+    if props.miscellaneous.multi_keyboard {
+        cmd.arg("-multikeyboard");
+    }
+    
+    if props.miscellaneous.multi_mouse {
+        cmd.arg("-multimouse");
+    }
+    
+    if props.miscellaneous.steady_key {
+        cmd.arg("-steadykey");
+    }
+    
+    if props.miscellaneous.ui_active {
+        cmd.arg("-ui_active");
+    }
+    
+    if props.miscellaneous.offscreen_reload {
+        cmd.arg("-offscreen_reload");
+    }
+    
+    if props.miscellaneous.contradictory {
+        cmd.arg("-joystick_contradictory");
+    }
+    
+    if props.miscellaneous.natural {
+        cmd.arg("-natural");
+    }
+    
+    // Core Debug options
+    if props.miscellaneous.verbose {
+        cmd.arg("-verbose");
+    }
+    
+    if props.miscellaneous.log {
+        cmd.arg("-log");
+    }
+    
+    if props.miscellaneous.oslog {
+        cmd.arg("-oslog");
+    }
+    
+    if props.miscellaneous.debug {
+        cmd.arg("-debug");
+    }
+    
+    if props.miscellaneous.update_pause {
+        cmd.arg("-update_in_pause");
+    }
+    
+    if props.miscellaneous.debuglog {
+        cmd.arg("-debuglog");
+    }
+    
+    if props.miscellaneous.drc_c {
+        cmd.arg("-drc_use_c");
+    }
+    
+    if props.miscellaneous.log_uml {
+        cmd.arg("-drc_log_uml");
+    }
+    
+    if props.miscellaneous.log_native {
+        cmd.arg("-drc_log_native");
+    }
+    
+    if props.miscellaneous.cheat {
+        cmd.arg("-cheat");
+    }
+    
+    if props.miscellaneous.skip {
+        cmd.arg("-skip_gameinfo");
+    }
+    
+    if props.miscellaneous.confirm {
+        cmd.arg("-confirm_quit");
+    }
+    
+    if props.miscellaneous.console {
+        cmd.arg("-console");
+    }
+    
+    if props.miscellaneous.switchres {
+        cmd.arg("-switchres");
+    }
+    
     // Number of processors
     if let Some(num_procs) = props.miscellaneous.num_processors {
         cmd.arg("-numprocessors").arg(num_procs.to_string());
