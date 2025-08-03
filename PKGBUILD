@@ -11,7 +11,7 @@ makedepends=('rust>=1.70' 'pkgconf' 'zstd' 'git' 'cmake' 'ninja')
 optdepends=('mame-roms: Game ROMs for MAME')
 provides=('mameuix')
 conflicts=('mameuix-git')
-source=('git+https://github.com/firesand/MAMEUIx.git#branch=main')
+source=('git+https://github.com/firesand/MAMEUIx.git#tag=v0.1.4')
 sha256sums=('SKIP')
 validpgpkeys=()
 
