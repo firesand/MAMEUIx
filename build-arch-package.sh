@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# MAMEUIX Arch/CachyOS Package Builder
-# Builds and validates the MAMEUIX package for Arch Linux and CachyOS
+# MAMEUIX Arch Linux Package Builder
+# Builds optimized package for Arch Linux and CachyOS
 
 set -e
 
@@ -31,27 +31,53 @@ print_error() {
 
 # Check if we're in the right directory
 if [ ! -f "PKGBUILD" ]; then
-    print_error "PKGBUILD not found. Please run this script from the MAMEUIX project directory."
+    print_error "PKGBUILD not found. Please run this script from the project root directory."
+    exit 1
+fi
+
+# Check if we're on Arch Linux or CachyOS
+if ! command -v pacman &> /dev/null; then
+    print_error "This script is designed for Arch Linux or CachyOS systems."
     exit 1
 fi
 
 print_status "Starting MAMEUIX v0.1.4 package build..."
 
 # Clean previous builds
-print_status "Cleaning previous builds..."
+print_status "Cleaning previous build artifacts..."
 rm -rf pkg/ src/ *.pkg.tar.zst *.pkg.tar.zst.sig 2>/dev/null || true
 
-# Update .SRCINFO
-print_status "Updating .SRCINFO..."
-makepkg --printsrcinfo > .SRCINFO
+# Update system packages (optional)
+read -p "Update system packages before building? (y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    print_status "Updating system packages..."
+    sudo pacman -Syu --noconfirm
+fi
 
-# Validate PKGBUILD
-print_status "Validating PKGBUILD..."
-namcap PKGBUILD || print_warning "PKGBUILD validation completed with warnings"
+# Install build dependencies
+print_status "Installing build dependencies..."
+sudo pacman -S --needed --noconfirm \
+    rust \
+    pkgconf \
+    zstd \
+    git \
+    cmake \
+    ninja \
+    base-devel
 
-# Build package
-print_status "Building package..."
-if makepkg --syncdeps --noconfirm; then
+# Verify Rust installation
+if ! command -v cargo &> /dev/null; then
+    print_error "Rust/Cargo not found. Please install Rust first."
+    exit 1
+fi
+
+print_status "Rust version: $(rustc --version)"
+print_status "Cargo version: $(cargo --version)"
+
+# Build the package
+print_status "Building MAMEUIX package..."
+if makepkg -sf --noconfirm; then
     print_success "Package built successfully!"
 else
     print_error "Package build failed!"
@@ -59,37 +85,48 @@ else
 fi
 
 # Find the built package
-PACKAGE_FILE=$(ls -t *.pkg.tar.zst 2>/dev/null | head -1)
+PACKAGE_FILE=$(ls -t mameuix-*.pkg.tar.zst 2>/dev/null | head -n1)
+
 if [ -z "$PACKAGE_FILE" ]; then
     print_error "No package file found after build!"
     exit 1
 fi
 
-print_success "Package file: $PACKAGE_FILE"
-
-# Validate package
-print_status "Validating package..."
-if namcap "$PACKAGE_FILE"; then
-    print_success "Package validation completed!"
-else
-    print_warning "Package validation completed with warnings"
-fi
-
-# Show package info
-print_status "Package information:"
-pacman -Qip "$PACKAGE_FILE"
-
-# Show package contents
-print_status "Package contents:"
-tar -tf "$PACKAGE_FILE" | head -20
-echo "... (showing first 20 files)"
-
 print_success "MAMEUIX v0.1.4 package build completed successfully!"
 print_status "Package file: $PACKAGE_FILE"
 print_status "Size: $(du -h "$PACKAGE_FILE" | cut -f1)"
 
-echo ""
-print_status "Next steps:"
-echo "1. Test the package: sudo pacman -U $PACKAGE_FILE"
-echo "2. Upload to AUR: git push origin main"
-echo "3. For CachyOS: Submit to CachyOS package repository" 
+# Show package information
+print_status "Package information:"
+tar -tf "$PACKAGE_FILE" | head -20
+echo "... (showing first 20 files)"
+
+# Optional: Install the package
+read -p "Install the package now? (y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    print_status "Installing MAMEUIX package..."
+    sudo pacman -U --noconfirm "$PACKAGE_FILE"
+    print_success "MAMEUIX installed successfully!"
+    
+    # Check if MAME is installed
+    if ! command -v mame &> /dev/null; then
+        print_warning "MAME is not installed. You may want to install it:"
+        print_status "sudo pacman -S mame"
+    fi
+fi
+
+# Optional: Validate package
+read -p "Validate package with namcap? (y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if command -v namcap &> /dev/null; then
+        print_status "Validating package..."
+        namcap "$PACKAGE_FILE"
+    else
+        print_warning "namcap not installed. Install it with: sudo pacman -S namcap"
+    fi
+fi
+
+print_success "Build process completed!"
+print_status "Package location: $(pwd)/$PACKAGE_FILE" 

@@ -1,19 +1,30 @@
 pkgbase = mameuix
-	pkgdesc = Modern GUI frontend for MAME arcade emulator with thread pool performance and enhanced UI
+	pkgdesc = Modern GUI frontend for MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification
 	pkgver = 0.1.4
 	pkgrel = 1
 	url = https://github.com/firesand/MAMEUIx
 	arch = x86_64
 	license = MIT
+	depends = mame>=0.200
+	depends = glibc
+	depends = gcc-libs
+	depends = libx11
+	depends = libxcb
+	depends = libxrandr
+	depends = libxinerama
+	depends = libxcursor
+	depends = libxi
 	makedepends = rust>=1.70
 	makedepends = pkgconf
 	makedepends = zstd
 	makedepends = git
-	depends = mame>=0.200
-	depends = glibc
-	depends = gcc-libs
+	makedepends = cmake
+	makedepends = ninja
 	optdepends = mame-roms: Game ROMs for MAME
-	source = mameuix-0.1.4.tar.gz::https://github.com/firesand/MAMEUIx/archive/v0.1.4.tar.gz
+	provides = mameuix
+	conflicts = mameuix-git
+	source = git+https://github.com/firesand/MAMEUIx.git#branch=main
 	sha256sums = SKIP
+	validpgpkeys = 
 
 pkgname = mameuix
