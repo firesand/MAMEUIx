@@ -41,11 +41,12 @@ if ! command -v pacman &> /dev/null; then
     exit 1
 fi
 
-print_status "Starting MAMEUIX v0.1.4 package build..."
+VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
+print_status "Starting MAMEUIx v$VERSION package build..."
 
 # Clean previous builds
 print_status "Cleaning previous build artifacts..."
-rm -rf pkg/ src/ *.pkg.tar.zst *.pkg.tar.zst.sig 2>/dev/null || true
+rm -f mameuix-"$VERSION"*.pkg.tar.zst mameuix-"$VERSION"*.pkg.tar.zst.sig 2>/dev/null || true
 
 # Update system packages (optional)
 read -p "Update system packages before building? (y/N): " -n 1 -r
@@ -61,7 +62,6 @@ sudo pacman -S --needed --noconfirm \
     rust \
     pkgconf \
     zstd \
-    git \
     cmake \
     ninja \
     base-devel
@@ -75,9 +75,32 @@ fi
 print_status "Rust version: $(rustc --version)"
 print_status "Cargo version: $(cargo --version)"
 
+BUILD_TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$BUILD_TMP_DIR"' EXIT
+
+print_status "Creating source tarball..."
+SOURCE_ROOT="mameuix-$VERSION"
+SOURCE_ARCHIVE="mameuix-$VERSION.tar.gz"
+mkdir -p "$BUILD_TMP_DIR/source/$SOURCE_ROOT"
+tar --exclude='.git' --exclude='.cargo' --exclude='target' --exclude='pkg' \
+    --exclude='cfg' --exclude='nvram' --exclude='diff' \
+    --exclude='pS_CatVer_277' --exclude='MAMEUI-inifiles' \
+    --exclude='memory.md' --exclude='*.log' --exclude='*.tmp' --exclude='*.temp' \
+    --exclude='*.deb' --exclude='*.rpm' --exclude='*.pkg.tar.zst' \
+    --exclude='*.pkg.tar.zst.sig' \
+    --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \
+    --exclude='*.changes' --exclude='*.dsc' \
+    -cf - . | tar -C "$BUILD_TMP_DIR/source/$SOURCE_ROOT" -xf -
+tar -C "$BUILD_TMP_DIR/source" -czf "$SOURCE_ARCHIVE" "$SOURCE_ROOT"
+
+ARCH_BUILD_DIR="$BUILD_TMP_DIR/arch"
+mkdir -p "$ARCH_BUILD_DIR"
+cp PKGBUILD .SRCINFO "$SOURCE_ARCHIVE" "$ARCH_BUILD_DIR/"
+
 # Build the package
 print_status "Building MAMEUIX package..."
-if makepkg -sf --noconfirm; then
+if (cd "$ARCH_BUILD_DIR" && makepkg -sf --noconfirm); then
+    cp "$ARCH_BUILD_DIR"/mameuix-"$VERSION"*.pkg.tar.zst .
     print_success "Package built successfully!"
 else
     print_error "Package build failed!"
@@ -92,7 +115,7 @@ if [ -z "$PACKAGE_FILE" ]; then
     exit 1
 fi
 
-print_success "MAMEUIX v0.1.4 package build completed successfully!"
+print_success "MAMEUIx v$VERSION package build completed successfully!"
 print_status "Package file: $PACKAGE_FILE"
 print_status "Size: $(du -h "$PACKAGE_FILE" | cut -f1)"
 

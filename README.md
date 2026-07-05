@@ -2,11 +2,20 @@
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
-**Current Version: 0.1.4** - CLRMamePro Lite Mode & Enhanced ROM Verification
+**Current Version: 0.1.5** - Stability, Parser, and Build Gate Improvements
 
-## 🚀 Recent Improvements (v0.1.4)
+## Recent Improvements (v0.1.5)
 
-### 🔍 **CLRMamePro Lite Mode - ROM Verification**
+- Fixed core unit tests and restored a clean `cargo test --bin mameuix` baseline
+- Excluded stale auto-discovered examples from the default test/build gate
+- Replaced the main MAME XML scanner path with `quick-xml` parsing
+- Removed the stale duplicate app entry file
+- Improved ROM scan progress reporting while preserving CHD status handling
+- Made icon loading use a local Rayon thread pool instead of a global pool initializer
+
+## Recent Improvements (v0.1.4)
+
+### CLRMamePro Lite Mode — ROM Verification
 - **Professional ROM Verification**: Complete CLRMamePro-style verification system
 - **Real-time Progress Tracking**: Live "5/200 verified, 3 missing, 2 incorrect" statistics
 - **Color-coded Game List**: Visual status indicators throughout the application
@@ -21,16 +30,14 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - **Global State Management**: Thread-safe verification status across the entire application
 - **Professional UI**: Organized panels with stats, progress, and results sections
 
-### 🎯 **Enhanced User Experience**
+### Enhanced User Experience (v0.1.4)
 - **Verification Status Integration**: Game list shows verification status in real-time
 - **Smart Background Processing**: Non-blocking verification with progress updates
 - **Comprehensive Reporting**: Detailed export reports with summary statistics
 - **No-Intro Integration**: One-click access to find missing ROMs
 - **Visual Feedback**: Color-coded backgrounds and status indicators
 
-## 🚀 Recent Improvements (v0.1.4)
-
-### 🚀 **Major Performance Improvements**
+### Performance and Shader System (v0.1.4)
 - **Thread Pool Icon Loading**: Parallel processing for 48,000+ games with up to 8x performance improvement
 - **Performance Monitoring**: Real-time metrics and statistics for icon loading
 - **Adaptive Loading**: Dynamic rate adjustment based on system performance
@@ -364,45 +371,29 @@ The game list table supports full column customization:
 
 ```
 src/
-├── main.rs              # Application entry point
-├── config/              # Configuration management
-├── graphics/            # Graphics and rendering
-│   ├── shader_manager.rs # GLSL shader management
-│   ├── shader_templates/ # Pre-built shader templates
-│   │   ├── crt-geom.vert # CRT geometry vertex shader
-│   │   ├── crt-geom.frag # CRT geometry fragment shader
-│   │   ├── lcd.vert      # LCD vertex shader
-│   │   ├── lcd.frag      # LCD fragment shader
-│   │   └── scanlines.frag # Scanline effect shader
-│   └── mod.rs           # BGFX integration and graphics config
-├── hardware_filter.rs   # Hardware filtering (CPU, device, sound)
-├── ini_utils/           # INI file processing utilities
-├── mame/                # MAME integration
-│   ├── launcher.rs      # Game launching with performance options
-│   ├── scanner.rs       # ROM scanning
-│   ├── category_loader.rs # Category loading from catver.ini
-│   └── mod.rs
-├── models/              # Data models
-│   ├── game.rs          # Game data structure
-│   ├── config.rs        # Configuration models
-│   ├── filters.rs       # Filtering logic
-│   └── mod.rs
-├── rom_utils/           # ROM utilities
-├── ui/                  # User interface
-│   ├── main_window.rs   # Main application window
-│   ├── game_list.rs     # Game list component (with resizable columns)
-│   ├── sidebar.rs       # Sidebar with filters
-│   ├── artwork_panel.rs # Artwork display
-│   ├── theme.rs         # Theme system
-│   ├── dialogs/         # Dialog windows
-│   │   ├── directories.rs # Directory configuration
-│   │   ├── preferences.rs # Preferences dialog
-│   │   ├── video_settings.rs # Video settings with BGFX/GLSL
-│   │   ├── mame_finder.rs # MAME executable finder
-│   │   ├── rom_verify.rs # ROM verification dialog
-│   │   └── hidden_categories.rs # Hidden categories management
-│   └── mod.rs
-└── test_*.rs            # Test binaries for development
+├── main.rs                 # Application entry point
+├── app/
+│   └── mame_app.rs         # Main application coordinator
+├── config/                 # Configuration load/save (TOML)
+├── mame/                   # MAME integration
+│   ├── launcher.rs         # Game launching
+│   ├── scanner.rs          # Game list XML parsing (quick-xml)
+│   └── category_loader.rs  # Category loading from catver.ini
+├── models/                 # Data models (game, config, filters)
+├── embedded_shaders/       # Built-in GLSL shaders
+├── ui/
+│   ├── dock.rs             # Dockable panel layout (egui_dock)
+│   ├── notifications.rs    # Toast notifications
+│   ├── panels/             # Game list, sidebar, artwork, icons, ...
+│   ├── components/         # Dialogs (preferences, directories, ROM verify, ...)
+│   │   └── steam_ui.rs     # Shared Steam-inspired dialog styling
+│   └── themes/             # Theme system
+└── utils/
+    ├── rom_utils/          # ROM/CHD scanning and progress
+    ├── ini_utils/          # INI file helpers
+    ├── hardware_filter.rs  # CPU/device/sound filtering
+    ├── enhanced_search.rs  # Fuzzy/full-text search
+    └── graphics/           # Shader management and validation
 ```
 
 ## Performance
@@ -422,8 +413,8 @@ The application is optimized for performance:
 
 ## Development Status
 
-✅ **Stable Release**: v0.1.4 is production-ready with CLRMamePro Lite Mode
-🔄 **Active Development**: v0.1.5 in development with additional features
+✅ **Stable Release**: v0.1.5 is production-ready with stability and packaging improvements
+🔄 **Active Development**: Ongoing UI, performance, and packaging refinements
 📦 **Packaging**: Complete Linux distribution support (Debian, RPM, Arch)
 🎯 **Roadmap**: Performance optimizations and feature enhancements
 🔧 **New Features**: ROM verification system, BGFX/GLSL support, core performance options
@@ -471,7 +462,7 @@ The application is optimized for performance:
 - Try different BGFX backends (OpenGL, DirectX, Vulkan)
 - Disable GLSL shaders if causing problems
 - Check integer scaling settings
-### v0.1.4 (Latest Release)
+### v0.1.4
 - **🎨 Enhanced Shader System**: Complete overhaul of shader management
   - Embedded shaders included in binary (no download required)
   - 11 professional-quality shaders: CRT, LCD, retro effects, and scaling
@@ -518,7 +509,14 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Version History
 
-### v0.1.4 (Latest Release)
+### v0.1.5 (Latest Release)
+- **Stability and build gate improvements**:
+  - Restored a clean `cargo test --bin mameuix` baseline
+  - Replaced the main MAME XML scanner path with `quick-xml`
+  - Improved ROM scan progress while preserving CHD status handling
+  - Updated Debian, RPM, and Arch packaging metadata and build scripts
+
+### v0.1.4
 - **🔍 CLRMamePro Lite Mode**: Complete professional ROM verification system
   - Real-time verification with live progress tracking and statistics
   - Color-coded game list with visual status indicators throughout the application

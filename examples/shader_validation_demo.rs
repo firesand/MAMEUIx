@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use anyhow::Result;
+use std::path::PathBuf;
 
 // This demonstrates how to integrate the enhanced shader validation into your UI
 // You can copy this pattern into your game_properties.rs or wherever you handle shaders
@@ -33,12 +33,15 @@ impl ShaderValidationDemo {
                 };
 
                 // Validate the shader using the enhanced validator
-                match self.shader_manager.validate_glsl_syntax(&shader_content, shader_type) {
+                match self
+                    .shader_manager
+                    .validate_glsl_syntax(&shader_content, shader_type)
+                {
                     Ok(()) => (true, vec![]),
-                    Err(e) => (false, vec![e.to_string()])
+                    Err(e) => (false, vec![e.to_string()]),
                 }
             }
-            Err(_) => (false, vec!["File not found or cannot be read".to_string()])
+            Err(_) => (false, vec!["File not found or cannot be read".to_string()]),
         }
     }
 
@@ -62,44 +65,45 @@ impl ShaderValidationDemo {
 
     /// Example: Real-time validation during shader editing
     pub fn validate_shader_code(&self, shader_code: &str, shader_type: &str) -> Result<()> {
-        self.shader_manager.validate_glsl_syntax(shader_code, shader_type)
+        self.shader_manager
+            .validate_glsl_syntax(shader_code, shader_type)
     }
 }
 
-/// Example usage in your UI:
-/// 
-/// ```rust
-/// // In your game_properties.rs or wherever you handle shaders:
-/// 
-/// // 1. Add shader manager to your dialog struct
-/// pub struct GamePropertiesDialog {
-///     // ... existing fields ...
-///     shader_validator: ShaderValidationDemo,
-/// }
-/// 
-/// // 2. Initialize it in your constructor
-/// impl GamePropertiesDialog {
-///     pub fn new_with_config(game: Option<&Game>, config: &AppConfig) -> Self {
-///         // ... existing code ...
-///         Self {
-///             // ... existing fields ...
-///             shader_validator: ShaderValidationDemo::new(),
-///         }
-///     }
-/// }
-/// 
-/// // 3. Use it in your shader input fields
-/// fn show_shader_input(&self, ui: &mut egui::Ui, shader_path: &str, slot_name: &str) {
-///     ui.horizontal(|ui| {
-///         ui.label(format!("{}", slot_name));
-///         
-///         let mut path = shader_path.to_string();
-///         if ui.text_edit_singleline(&mut path).changed() {
-///             // Update your shader path here
-///         }
-///         
-///         // Show validation status
-///         self.shader_validator.show_validation_status(ui, &path, slot_name);
-///     });
-/// }
-/// ```
+// Example usage in your UI:
+//
+// ```rust
+// // In your game_properties.rs or wherever you handle shaders:
+//
+// // 1. Add shader manager to your dialog struct
+// pub struct GamePropertiesDialog {
+//     // ... existing fields ...
+//     shader_validator: ShaderValidationDemo,
+// }
+//
+// // 2. Initialize it in your constructor
+// impl GamePropertiesDialog {
+//     pub fn new_with_config(game: Option<&Game>, config: &AppConfig) -> Self {
+//         // ... existing code ...
+//         Self {
+//             // ... existing fields ...
+//             shader_validator: ShaderValidationDemo::new(),
+//         }
+//     }
+// }
+//
+// // 3. Use it in your shader input fields
+// fn show_shader_input(&self, ui: &mut egui::Ui, shader_path: &str, slot_name: &str) {
+//     ui.horizontal(|ui| {
+//         ui.label(format!("{}", slot_name));
+//
+//         let mut path = shader_path.to_string();
+//         if ui.text_edit_singleline(&mut path).changed() {
+//             // Update your shader path here
+//         }
+//
+//         // Show validation status
+//         self.shader_validator.show_validation_status(ui, &path, slot_name);
+//     });
+// }
+// ```

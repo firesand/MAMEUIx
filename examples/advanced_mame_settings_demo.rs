@@ -30,16 +30,16 @@ impl eframe::App for AdvancedMameSettingsDemo {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Advanced MAME Settings Demo");
             ui.add_space(20.0);
-            
+
             ui.label("This demo shows the Advanced MAME Settings dialog implementation.");
             ui.add_space(10.0);
-            
+
             if ui.button("Open Advanced MAME Settings").clicked() {
                 self.settings_dialog.open();
             }
-            
+
             ui.add_space(20.0);
-            
+
             ui.label("Features implemented:");
             ui.label("• Dark theme with modern UI design");
             ui.label("• Categories sidebar with icons");
@@ -127,7 +127,8 @@ impl AdvancedMameSettings {
 
     fn render_header(&mut self, ui: &mut egui::Ui) {
         let header_rect = ui.available_rect_before_wrap();
-        let header_rect = Rect::from_min_size(header_rect.min, Vec2::new(header_rect.width(), 56.0));
+        let header_rect =
+            Rect::from_min_size(header_rect.min, Vec2::new(header_rect.width(), 56.0));
 
         ui.allocate_ui_at_rect(header_rect, |ui| {
             ui.painter().rect_filled(
@@ -148,7 +149,7 @@ impl AdvancedMameSettings {
                 ui.label(
                     RichText::new("⚙️ Advanced MAME Settings")
                         .size(18.0)
-                        .color(Color32::from_rgb(255, 255, 255))
+                        .color(Color32::from_rgb(255, 255, 255)),
                 );
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -159,11 +160,11 @@ impl AdvancedMameSettings {
                         egui::Button::new(
                             RichText::new("×")
                                 .size(20.0)
-                                .color(Color32::from_rgb(136, 136, 136))
+                                .color(Color32::from_rgb(136, 136, 136)),
                         )
                         .fill(Color32::from_rgb(42, 42, 42))
                         .stroke(Stroke::NONE)
-                        .rounding(Rounding::same(6))
+                        .rounding(Rounding::same(6)),
                     );
 
                     if close_button.clicked() {
@@ -190,11 +191,8 @@ impl AdvancedMameSettings {
 
         ui.allocate_ui_at_rect(sidebar_rect, |ui| {
             // Background
-            ui.painter().rect_filled(
-                sidebar_rect,
-                Rounding::ZERO,
-                Color32::from_rgb(15, 15, 15),
-            );
+            ui.painter()
+                .rect_filled(sidebar_rect, Rounding::ZERO, Color32::from_rgb(15, 15, 15));
 
             // Border
             ui.painter().line_segment(
@@ -217,7 +215,7 @@ impl AdvancedMameSettings {
                     egui::TextEdit::singleline(&mut self.search_query)
                         .desired_width(search_width)
                         .hint_text("Search settings...")
-                        .frame(true)
+                        .frame(true),
                 );
             });
 
@@ -244,10 +242,7 @@ impl AdvancedMameSettings {
                 let is_active = self.selected_category == id;
 
                 let item_rect = ui.available_rect_before_wrap();
-                let item_rect = Rect::from_min_size(
-                    item_rect.min,
-                    Vec2::new(sidebar_width, 44.0),
-                );
+                let item_rect = Rect::from_min_size(item_rect.min, Vec2::new(sidebar_width, 44.0));
 
                 let response = ui.allocate_rect(item_rect, Sense::click());
 
@@ -270,10 +265,8 @@ impl AdvancedMameSettings {
                     );
 
                     // Active indicator
-                    let indicator_rect = Rect::from_min_size(
-                        item_rect.min,
-                        Vec2::new(3.0, item_rect.height()),
-                    );
+                    let indicator_rect =
+                        Rect::from_min_size(item_rect.min, Vec2::new(3.0, item_rect.height()));
                     ui.painter().rect_filled(
                         indicator_rect,
                         Rounding::ZERO,
@@ -326,11 +319,8 @@ impl AdvancedMameSettings {
 
         ui.allocate_ui_at_rect(panel_rect, |ui| {
             // Background
-            ui.painter().rect_filled(
-                panel_rect,
-                Rounding::ZERO,
-                Color32::from_rgb(10, 10, 10),
-            );
+            ui.painter()
+                .rect_filled(panel_rect, Rounding::ZERO, Color32::from_rgb(10, 10, 10));
 
             ui.add_space(24.0);
 
@@ -360,7 +350,7 @@ impl AdvancedMameSettings {
                     ui.label(
                         RichText::new("Paths & Directories")
                             .size(20.0)
-                            .color(Color32::from_rgb(255, 255, 255))
+                            .color(Color32::from_rgb(255, 255, 255)),
                     );
                 });
 
@@ -369,17 +359,20 @@ impl AdvancedMameSettings {
                 ui.label(
                     RichText::new("Configure where MAME looks for and saves various files")
                         .size(14.0)
-                        .color(Color32::from_rgb(136, 136, 136))
+                        .color(Color32::from_rgb(136, 136, 136)),
                 );
 
                 ui.add_space(20.0);
 
                 // Tab bar
-                self.render_tab_bar(ui, &[
-                    ("search-paths", "Search Paths"),
-                    ("output-dirs", "Output Directories"),
-                    ("history-info", "History & Info"),
-                ]);
+                self.render_tab_bar(
+                    ui,
+                    &[
+                        ("search-paths", "Search Paths"),
+                        ("output-dirs", "Output Directories"),
+                        ("history-info", "History & Info"),
+                    ],
+                );
 
                 ui.add_space(20.0);
 
@@ -398,10 +391,7 @@ impl AdvancedMameSettings {
         ui.horizontal(|ui| {
             // Tab bar background
             let tab_bar_rect = ui.available_rect_before_wrap();
-            let tab_bar_rect = Rect::from_min_size(
-                tab_bar_rect.min,
-                Vec2::new(400.0, 40.0),
-            );
+            let tab_bar_rect = Rect::from_min_size(tab_bar_rect.min, Vec2::new(400.0, 40.0));
 
             ui.painter().rect_filled(
                 tab_bar_rect,
@@ -416,22 +406,18 @@ impl AdvancedMameSettings {
 
                 let tab_response = ui.add_sized(
                     Vec2::new(120.0, 32.0),
-                    egui::Button::new(
-                        RichText::new(*label)
-                            .size(14.0)
-                            .color(if is_active {
-                                Color32::from_rgb(74, 158, 255)
-                            } else {
-                                Color32::from_rgb(136, 136, 136)
-                            })
-                    )
+                    egui::Button::new(RichText::new(*label).size(14.0).color(if is_active {
+                        Color32::from_rgb(74, 158, 255)
+                    } else {
+                        Color32::from_rgb(136, 136, 136)
+                    }))
                     .fill(if is_active {
                         Color32::from_rgb(42, 42, 42)
                     } else {
                         Color32::TRANSPARENT
                     })
                     .stroke(Stroke::NONE)
-                    .rounding(Rounding::same(6))
+                    .rounding(Rounding::same(6)),
                 );
 
                 if tab_response.clicked() {
@@ -452,29 +438,27 @@ impl AdvancedMameSettings {
         ui.add_space(10.0);
         ui.label("Configure where MAME looks for ROMs, artwork, and other files");
         ui.add_space(20.0);
-        
+
         // ROM Paths example
         ui.label("ROM Paths (multiple directories supported):");
         ui.horizontal(|ui| {
             let mut path_str = String::new();
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
-                egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter ROM directory path...")
+                egui::TextEdit::singleline(&mut path_str).hint_text("Enter ROM directory path..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select ROM Directory");
-                
+                let mut dialog = rfd::FileDialog::new().set_title("Select ROM Directory");
+
                 if let Some(folder) = dialog.pick_folder() {
                     println!("Selected ROM folder: {}", folder.display());
                 }
             }
         });
-        
+
         ui.add_space(16.0);
-        
+
         // Artwork Path example
         ui.label("Artwork Path:");
         ui.horizontal(|ui| {
@@ -482,21 +466,20 @@ impl AdvancedMameSettings {
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
                 egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter artwork directory path...")
+                    .hint_text("Enter artwork directory path..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select Artwork Directory");
-                
+                let mut dialog = rfd::FileDialog::new().set_title("Select Artwork Directory");
+
                 if let Some(folder) = dialog.pick_folder() {
                     println!("Selected artwork folder: {}", folder.display());
                 }
             }
         });
-        
+
         ui.add_space(16.0);
-        
+
         // Snapshot Path example
         ui.label("Snapshot/snap Path:");
         ui.horizontal(|ui| {
@@ -504,13 +487,12 @@ impl AdvancedMameSettings {
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
                 egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter snapshot directory path...")
+                    .hint_text("Enter snapshot directory path..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select Snapshot Directory");
-                
+                let mut dialog = rfd::FileDialog::new().set_title("Select Snapshot Directory");
+
                 if let Some(folder) = dialog.pick_folder() {
                     println!("Selected snapshot folder: {}", folder.display());
                 }
@@ -523,7 +505,7 @@ impl AdvancedMameSettings {
         ui.add_space(10.0);
         ui.label("Configure where MAME saves various files");
         ui.add_space(20.0);
-        
+
         // Snapshot Directory example
         ui.label("Snapshot Directory:");
         ui.horizontal(|ui| {
@@ -531,57 +513,53 @@ impl AdvancedMameSettings {
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
                 egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter snapshot output directory...")
+                    .hint_text("Enter snapshot output directory..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select Snapshot Output Directory");
-                
+                let mut dialog =
+                    rfd::FileDialog::new().set_title("Select Snapshot Output Directory");
+
                 if let Some(folder) = dialog.pick_folder() {
                     println!("Selected snapshot output folder: {}", folder.display());
                 }
             }
         });
-        
+
         ui.add_space(16.0);
-        
+
         // Config Directory example
         ui.label("Config Directory:");
         ui.horizontal(|ui| {
             let mut path_str = String::new();
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
-                egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter config directory...")
+                egui::TextEdit::singleline(&mut path_str).hint_text("Enter config directory..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select Config Directory");
-                
+                let mut dialog = rfd::FileDialog::new().set_title("Select Config Directory");
+
                 if let Some(folder) = dialog.pick_folder() {
                     println!("Selected config folder: {}", folder.display());
                 }
             }
         });
-        
+
         ui.add_space(16.0);
-        
+
         // State Directory example
         ui.label("State Directory:");
         ui.horizontal(|ui| {
             let mut path_str = String::new();
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
-                egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter state directory...")
+                egui::TextEdit::singleline(&mut path_str).hint_text("Enter state directory..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select State Directory");
-                
+                let mut dialog = rfd::FileDialog::new().set_title("Select State Directory");
+
                 if let Some(folder) = dialog.pick_folder() {
                     println!("Selected state folder: {}", folder.display());
                 }
@@ -594,43 +572,39 @@ impl AdvancedMameSettings {
         ui.add_space(10.0);
         ui.label("Configure where MAME saves history and information files.");
         ui.add_space(20.0);
-        
+
         // History File example
         ui.label("History File:");
         ui.horizontal(|ui| {
             let mut path_str = String::new();
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
-                egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter history file path...")
+                egui::TextEdit::singleline(&mut path_str).hint_text("Enter history file path..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select History File");
-                
+                let mut dialog = rfd::FileDialog::new().set_title("Select History File");
+
                 if let Some(file) = dialog.pick_file() {
                     println!("Selected history file: {}", file.display());
                 }
             }
         });
-        
+
         ui.add_space(16.0);
-        
+
         // Info File example
         ui.label("Info File:");
         ui.horizontal(|ui| {
             let mut path_str = String::new();
             ui.add_sized(
                 Vec2::new(300.0, 36.0),
-                egui::TextEdit::singleline(&mut path_str)
-                    .hint_text("Enter info file path...")
+                egui::TextEdit::singleline(&mut path_str).hint_text("Enter info file path..."),
             );
-            
+
             if ui.button("Browse...").clicked() {
-                let mut dialog = rfd::FileDialog::new()
-                    .set_title("Select Info File");
-                
+                let mut dialog = rfd::FileDialog::new().set_title("Select Info File");
+
                 if let Some(file) = dialog.pick_file() {
                     println!("Selected info file: {}", file.display());
                 }
@@ -690,7 +664,7 @@ impl AdvancedMameSettings {
                 ui.label(
                     RichText::new("MAME 0.264 Configuration")
                         .size(12.0)
-                        .color(Color32::from_rgb(136, 136, 136))
+                        .color(Color32::from_rgb(136, 136, 136)),
                 );
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -701,7 +675,7 @@ impl AdvancedMameSettings {
                         Vec2::new(140.0, 36.0),
                         egui::Button::new("Apply Changes")
                             .fill(Color32::from_rgb(74, 158, 255))
-                            .stroke(Stroke::NONE)
+                            .stroke(Stroke::NONE),
                     );
 
                     if apply_btn.clicked() {
@@ -716,7 +690,7 @@ impl AdvancedMameSettings {
                         Vec2::new(80.0, 36.0),
                         egui::Button::new("Cancel")
                             .fill(Color32::from_rgb(42, 42, 42))
-                            .stroke(Stroke::new(1.0, Color32::from_rgb(68, 68, 68)))
+                            .stroke(Stroke::new(1.0, Color32::from_rgb(68, 68, 68))),
                     );
 
                     if cancel_btn.clicked() {
@@ -730,7 +704,7 @@ impl AdvancedMameSettings {
                         Vec2::new(140.0, 36.0),
                         egui::Button::new("Reset to Defaults")
                             .fill(Color32::from_rgb(42, 42, 42))
-                            .stroke(Stroke::new(1.0, Color32::from_rgb(68, 68, 68)))
+                            .stroke(Stroke::new(1.0, Color32::from_rgb(68, 68, 68))),
                     );
 
                     if reset_btn.clicked() {

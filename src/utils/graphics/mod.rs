@@ -184,7 +184,7 @@ impl GraphicsConfig {
     /// Generate MAME BGFX command line arguments
     pub fn generate_bgfx_args(&self) -> Vec<String> {
         let mut args = Vec::new();
-        
+
         if let Some(preset) = self.current_preset() {
             // Backend selection
             match preset.bgfx_backend {
@@ -192,31 +192,31 @@ impl GraphicsConfig {
                 BGFXBackend::OpenGL => {
                     args.push("-bgfx_backend".to_string());
                     args.push("opengl".to_string());
-                },
+                }
                 BGFXBackend::DirectX11 => {
                     args.push("-bgfx_backend".to_string());
                     args.push("d3d11".to_string());
-                },
+                }
                 BGFXBackend::DirectX12 => {
                     args.push("-bgfx_backend".to_string());
                     args.push("d3d12".to_string());
-                },
+                }
                 BGFXBackend::Vulkan => {
                     args.push("-bgfx_backend".to_string());
                     args.push("vulkan".to_string());
-                },
+                }
                 BGFXBackend::Metal => {
                     args.push("-bgfx_backend".to_string());
                     args.push("metal".to_string());
-                },
+                }
                 BGFXBackend::Gnm => {
                     args.push("-bgfx_backend".to_string());
                     args.push("gnm".to_string());
-                },
+                }
                 BGFXBackend::Nvn => {
                     args.push("-bgfx_backend".to_string());
                     args.push("nvn".to_string());
-                },
+                }
             }
 
             // Shader chain
@@ -281,11 +281,11 @@ impl GraphicsConfig {
     /// Generate GLSL shader parameters
     pub fn generate_shader_params(&self) -> HashMap<String, f32> {
         let mut params = HashMap::new();
-        
-        if let Some(shader_name) = &self.current_shader {
-            if let Some(shader_preset) = self.get_shader_preset(shader_name) {
-                params.extend(shader_preset.parameters.clone());
-            }
+
+        if let Some(shader_name) = &self.current_shader
+            && let Some(shader_preset) = self.get_shader_preset(shader_name)
+        {
+            params.extend(shader_preset.parameters.clone());
         }
 
         params
@@ -325,17 +325,17 @@ void main() {
     float dist = length(uv);
     uv = uv * (1.0 + dist * dist * uCurvature);
     uv = uv + 0.5;
-    
+
     // Sample texture
     vec4 color = texture(uTexture, uv);
-    
+
     // Apply scanlines
     float scanline = sin(uv.y * 1000.0) * 0.5 + 0.5;
     color.rgb *= 1.0 - uScanlines * (1.0 - scanline);
-    
+
     // Phosphor effect
     color.rgb = mix(color.rgb, color.rgb * 0.8, uPhosphor);
-    
+
     fragColor = color;
 }
 "#;
@@ -352,19 +352,19 @@ uniform float uSharpness;
 
 void main() {
     vec2 uv = vTexCoord;
-    
+
     // Create pixel grid effect
     vec2 pixel = floor(uv * uPixelSize) / uPixelSize;
     vec4 color = texture(uTexture, pixel);
-    
+
     // Apply sharpening
     vec4 neighbor1 = texture(uTexture, pixel + vec2(1.0/uPixelSize, 0.0));
     vec4 neighbor2 = texture(uTexture, pixel + vec2(-1.0/uPixelSize, 0.0));
     vec4 neighbor3 = texture(uTexture, pixel + vec2(0.0, 1.0/uPixelSize));
     vec4 neighbor4 = texture(uTexture, pixel + vec2(0.0, -1.0/uPixelSize));
-    
+
     color.rgb = color.rgb + uSharpness * (4.0 * color.rgb - neighbor1.rgb - neighbor2.rgb - neighbor3.rgb - neighbor4.rgb);
-    
+
     fragColor = color;
 }
 "#;
@@ -381,11 +381,11 @@ uniform float uFrequency;
 
 void main() {
     vec4 color = texture(uTexture, vTexCoord);
-    
+
     // Create scanline effect
     float scanline = sin(vTexCoord.y * uFrequency * 100.0) * 0.5 + 0.5;
     color.rgb *= 1.0 - uIntensity * (1.0 - scanline);
-    
+
     fragColor = color;
 }
 "#;
@@ -393,4 +393,3 @@ void main() {
 
 pub mod enhanced_validator;
 pub mod shader_manager;
-pub use shader_manager::{ShaderManager, BGFXManager};

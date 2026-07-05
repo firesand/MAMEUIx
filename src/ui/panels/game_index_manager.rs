@@ -2,11 +2,11 @@
 // Game indexing, filtering, and search management module
 
 use crate::models::*;
-use crate::mame::CategoryLoader;
 use crate::utils::enhanced_search::{EnhancedSearchEngine, SearchConfig, SearchStats};
+use crate::utils::hardware_filter::HardwareFilter;
+use rayon::prelude::*;
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
-use rayon::prelude::*;
 
 pub struct GameIndexManager {
     // Core indexing
@@ -14,16 +14,16 @@ pub struct GameIndexManager {
     pub filtered_games_cache: Vec<usize>,
     pub filter_cache_dirty: bool,
     pub last_filter_update: Instant,
-    
+
     // Search management
     pub search_debounce_timer: Option<Instant>,
     pub pending_search: Option<String>,
-    
+
     // Enhanced search engine
     pub enhanced_search: Option<EnhancedSearchEngine>,
-    
+
     // Category management - REMOVED
-    
+
     // Performance settings
     pub search_debounce_ms: u64,
     pub max_cache_size: usize,
@@ -51,7 +51,6 @@ impl GameIndexManager {
         self
     }
 
-
     /// Build game index for fast lookup - CRITICAL for performance!
     pub fn build_game_index(&mut self, games: &[Game], favorites: &HashSet<String>) {
         println!("Building optimized game index for {} games...", games.len());
@@ -63,10 +62,10 @@ impl GameIndexManager {
         println!("Game index built in {:.2}s", elapsed.as_secs_f32());
 
         // Initialize enhanced search engine with games data
-        if let Some(ref mut search_engine) = self.enhanced_search {
-            if let Err(e) = search_engine.initialize_fulltext_index(games) {
-                eprintln!("Warning: Failed to initialize full-text search: {}", e);
-            }
+        if let Some(ref mut search_engine) = self.enhanced_search
+            && let Err(e) = search_engine.initialize_fulltext_index(games)
+        {
+            eprintln!("Warning: Failed to initialize full-text search: {}", e);
         }
 
         // Force filter update with new index
@@ -77,9 +76,10 @@ impl GameIndexManager {
     pub fn update_filtered_games_cache(
         &mut self,
         games: &[Game],
-        selected_filter: FilterCategory, // Deprecated parameter, kept for compatibility
+        _selected_filter: FilterCategory, // Deprecated parameter, kept for compatibility
         filter_settings: &FilterSettings,
-        hidden_categories: &HashSet<String>,
+        _hidden_categories: &HashSet<String>,
+        hardware_filter: Option<&HardwareFilter>,
     ) {
         if !self.filter_cache_dirty {
             return;
@@ -96,42 +96,57 @@ impl GameIndexManager {
         } else {
             HashSet::new()
         };
-        self.apply_categorized_filters_with_favorites(games, filter_settings, &favorites);
+        self.apply_categorized_filters_with_favorites(
+            games,
+            filter_settings,
+            &favorites,
+            hardware_filter,
+        );
 
         // Apply search filter only if there's text
-            if !filter_settings.search_text.is_empty() {
-                // Check cache first for instant results!
-                let search_key = filter_settings.search_text.clone();
-    
-                if let Some(ref index) = self.game_index {
-                    if let Some(cached) = index.get_cached_search(&search_key) {
-                        // Cache hit! No need to search
-                        self.filtered_games_cache = cached.to_vec();
-                    } else {
-                        // Cache miss - search and cache the result
-                        self.apply_search_filter_optimized(games, &filter_settings.search_text, &filter_settings.search_mode);
-    
-                        // Store in cache for next time
-                        if let Some(index) = &mut self.game_index {
-                            index.cache_search(
-                                search_key.clone(),
-                                self.filtered_games_cache.clone()
-                            );
-                        }
-                    }
+        if !filter_settings.search_text.is_empty() {
+            // Check cache first for instant results!
+            let search_key = filter_settings.search_text.clone();
+
+            if let Some(ref index) = self.game_index {
+                if let Some(cached) = index.get_cached_search(&search_key) {
+                    // Cache hit! No need to search
+                    self.filtered_games_cache = cached.to_vec();
                 } else {
-                    // No index available, do regular search
-                    self.apply_search_filter_optimized(games, &filter_settings.search_text, &filter_settings.search_mode);
+                    // Cache miss - search and cache the result
+                    self.apply_search_filter_optimized(
+                        games,
+                        &filter_settings.search_text,
+                        &filter_settings.search_mode,
+                        hardware_filter,
+                    );
+
+                    // Store in cache for next time
+                    if let Some(index) = &mut self.game_index {
+                        index.cache_search(search_key.clone(), self.filtered_games_cache.clone());
+                    }
                 }
+            } else {
+                // No index available, do regular search
+                self.apply_search_filter_optimized(
+                    games,
+                    &filter_settings.search_text,
+                    &filter_settings.search_mode,
+                    hardware_filter,
+                );
             }
+        }
 
         self.filter_cache_dirty = false;
         self.last_filter_update = Instant::now();
 
         let elapsed = start.elapsed();
         if elapsed.as_millis() > 50 {
-            println!("Warning: Filter update took {}ms for {} results",
-                     elapsed.as_millis(), self.filtered_games_cache.len());
+            println!(
+                "Warning: Filter update took {}ms for {} results",
+                elapsed.as_millis(),
+                self.filtered_games_cache.len()
+            );
         }
     }
 
@@ -141,7 +156,11 @@ impl GameIndexManager {
         games: &[Game],
         filters: &FilterSettings,
         favorites: &HashSet<String>,
+        hardware_filter: Option<&HardwareFilter>,
     ) {
+        let hardware_fields_active = !filters.cpu_filter.is_empty()
+            || !filters.device_filter.is_empty()
+            || !filters.sound_filter.is_empty();
 
         self.filtered_games_cache.retain(|&idx| {
             if let Some(game) = games.get(idx) {
@@ -152,8 +171,9 @@ impl GameIndexManager {
                     if !avail.show_available && !avail.show_unavailable {
                         true
                     } else {
-                        (avail.show_available && matches!(game.status, RomStatus::Available)) ||
-                        (avail.show_unavailable && !matches!(game.status, RomStatus::Available))
+                        (avail.show_available && matches!(game.status, RomStatus::Available))
+                            || (avail.show_unavailable
+                                && !matches!(game.status, RomStatus::Available))
                     }
                 };
 
@@ -164,9 +184,10 @@ impl GameIndexManager {
                     if !status.show_working && !status.show_not_working {
                         true
                     } else {
-                        let is_working = matches!(game.driver_status.as_str(), "good" | "imperfect");
-                        (status.show_working && is_working) ||
-                        (status.show_not_working && !is_working)
+                        let is_working =
+                            matches!(game.driver_status.as_str(), "good" | "imperfect");
+                        (status.show_working && is_working)
+                            || (status.show_not_working && !is_working)
                     }
                 };
 
@@ -174,21 +195,59 @@ impl GameIndexManager {
                 let others_match = {
                     let others = &filters.other_filters;
                     // If no filters selected, show all
-                    if !others.show_favorites && !others.show_parents_only && !others.show_chd_games {
+                    if !others.show_favorites && !others.show_parents_only && !others.show_chd_games
+                    {
                         true
                     } else {
-                        (others.show_favorites && favorites.contains(&game.name)) ||
-                        (others.show_parents_only && !game.is_clone) ||
-                        (others.show_chd_games && game.requires_chd)
+                        (others.show_favorites && favorites.contains(&game.name))
+                            || (others.show_parents_only && !game.is_clone)
+                            || (others.show_chd_games && game.requires_chd)
                     }
                 };
 
+                let hardware_match = if !hardware_fields_active {
+                    true
+                } else if let Some(hw) = hardware_filter {
+                    hw.matches_hardware_filters(
+                        &game.name,
+                        &filters.cpu_filter,
+                        &filters.device_filter,
+                        &filters.sound_filter,
+                    )
+                } else {
+                    false
+                };
+
                 // AND logic between categories
-                availability_match && status_match && others_match
+                availability_match
+                    && status_match
+                    && others_match
+                    && hardware_match
+                    && filters.manufacturer_matches(&game.manufacturer)
             } else {
                 false
             }
         });
+    }
+
+    fn hardware_search_match(
+        game: &Game,
+        search_lower: &str,
+        search_mode: &SearchMode,
+        hardware_filter: Option<&HardwareFilter>,
+    ) -> bool {
+        match search_mode {
+            SearchMode::Cpu => hardware_filter
+                .map(|hw| hw.game_uses_cpu(&game.name, search_lower))
+                .unwrap_or(false),
+            SearchMode::Device => hardware_filter
+                .map(|hw| hw.game_uses_device(&game.name, search_lower))
+                .unwrap_or(false),
+            SearchMode::Sound => hardware_filter
+                .map(|hw| hw.game_uses_sound(&game.name, search_lower))
+                .unwrap_or(false),
+            _ => false,
+        }
     }
 
     /// ENHANCED: Apply search filter with multiple search strategies
@@ -197,6 +256,7 @@ impl GameIndexManager {
         games: &[Game],
         search_text: &str,
         search_mode: &SearchMode,
+        hardware_filter: Option<&HardwareFilter>,
     ) {
         // Use enhanced search for special modes
         match search_mode {
@@ -206,11 +266,15 @@ impl GameIndexManager {
                         Ok(results) => {
                             // Filter current cache to only include enhanced search results
                             let result_set: HashSet<usize> = results.into_iter().collect();
-                            self.filtered_games_cache.retain(|&idx| result_set.contains(&idx));
+                            self.filtered_games_cache
+                                .retain(|&idx| result_set.contains(&idx));
                             return;
                         }
                         Err(e) => {
-                            eprintln!("Enhanced search failed: {}, falling back to basic search", e);
+                            eprintln!(
+                                "Enhanced search failed: {}, falling back to basic search",
+                                e
+                            );
                             // Fall through to basic search
                         }
                     }
@@ -222,7 +286,8 @@ impl GameIndexManager {
                     match search_engine.enhanced_search(games, search_text, search_mode) {
                         Ok(results) => {
                             let result_set: HashSet<usize> = results.into_iter().collect();
-                            self.filtered_games_cache.retain(|&idx| result_set.contains(&idx));
+                            self.filtered_games_cache
+                                .retain(|&idx| result_set.contains(&idx));
                             return;
                         }
                         Err(_) => {
@@ -238,46 +303,56 @@ impl GameIndexManager {
 
         // Use parallel processing for large datasets (huge speedup!)
         if self.filtered_games_cache.len() > 1000 {
-            self.filtered_games_cache = self.filtered_games_cache
-            .par_iter() // Parallel iterator from rayon
-            .filter(|&&idx| {
-                if let Some(game) = games.get(idx) {
-                    match search_mode {
-                        SearchMode::GameTitle => {
-                            game.description.to_lowercase().contains(&search_lower)
+            self.filtered_games_cache = self
+                .filtered_games_cache
+                .par_iter() // Parallel iterator from rayon
+                .filter(|&&idx| {
+                    if let Some(game) = games.get(idx) {
+                        match search_mode {
+                            SearchMode::GameTitle => {
+                                game.description.to_lowercase().contains(&search_lower)
+                            }
+                            SearchMode::Manufacturer => {
+                                game.manufacturer.to_lowercase().contains(&search_lower)
+                            }
+                            SearchMode::RomFileName => {
+                                game.name.to_lowercase().contains(&search_lower)
+                            }
+                            SearchMode::Year => game.year.to_lowercase().contains(&search_lower),
+                            SearchMode::Status => game
+                                .status
+                                .description()
+                                .to_lowercase()
+                                .contains(&search_lower),
+                            SearchMode::Cpu => Self::hardware_search_match(
+                                game,
+                                &search_lower,
+                                search_mode,
+                                hardware_filter,
+                            ),
+                            SearchMode::Device => Self::hardware_search_match(
+                                game,
+                                &search_lower,
+                                search_mode,
+                                hardware_filter,
+                            ),
+                            SearchMode::Sound => Self::hardware_search_match(
+                                game,
+                                &search_lower,
+                                search_mode,
+                                hardware_filter,
+                            ),
+                            // Enhanced search modes shouldn't reach here, but just in case
+                            SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                                game.description.to_lowercase().contains(&search_lower)
+                            }
                         }
-                        SearchMode::Manufacturer => {
-                            game.manufacturer.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::RomFileName => {
-                            game.name.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Year => {
-                            game.year.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Status => {
-                            game.status.description().to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Cpu => {
-                            game.driver.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Device => {
-                            game.controls.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Sound => {
-                            game.category.to_lowercase().contains(&search_lower)
-                        }
-                        // Enhanced search modes shouldn't reach here, but just in case
-                        SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
-                            game.description.to_lowercase().contains(&search_lower)
-                        }
+                    } else {
+                        false
                     }
-                } else {
-                    false
-                }
-            })
-            .copied()
-            .collect();
+                })
+                .copied()
+                .collect();
         } else {
             // Sequential processing for smaller datasets
             self.filtered_games_cache.retain(|&idx| {
@@ -289,24 +364,31 @@ impl GameIndexManager {
                         SearchMode::Manufacturer => {
                             game.manufacturer.to_lowercase().contains(&search_lower)
                         }
-                        SearchMode::RomFileName => {
-                            game.name.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Year => {
-                            game.year.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Status => {
-                            game.status.description().to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Cpu => {
-                            game.driver.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Device => {
-                            game.controls.to_lowercase().contains(&search_lower)
-                        }
-                        SearchMode::Sound => {
-                            game.category.to_lowercase().contains(&search_lower)
-                        }
+                        SearchMode::RomFileName => game.name.to_lowercase().contains(&search_lower),
+                        SearchMode::Year => game.year.to_lowercase().contains(&search_lower),
+                        SearchMode::Status => game
+                            .status
+                            .description()
+                            .to_lowercase()
+                            .contains(&search_lower),
+                        SearchMode::Cpu => Self::hardware_search_match(
+                            game,
+                            &search_lower,
+                            search_mode,
+                            hardware_filter,
+                        ),
+                        SearchMode::Device => Self::hardware_search_match(
+                            game,
+                            &search_lower,
+                            search_mode,
+                            hardware_filter,
+                        ),
+                        SearchMode::Sound => Self::hardware_search_match(
+                            game,
+                            &search_lower,
+                            search_mode,
+                            hardware_filter,
+                        ),
                         // Enhanced search modes shouldn't reach here, but just in case
                         SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
                             game.description.to_lowercase().contains(&search_lower)
@@ -327,18 +409,18 @@ impl GameIndexManager {
 
     /// Process pending search after debounce delay
     pub fn process_pending_search(&mut self) -> Option<String> {
-        if let Some(pending) = &self.pending_search {
-            if let Some(timer) = self.search_debounce_timer {
-                let delay = Duration::from_millis(self.search_debounce_ms);
+        if let Some(pending) = &self.pending_search
+            && let Some(timer) = self.search_debounce_timer
+        {
+            let delay = Duration::from_millis(self.search_debounce_ms);
 
-                if timer.elapsed() >= delay {
-                    // Return the pending search text for application
-                    let result = pending.clone();
-                    self.pending_search = None;
-                    self.search_debounce_timer = None;
-                    self.filter_cache_dirty = true;
-                    return Some(result);
-                }
+            if timer.elapsed() >= delay {
+                // Return the pending search text for application
+                let result = pending.clone();
+                self.pending_search = None;
+                self.search_debounce_timer = None;
+                self.filter_cache_dirty = true;
+                return Some(result);
             }
         }
         None
@@ -374,8 +456,6 @@ impl GameIndexManager {
         self.filter_cache_dirty = true;
     }
 
-
-
     /// Get search cache statistics
     pub fn get_cache_stats(&self) -> (usize, usize) {
         if let Some(index) = &self.game_index {
@@ -402,7 +482,9 @@ impl GameIndexManager {
 
     /// Get enhanced search statistics
     pub fn get_enhanced_search_stats(&self) -> Option<SearchStats> {
-        self.enhanced_search.as_ref().map(|engine| engine.get_stats())
+        self.enhanced_search
+            .as_ref()
+            .map(|engine| engine.get_stats())
     }
 
     /// Clear regex cache to free memory
@@ -423,7 +505,7 @@ impl GameIndexManager {
         expanded_rows_cache: &[crate::ui::panels::game_list::RowData],
     ) -> Option<usize> {
         let search_char = character.to_lowercase().to_string();
-        
+
         // Search through the expanded rows cache (which includes the current filter and sort)
         if let Some(row_index) = expanded_rows_cache.iter().position(|row| {
             if let Some(game) = games.get(row.game_idx) {
@@ -473,4 +555,4 @@ pub struct GameIndexStats {
     pub search_cache_size: usize,
     pub max_cache_size: usize,
     pub last_update: Instant,
-} 
+}

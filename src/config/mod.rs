@@ -4,8 +4,8 @@ use anyhow::Result;
 
 pub fn load_config() -> Result<AppConfig> {
     let config_dir = dirs::config_dir()
-    .ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?
-    .join("mameuix");
+        .ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?
+        .join("mameuix");
 
     let config_file = config_dir.join("config.toml");
 
@@ -19,8 +19,8 @@ pub fn load_config() -> Result<AppConfig> {
 
 pub fn save_config(config: &AppConfig) -> Result<()> {
     let config_dir = dirs::config_dir()
-    .ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?
-    .join("mameuix");
+        .ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?
+        .join("mameuix");
 
     std::fs::create_dir_all(&config_dir)?;
 

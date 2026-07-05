@@ -12,16 +12,16 @@ pub struct PerformanceManager {
     slow_frame_threshold: Duration,
     pub frame_count: u64,
     total_time: Duration,
-    
+
     // FPS calculation optimization
     last_fps_calculation: Instant,
     cached_fps: f32,
-    
+
     // Performance settings
     enable_fps_limit: bool,
     target_fps: u32,
     enable_low_quality_mode: bool,
-    
+
     // Debug information
     debug_info_visible: bool,
     performance_history: VecDeque<f32>, // Store FPS history for graphs
@@ -48,7 +48,12 @@ impl PerformanceManager {
     }
 
     /// Initialize with performance settings
-    pub fn with_settings(mut self, enable_fps_limit: bool, target_fps: u32, enable_low_quality_mode: bool) -> Self {
+    pub fn with_settings(
+        mut self,
+        enable_fps_limit: bool,
+        target_fps: u32,
+        enable_low_quality_mode: bool,
+    ) -> Self {
         self.enable_fps_limit = enable_fps_limit;
         self.target_fps = target_fps;
         self.enable_low_quality_mode = enable_low_quality_mode;
@@ -73,27 +78,27 @@ impl PerformanceManager {
     /// Get average FPS - cached for performance
     pub fn get_average_fps(&mut self) -> f32 {
         // Only recalculate FPS every second
-        if self.last_fps_calculation.elapsed() >= Duration::from_secs(1) {
-            if !self.frame_times.is_empty() {
-                let avg_frame_time = self.frame_times.iter()
-                    .sum::<Duration>() / self.frame_times.len() as u32;
-                
-                if avg_frame_time.as_secs_f32() > 0.0 {
-                    self.cached_fps = 1.0 / avg_frame_time.as_secs_f32();
-                } else {
-                    self.cached_fps = 60.0; // Default to 60 FPS if calculation fails
-                }
-                
-                // Store in history for graphs
-                self.performance_history.push_back(self.cached_fps);
-                if self.performance_history.len() > self.max_history_size {
-                    self.performance_history.pop_front();
-                }
-                
-                self.last_fps_calculation = Instant::now();
+        if self.last_fps_calculation.elapsed() >= Duration::from_secs(1)
+            && !self.frame_times.is_empty()
+        {
+            let avg_frame_time =
+                self.frame_times.iter().sum::<Duration>() / self.frame_times.len() as u32;
+
+            if avg_frame_time.as_secs_f32() > 0.0 {
+                self.cached_fps = 1.0 / avg_frame_time.as_secs_f32();
+            } else {
+                self.cached_fps = 60.0; // Default to 60 FPS if calculation fails
             }
+
+            // Store in history for graphs
+            self.performance_history.push_back(self.cached_fps);
+            if self.performance_history.len() > self.max_history_size {
+                self.performance_history.pop_front();
+            }
+
+            self.last_fps_calculation = Instant::now();
         }
-        
+
         self.cached_fps
     }
 
@@ -108,9 +113,10 @@ impl PerformanceManager {
 
     /// Get lag spike count
     pub fn get_lag_spike_count(&self) -> usize {
-        self.frame_times.iter()
-        .filter(|&&time| time > self.slow_frame_threshold)
-        .count()
+        self.frame_times
+            .iter()
+            .filter(|&&time| time > self.slow_frame_threshold)
+            .count()
     }
 
     /// Get current frame time
@@ -192,7 +198,10 @@ impl PerformanceManager {
 
         // Show frame time
         let frame_time = self.get_current_frame_time();
-        ui.label(format!("Frame time: {:.1}ms", frame_time.as_secs_f32() * 1000.0));
+        ui.label(format!(
+            "Frame time: {:.1}ms",
+            frame_time.as_secs_f32() * 1000.0
+        ));
 
         // Show performance mode
         if self.should_use_low_quality_mode() {
@@ -207,15 +216,16 @@ impl PerformanceManager {
         }
 
         ui.label("Performance History:");
-        
+
         // Show recent FPS values as text instead of plot
-        let recent_fps: Vec<String> = self.performance_history
+        let recent_fps: Vec<String> = self
+            .performance_history
             .iter()
             .rev()
             .take(10)
             .map(|fps| format!("{:.1}", fps))
             .collect();
-        
+
         ui.label(format!("Recent FPS: {}", recent_fps.join(", ")));
     }
 
@@ -230,7 +240,12 @@ impl PerformanceManager {
     }
 
     /// Update performance settings
-    pub fn update_settings(&mut self, enable_fps_limit: bool, target_fps: u32, enable_low_quality_mode: bool) {
+    pub fn update_settings(
+        &mut self,
+        enable_fps_limit: bool,
+        target_fps: u32,
+        enable_low_quality_mode: bool,
+    ) {
         self.enable_fps_limit = enable_fps_limit;
         self.target_fps = target_fps;
         self.enable_low_quality_mode = enable_low_quality_mode;
@@ -266,4 +281,4 @@ pub struct MemoryStats {
     pub frame_times_len: usize,
     pub history_capacity: usize,
     pub history_len: usize,
-} 
+}

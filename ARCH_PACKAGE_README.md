@@ -2,12 +2,12 @@
 
 ## Overview
 
-This directory contains the Arch Linux and CachyOS package files for MAMEUIX v0.1.4, a modern GUI frontend for the MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification.
+This directory contains the Arch Linux and CachyOS package files for MAMEUIx v0.1.5, a modern GUI frontend for the MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification.
 
 ## Package Information
 
 - **Package Name**: `mameuix`
-- **Version**: `0.1.4`
+- **Version**: `0.1.5`
 - **Architecture**: `x86_64`
 - **License**: MIT
 - **Maintainer**: edo hikmahtiar <edohikmahtiar@me.com>
@@ -34,10 +34,10 @@ This directory contains the Arch Linux and CachyOS package files for MAMEUIX v0.
 - `gcc-libs` - GCC runtime libraries
 
 ### Build Dependencies
-- `rust>=1.70` - Rust programming language
+- `rust>=1.85` - Rust programming language
 - `pkgconf` - Package configuration utility
 - `zstd` - Zstandard compression library
-- `git` - Distributed version control system
+- `cmake` and `ninja` - Native build helpers used by Rust dependencies
 
 ### Optional Dependencies
 - `mame-roms` - Game ROMs for MAME
@@ -66,8 +66,11 @@ makepkg -si
 git clone https://github.com/firesand/MAMEUIx.git
 cd MAMEUIx
 
-# Build and install
-makepkg -si
+# Build package safely from a temporary makepkg directory
+./build-arch-package.sh
+
+# Install the generated package
+sudo pacman -U mameuix-0.1.5-1-x86_64.pkg.tar.zst
 ```
 
 ### Manual Build
@@ -77,7 +80,7 @@ makepkg -si
 ./build-arch-package.sh
 
 # Install package
-sudo pacman -U mameuix-0.1.4-1-x86_64.pkg.tar.zst
+sudo pacman -U mameuix-0.1.5-1-x86_64.pkg.tar.zst
 ```
 
 ## Package Contents
@@ -108,15 +111,16 @@ The package installs the following components:
 Ensure you have the required build tools:
 
 ```bash
-sudo pacman -S base-devel namcap
+sudo pacman -S base-devel rust pkgconf zstd cmake ninja namcap
 ```
 
 ### Build Process
 
-1. **Clean build environment**:
+1. **Clean package artifacts**:
    ```bash
-   rm -rf pkg/ src/ *.pkg.tar.zst
+   rm -f mameuix-*.pkg.tar.zst mameuix-*.pkg.tar.zst.sig
    ```
+   Do not remove `src/` from the repository root; that is the Rust source directory.
 
 2. **Update package metadata**:
    ```bash
@@ -125,12 +129,12 @@ sudo pacman -S base-devel namcap
 
 3. **Build package**:
    ```bash
-   makepkg --syncdeps --noconfirm
+   ./build-arch-package.sh
    ```
 
 4. **Validate package**:
    ```bash
-   namcap mameuix-0.1.4-1-x86_64.pkg.tar.zst
+   namcap mameuix-0.1.5-1-x86_64.pkg.tar.zst
    ```
 
 ### Automated Build
@@ -154,7 +158,7 @@ The package is validated using `namcap` to ensure:
 
 ### Build Optimizations
 - **LTO (Link Time Optimization)** enabled
-- **Native CPU optimizations** (`-C target-cpu=native`)
+- **Portable x86_64 build flags** suitable for redistribution
 - **Release mode** with maximum optimizations
 - **Stripped binaries** for smaller package size
 
@@ -225,6 +229,11 @@ For support and issues:
 - **Email**: edohikmahtiar@me.com
 
 ## Changelog
+
+### v0.1.5
+- Updated Arch package metadata for the current MAMEUIx release
+- Build script now runs `makepkg` in a temporary directory to avoid repository `src/` collisions
+- Removed machine-specific native CPU flags from redistributable package builds
 
 ### v0.1.4
 - **Major performance improvements** with thread pool icon loading

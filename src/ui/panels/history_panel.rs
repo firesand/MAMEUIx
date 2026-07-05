@@ -1,18 +1,18 @@
 // src/ui/history_panel.rs
-use eframe::egui;
-use std::path::PathBuf;
-use std::collections::HashMap;
 use crate::models::AppConfig;
-use std::fs;
-use quick_xml::events::Event;
+use eframe::egui;
 use quick_xml::Reader;
+use quick_xml::events::Event;
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 
 /// Tab selection for history panel
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum HistoryTab {
-    History,    // history.xml
-    MameInfo,   // mameinfo.dat
-    Other,      // Other DAT files (command, hiscore, gameinit)
+    History,  // history.xml
+    MameInfo, // mameinfo.dat
+    Other,    // Other DAT files (command, hiscore, gameinit)
 }
 
 /// HistoryPanel displays game history and information from various DAT files
@@ -46,19 +46,24 @@ impl HistoryPanel {
             other_text: String::new(),
         }
     }
-    
+
     /// Update the selected game and load its history
-    pub fn set_selected_game(&mut self, game_name: Option<String>, rom_name: Option<String>, config: &AppConfig) {
+    pub fn set_selected_game(
+        &mut self,
+        game_name: Option<String>,
+        rom_name: Option<String>,
+        config: &AppConfig,
+    ) {
         if self.current_game != game_name {
             self.current_game = game_name.clone();
             self.is_loading = true;
-            
+
             // Clear all tab texts
             self.history_text.clear();
             self.mameinfo_text.clear();
             self.other_text.clear();
             self.current_display_text.clear();
-            
+
             // Load history data for the new game using ROM name
             if let Some(rom_name) = rom_name {
                 // Strip .zip extension if present
@@ -69,18 +74,18 @@ impl HistoryPanel {
                 };
                 self.load_game_history(rom_name_clean, config);
             }
-            
+
             self.is_loading = false;
         }
     }
-    
+
     /// Load all history data for a game
     fn load_game_history(&mut self, rom_name: &str, config: &AppConfig) {
         // Load from history.xml if available
         if let Some(history_path) = &config.history_path {
             // Force reload the history XML file to populate cache
             self.load_history_xml(history_path, rom_name);
-            
+
             // Now check if we have the data in cache
             let cache_key = format!("history_xml_{}", rom_name);
             if let Some(text) = self.history_cache.get(&cache_key) {
@@ -88,8 +93,8 @@ impl HistoryPanel {
             } else {
                 // Try case-insensitive search
                 for (key, value) in &self.history_cache {
-                    if key.starts_with("history_xml_") {
-                        let cached_rom = &key[12..]; // Skip "history_xml_" prefix
+                    if let Some(cached_rom) = key.strip_prefix("history_xml_") {
+                        // Skip "history_xml_" prefix
                         if cached_rom.to_lowercase() == rom_name.to_lowercase() {
                             self.history_text = value.clone();
                             break;
@@ -98,73 +103,88 @@ impl HistoryPanel {
                 }
             }
         }
-        
+
         // Load from mameinfo.dat if available
-        if let Some(mameinfo_path) = &config.mameinfo_dat_path {
-            if let Some(text) = self.load_dat_file(mameinfo_path, rom_name, "mameinfo") {
-                self.mameinfo_text = text;
-            }
+        if let Some(mameinfo_path) = &config.mameinfo_dat_path
+            && let Some(text) = self.load_dat_file(mameinfo_path, rom_name, "mameinfo")
+        {
+            self.mameinfo_text = text;
         }
-        
+
         // Load other DAT files and combine them
         let mut other_combined = String::new();
-        
+
         // Load from command.dat if available
-        if let Some(command_path) = &config.command_dat_path {
-            if let Some(text) = self.load_dat_file(command_path, rom_name, "command") {
-                if !other_combined.is_empty() {
-                    other_combined.push_str("\n\n");
-                }
-                other_combined.push_str("=== Commands ===\n");
-                other_combined.push_str(&text);
+        if let Some(command_path) = &config.command_dat_path
+            && let Some(text) = self.load_dat_file(command_path, rom_name, "command")
+        {
+            if !other_combined.is_empty() {
+                other_combined.push_str("\n\n");
             }
+            other_combined.push_str("=== Commands ===\n");
+            other_combined.push_str(&text);
         }
-        
+
         // Load from hiscore.dat if available
-        if let Some(hiscore_path) = &config.hiscore_dat_path {
-            if let Some(text) = self.load_dat_file(hiscore_path, rom_name, "hiscore") {
-                if !other_combined.is_empty() {
-                    other_combined.push_str("\n\n");
-                }
-                other_combined.push_str("=== High Score Info ===\n");
-                other_combined.push_str(&text);
+        if let Some(hiscore_path) = &config.hiscore_dat_path
+            && let Some(text) = self.load_dat_file(hiscore_path, rom_name, "hiscore")
+        {
+            if !other_combined.is_empty() {
+                other_combined.push_str("\n\n");
             }
+            other_combined.push_str("=== High Score Info ===\n");
+            other_combined.push_str(&text);
         }
-        
+
         // Load from gameinit.dat if available
-        if let Some(gameinit_path) = &config.gameinit_dat_path {
-            if let Some(text) = self.load_dat_file(gameinit_path, rom_name, "gameinit") {
-                if !other_combined.is_empty() {
-                    other_combined.push_str("\n\n");
-                }
-                other_combined.push_str("=== Game Init Info ===\n");
-                other_combined.push_str(&text);
+        if let Some(gameinit_path) = &config.gameinit_dat_path
+            && let Some(text) = self.load_dat_file(gameinit_path, rom_name, "gameinit")
+        {
+            if !other_combined.is_empty() {
+                other_combined.push_str("\n\n");
             }
+            other_combined.push_str("=== Game Init Info ===\n");
+            other_combined.push_str(&text);
         }
-        
+
         self.other_text = other_combined;
     }
-    
+
     /// Show the history panel
     pub fn show(&mut self, ui: &mut egui::Ui, _config: &AppConfig) {
         ui.group(|ui| {
             ui.heading("Game Information");
             ui.add_space(8.0); // Add some spacing after heading
-            
+
             // Add tab selector if a game is selected
             if self.current_game.is_some() && !self.is_loading {
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.add_space(4.0); // Add left padding
-                    if ui.selectable_label(matches!(self.selected_tab, HistoryTab::History), "History").clicked() {
+                    if ui
+                        .selectable_label(
+                            matches!(self.selected_tab, HistoryTab::History),
+                            "History",
+                        )
+                        .clicked()
+                    {
                         self.selected_tab = HistoryTab::History;
                     }
                     ui.separator();
-                    if ui.selectable_label(matches!(self.selected_tab, HistoryTab::MameInfo), "MAME Info").clicked() {
+                    if ui
+                        .selectable_label(
+                            matches!(self.selected_tab, HistoryTab::MameInfo),
+                            "MAME Info",
+                        )
+                        .clicked()
+                    {
                         self.selected_tab = HistoryTab::MameInfo;
                     }
                     ui.separator();
-                    if ui.selectable_label(matches!(self.selected_tab, HistoryTab::Other), "Other").clicked() {
+                    if ui
+                        .selectable_label(matches!(self.selected_tab, HistoryTab::Other), "Other")
+                        .clicked()
+                    {
                         self.selected_tab = HistoryTab::Other;
                     }
                     ui.add_space(4.0); // Add right padding
@@ -172,7 +192,7 @@ impl HistoryPanel {
                 ui.separator();
                 ui.add_space(4.0); // Add spacing after tabs
             }
-            
+
             egui::ScrollArea::vertical()
                 .auto_shrink([false, true]) // Allow vertical shrinking but not horizontal
                 .max_height(ui.available_height() - 50.0) // Use most of available height
@@ -188,7 +208,7 @@ impl HistoryPanel {
                             HistoryTab::MameInfo => &self.mameinfo_text,
                             HistoryTab::Other => &self.other_text,
                         };
-                        
+
                         if content.is_empty() {
                             match self.selected_tab {
                                 HistoryTab::History => {
@@ -197,7 +217,9 @@ impl HistoryPanel {
                                 }
                                 HistoryTab::MameInfo => {
                                     ui.label("No MAME info available for this game.");
-                                    ui.label("Configure mameinfo.dat path in Directories settings.");
+                                    ui.label(
+                                        "Configure mameinfo.dat path in Directories settings.",
+                                    );
                                 }
                                 HistoryTab::Other => {
                                     ui.label("No additional information available for this game.");
@@ -207,11 +229,13 @@ impl HistoryPanel {
                         } else {
                             // Display the content for the selected tab
                             // ENHANCED: Better text display with improved formatting
-                            ui.add(egui::TextEdit::multiline(&mut content.as_str())
-                                .desired_width(f32::INFINITY)
-                                .desired_rows(20) // Show more rows by default
-                                .font(egui::TextStyle::Monospace)
-                                .text_color(ui.style().visuals.text_color()));
+                            ui.add(
+                                egui::TextEdit::multiline(&mut content.as_str())
+                                    .desired_width(f32::INFINITY)
+                                    .desired_rows(20) // Show more rows by default
+                                    .font(egui::TextStyle::Monospace)
+                                    .text_color(ui.style().visuals.text_color()),
+                            );
                         }
                     } else {
                         ui.label("Select a game to view its history and information.");
@@ -219,7 +243,7 @@ impl HistoryPanel {
                 });
         });
     }
-    
+
     /// Load history from history.xml file
     fn load_history_xml(&mut self, path: &PathBuf, rom_name: &str) {
         // Check cache first
@@ -227,17 +251,17 @@ impl HistoryPanel {
         if self.history_cache.contains_key(&cache_key) {
             return;
         }
-        
+
         if !path.exists() {
             return;
         }
-        
+
         // Try to read and parse the XML file
         match fs::read_to_string(path) {
             Ok(content) => {
                 let mut reader = Reader::from_str(&content);
                 reader.config_mut().trim_text(true);
-                
+
                 let mut buf = Vec::new();
                 let mut in_entry = false;
                 let mut in_systems = false;
@@ -245,9 +269,7 @@ impl HistoryPanel {
                 let mut in_text = false;
                 let mut found_game = false;
                 let mut entry_text = String::new();
-                let mut entry_count = 0;
-                let mut system_count = 0;
-                
+
                 loop {
                     match reader.read_event_into(&mut buf) {
                         Ok(Event::Start(ref e)) => {
@@ -256,7 +278,6 @@ impl HistoryPanel {
                                     in_entry = true;
                                     found_game = false;
                                     entry_text.clear();
-                                    entry_count += 1;
                                 }
                                 b"systems" if in_entry => {
                                     in_systems = true;
@@ -267,29 +288,25 @@ impl HistoryPanel {
                                 b"system" if in_systems => {
                                     // Check if this system matches our game
                                     for attr in e.attributes() {
-                                        if let Ok(attr) = attr {
-                                            if attr.key.as_ref() == b"name" {
-                                                if let Ok(value) = std::str::from_utf8(&attr.value) {
-                                                    system_count += 1;
-                                                    if value == rom_name {
-                                                        found_game = true;
-                                                    }
-                                                }
-                                            }
+                                        if let Ok(attr) = attr
+                                            && attr.key.as_ref() == b"name"
+                                            && let Ok(value) = std::str::from_utf8(&attr.value)
+                                            && value == rom_name
+                                        {
+                                            found_game = true;
                                         }
                                     }
                                 }
                                 b"item" if in_software => {
                                     // Check if this software item matches our game
                                     for attr in e.attributes() {
-                                        if let Ok(attr) = attr {
-                                            if attr.key.as_ref() == b"name" {
-                                                if let Ok(value) = String::from_utf8(attr.value.to_vec()) {
-                                                    if value == rom_name {
-                                                        found_game = true;
-                                                    }
-                                                }
-                                            }
+                                        if let Ok(attr) = attr
+                                            && attr.key.as_ref() == b"name"
+                                            && let Ok(value) =
+                                                String::from_utf8(attr.value.to_vec())
+                                            && value == rom_name
+                                        {
+                                            found_game = true;
                                         }
                                     }
                                 }
@@ -300,31 +317,29 @@ impl HistoryPanel {
                                 _ => {}
                             }
                         }
-                        Ok(Event::Text(e)) => {
-                            if in_text {
-                                // Decode the text properly
-                                match reader.decoder().decode(&e) {
-                                    Ok(text) => {
-                                        // Check if we've hit the -CONTRIBUTE- marker
-                                        if let Some(contribute_pos) = text.find("-CONTRIBUTE-") {
-                                            // Only add text up to the marker
-                                            entry_text.push_str(&text[..contribute_pos]);
-                                            // We're done reading this entry
-                                            in_text = false;
-                                        } else {
-                                            entry_text.push_str(&text);
-                                        }
+                        Ok(Event::Text(e)) if in_text => {
+                            // Decode the text properly
+                            match reader.decoder().decode(&e) {
+                                Ok(text) => {
+                                    // Check if we've hit the -CONTRIBUTE- marker
+                                    if let Some(contribute_pos) = text.find("-CONTRIBUTE-") {
+                                        // Only add text up to the marker
+                                        entry_text.push_str(&text[..contribute_pos]);
+                                        // We're done reading this entry
+                                        in_text = false;
+                                    } else {
+                                        entry_text.push_str(&text);
                                     }
-                                    Err(_) => {
-                                        // Fallback to lossy conversion
-                                        let text = String::from_utf8_lossy(&e);
-                                        // Check for -CONTRIBUTE- marker in lossy text too
-                                        if let Some(contribute_pos) = text.find("-CONTRIBUTE-") {
-                                            entry_text.push_str(&text[..contribute_pos]);
-                                            in_text = false;
-                                        } else {
-                                            entry_text.push_str(&text);
-                                        }
+                                }
+                                Err(_) => {
+                                    // Fallback to lossy conversion
+                                    let text = String::from_utf8_lossy(&e);
+                                    // Check for -CONTRIBUTE- marker in lossy text too
+                                    if let Some(contribute_pos) = text.find("-CONTRIBUTE-") {
+                                        entry_text.push_str(&text[..contribute_pos]);
+                                        in_text = false;
+                                    } else {
+                                        entry_text.push_str(&text);
                                     }
                                 }
                             }
@@ -360,29 +375,25 @@ impl HistoryPanel {
                                 b"system" if in_systems => {
                                     // Check if this system matches our game
                                     for attr in e.attributes() {
-                                        if let Ok(attr) = attr {
-                                            if attr.key.as_ref() == b"name" {
-                                                if let Ok(value) = std::str::from_utf8(&attr.value) {
-                                                    system_count += 1;
-                                                    if value == rom_name {
-                                                        found_game = true;
-                                                    }
-                                                }
-                                            }
+                                        if let Ok(attr) = attr
+                                            && attr.key.as_ref() == b"name"
+                                            && let Ok(value) = std::str::from_utf8(&attr.value)
+                                            && value == rom_name
+                                        {
+                                            found_game = true;
                                         }
                                     }
                                 }
                                 b"item" if in_software => {
                                     // Check if this software item matches our game
                                     for attr in e.attributes() {
-                                        if let Ok(attr) = attr {
-                                            if attr.key.as_ref() == b"name" {
-                                                if let Ok(value) = String::from_utf8(attr.value.to_vec()) {
-                                                    if value == rom_name {
-                                                        found_game = true;
-                                                    }
-                                                }
-                                            }
+                                        if let Ok(attr) = attr
+                                            && attr.key.as_ref() == b"name"
+                                            && let Ok(value) =
+                                                String::from_utf8(attr.value.to_vec())
+                                            && value == rom_name
+                                        {
+                                            found_game = true;
                                         }
                                     }
                                 }
@@ -391,7 +402,11 @@ impl HistoryPanel {
                         }
                         Ok(Event::Eof) => break,
                         Err(e) => {
-                            eprintln!("Error parsing history.xml at position {}: {:?}", reader.buffer_position(), e);
+                            eprintln!(
+                                "Error parsing history.xml at position {}: {:?}",
+                                reader.buffer_position(),
+                                e
+                            );
                             break;
                         }
                         _ => {}
@@ -404,7 +419,7 @@ impl HistoryPanel {
             }
         }
     }
-    
+
     /// Load information from a DAT file
     fn load_dat_file(&mut self, path: &PathBuf, rom_name: &str, dat_type: &str) -> Option<String> {
         // Check cache first
@@ -412,29 +427,31 @@ impl HistoryPanel {
         if let Some(cached) = self.history_cache.get(&cache_key) {
             return Some(cached.clone());
         }
-        
+
         if !path.exists() {
             return None;
         }
-        
+
         match fs::read_to_string(path) {
             Ok(content) => {
                 // Try to find the game entry
                 // Format: $info=romname (without .zip)
                 let game_marker = format!("$info={}", rom_name);
-                
+
                 if let Some(start_pos) = content.find(&game_marker) {
                     // Find the next line after $info=gamename
                     let content_after_marker = &content[start_pos..];
-                    
+
                     // Skip to the next line after $info=gamename
                     if let Some(newline_pos) = content_after_marker.find('\n') {
                         let content_after_info = &content_after_marker[newline_pos + 1..];
-                        
+
                         // Find the next $info= marker or end of file
-                        let end_pos = content_after_info.find("$info=").unwrap_or(content_after_info.len());
+                        let end_pos = content_after_info
+                            .find("$info=")
+                            .unwrap_or(content_after_info.len());
                         let info_text = &content_after_info[..end_pos];
-                        
+
                         // Clean up the text
                         let cleaned_text = info_text
                             .lines()
@@ -447,26 +464,26 @@ impl HistoryPanel {
                             .filter(|line| !line.is_empty())
                             .collect::<Vec<_>>()
                             .join("\n");
-                        
+
                         if !cleaned_text.is_empty() {
                             self.history_cache.insert(cache_key, cleaned_text.clone());
                             return Some(cleaned_text);
                         }
                     }
                 }
-                
+
                 // Alternative format: some DAT files use $bio/$end markers
                 let game_marker_with_comma = format!("$info={},", rom_name);
-                
+
                 if let Some(start_pos) = content.find(&game_marker_with_comma) {
                     let content_after_marker = &content[start_pos..];
-                    
+
                     if let Some(bio_start) = content_after_marker.find("$bio") {
                         let bio_content = &content_after_marker[bio_start + 4..];
-                        
+
                         if let Some(end_pos) = bio_content.find("$end") {
                             let info_text = bio_content[..end_pos].trim();
-                            
+
                             if !info_text.is_empty() {
                                 let cleaned_text = info_text
                                     .lines()
@@ -474,14 +491,14 @@ impl HistoryPanel {
                                     .filter(|line| !line.is_empty())
                                     .collect::<Vec<_>>()
                                     .join("\n");
-                                
+
                                 self.history_cache.insert(cache_key, cleaned_text.clone());
                                 return Some(cleaned_text);
                             }
                         }
                     }
                 }
-                
+
                 None
             }
             Err(e) => {
@@ -490,7 +507,7 @@ impl HistoryPanel {
             }
         }
     }
-    
+
     /// Clear the cache (useful when files are updated)
     pub fn clear_cache(&mut self) {
         self.history_cache.clear();

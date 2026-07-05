@@ -4,7 +4,7 @@
 use eframe::egui;
 use egui::Color32;
 // Import using crate path for examples
-use crate::models::{Game, RomStatus, GameIndex};
+use crate::models::{Game, GameIndex, RomStatus};
 use crate::ui::panels::GameListView;
 
 // Add necessary module declarations
@@ -210,56 +210,57 @@ impl eframe::App for GameListViewDemo {
                             ui.heading(
                                 egui::RichText::new("KMameUI - List View Demo")
                                     .size(24.0)
-                                    .color(Color32::from_rgb(224, 224, 224))
+                                    .color(Color32::from_rgb(224, 224, 224)),
                             );
-                            
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.label(
-                                    egui::RichText::new("Modern MAME Frontend")
-                                        .size(14.0)
-                                        .color(Color32::from_rgb(136, 136, 136))
-                                );
-                            });
+
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new("Modern MAME Frontend")
+                                            .size(14.0)
+                                            .color(Color32::from_rgb(136, 136, 136)),
+                                    );
+                                },
+                            );
                         });
                     });
-                
+
                 // Main content area
-                egui::Frame::none()
-                    .inner_margin(20.0)
-                    .show(ui, |ui| {
-                        // Show the list view
-                        let (double_clicked, favorite_toggled) = self.list_view.show(
-                            ui,
-                            &self.games,
-                            &mut self.selected,
-                            &mut self.expanded_parents,
-                            &self.favorites,
-                            &self.icons,
-                            self.show_icons,
-                            Some(&self.game_index),
-                            None, // No default icon for demo
-                        );
+                egui::Frame::none().inner_margin(20.0).show(ui, |ui| {
+                    // Show the list view
+                    let (double_clicked, favorite_toggled) = self.list_view.show(
+                        ui,
+                        &self.games,
+                        &mut self.selected,
+                        &mut self.expanded_parents,
+                        &self.favorites,
+                        &self.icons,
+                        self.show_icons,
+                        Some(&self.game_index),
+                        None, // No default icon for demo
+                    );
 
-                        // Handle double click
-                        if double_clicked {
-                            if let Some(selected_idx) = self.selected {
-                                if let Some(game) = self.games.get(selected_idx) {
-                                    println!("Launching game: {}", game.description);
-                                }
+                    // Handle double click
+                    if double_clicked {
+                        if let Some(selected_idx) = self.selected {
+                            if let Some(game) = self.games.get(selected_idx) {
+                                println!("Launching game: {}", game.description);
                             }
                         }
+                    }
 
-                        // Handle favorite toggle
-                        if let Some(game_name) = favorite_toggled {
-                            if self.favorites.contains(&game_name) {
-                                self.favorites.remove(&game_name);
-                                println!("Removed {} from favorites", game_name);
-                            } else {
-                                self.favorites.insert(game_name.clone());
-                                println!("Added {} to favorites", game_name);
-                            }
+                    // Handle favorite toggle
+                    if let Some(game_name) = favorite_toggled {
+                        if self.favorites.contains(&game_name) {
+                            self.favorites.remove(&game_name);
+                            println!("Removed {} from favorites", game_name);
+                        } else {
+                            self.favorites.insert(game_name.clone());
+                            println!("Added {} to favorites", game_name);
                         }
-                    });
+                    }
+                });
 
                 // Status bar
                 egui::Frame::none()
@@ -270,28 +271,37 @@ impl eframe::App for GameListViewDemo {
                             ui.label(
                                 egui::RichText::new(format!("Total games: {}", self.games.len()))
                                     .size(12.0)
-                                    .color(Color32::from_rgb(136, 136, 136))
+                                    .color(Color32::from_rgb(136, 136, 136)),
                             );
-                            
+
                             ui.separator();
-                            
+
                             if let Some(selected_idx) = self.selected {
                                 if let Some(game) = self.games.get(selected_idx) {
                                     ui.label(
-                                        egui::RichText::new(format!("Selected: {}", game.description))
-                                            .size(12.0)
-                                            .color(Color32::from_rgb(136, 136, 136))
+                                        egui::RichText::new(format!(
+                                            "Selected: {}",
+                                            game.description
+                                        ))
+                                        .size(12.0)
+                                        .color(Color32::from_rgb(136, 136, 136)),
                                     );
                                 }
                             }
-                            
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.label(
-                                    egui::RichText::new(format!("Favorites: {}", self.favorites.len()))
+
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "Favorites: {}",
+                                            self.favorites.len()
+                                        ))
                                         .size(12.0)
-                                        .color(Color32::from_rgb(255, 200, 50))
-                                );
-                            });
+                                        .color(Color32::from_rgb(255, 200, 50)),
+                                    );
+                                },
+                            );
                         });
                     });
             });
@@ -310,8 +320,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "KMameUI List View Demo",
         options,
-        Box::new(|_cc| {
-            Ok(Box::new(GameListViewDemo::default()))
-        }),
+        Box::new(|_cc| Ok(Box::new(GameListViewDemo::default()))),
     )
 }

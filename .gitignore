@@ -76,10 +76,10 @@ MAMEUI-inifiles/
 # Workspace files
 *.code-workspace
 
-# Development scripts (keep only essential ones)
-build-*.sh
-!build-arch-package.sh
-install-*.sh
+# Local cargo cache (used when system CARGO_HOME is unavailable)
+.cargo/
+
+# Optional development scripts not tracked in repo
 generate-icons.sh
 uninstall.sh
 test-install.sh

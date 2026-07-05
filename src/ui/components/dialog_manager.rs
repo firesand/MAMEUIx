@@ -1,17 +1,16 @@
 // src/ui/dialog_manager.rs
 // Dialog state management and rendering module
 
-use eframe::egui;
 use crate::models::*;
-use crate::ui::components::mame_finder::{MameFinderDialog, FoundMame};
-use crate::ui::components::rom_verify::{RomVerifyDialog, VerificationManager};
-use crate::ui::components::game_properties::GamePropertiesDialog;
-use crate::ui::components::directories::DirectoriesDialog;
-use crate::ui::components::directories_paths::DirectoriesPathsDialog;
-use crate::ui::components::preferences::PreferencesDialog;
-use crate::ui::components::hidden_categories::HiddenCategoriesDialog;
-use crate::ui::components::rom_info::RomInfoDialog;
 use crate::ui::components::advanced_mame_settings::AdvancedMameSettingsDialog;
+use crate::ui::components::directories::DirectoriesDialog;
+use crate::ui::components::game_properties::GamePropertiesDialog;
+use crate::ui::components::hidden_categories::HiddenCategoriesDialog;
+use crate::ui::components::mame_finder::{FoundMame, MameFinderDialog};
+use crate::ui::components::preferences::PreferencesDialog;
+use crate::ui::components::rom_info::RomInfoDialog;
+use crate::ui::components::rom_verify::{RomVerifyDialog, VerificationManager};
+use eframe::egui;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -28,7 +27,7 @@ pub enum DialogAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DialogType {
     Directories,
-    DirectoriesPaths,  // New modern UI dialog
+    DirectoriesPaths, // Alias for Directories (legacy)
     Preferences,
     RomInfo,
     About,
@@ -44,14 +43,13 @@ pub enum DialogType {
 pub struct DialogManager {
     // Dialog visibility states
     dialog_states: HashMap<DialogType, bool>,
-    
+
     // Dialog-specific data
     found_mame_executables: Vec<FoundMame>,
     rom_verify_dialog: RomVerifyDialog,
     game_properties_dialog: Option<GamePropertiesDialog>,
     advanced_mame_settings_dialog: Option<AdvancedMameSettingsDialog>,
-    directories_paths_dialog: Option<DirectoriesPathsDialog>,
-    
+
     // Callback for when dialogs need to trigger actions
     on_dialog_closed: Option<Box<dyn Fn(DialogType, bool) + Send + Sync>>,
 }
@@ -59,7 +57,7 @@ pub struct DialogManager {
 impl DialogManager {
     pub fn new() -> Self {
         let mut dialog_states = HashMap::new();
-        
+
         // Initialize all dialog states to false
         for dialog_type in [
             DialogType::Directories,
@@ -75,18 +73,17 @@ impl DialogManager {
         ] {
             dialog_states.insert(dialog_type, false);
         }
-        
+
         Self {
             dialog_states,
             found_mame_executables: Vec::new(),
             rom_verify_dialog: RomVerifyDialog::default(),
             game_properties_dialog: None,
             advanced_mame_settings_dialog: None,
-            directories_paths_dialog: None,
             on_dialog_closed: None,
         }
     }
-    
+
     /// Set callback for dialog closed events
     pub fn set_dialog_closed_callback<F>(&mut self, callback: F)
     where
@@ -94,64 +91,83 @@ impl DialogManager {
     {
         self.on_dialog_closed = Some(Box::new(callback));
     }
-    
+
     /// Check if any dialog is currently open
     pub fn is_any_dialog_open(&self) -> bool {
         self.dialog_states.values().any(|&state| state) || self.rom_verify_dialog.is_open()
     }
-    
+
     /// Check if a specific dialog is open
     pub fn is_dialog_open(&self, dialog_type: DialogType) -> bool {
-        self.dialog_states.get(&dialog_type).copied().unwrap_or(false)
+        self.dialog_states
+            .get(&dialog_type)
+            .copied()
+            .unwrap_or(false)
     }
-    
+
     /// Open a dialog
     pub fn open_dialog(&mut self, dialog_type: DialogType) {
+        let dialog_type = if dialog_type == DialogType::DirectoriesPaths {
+            DialogType::Directories
+        } else {
+            dialog_type
+        };
         self.dialog_states.insert(dialog_type, true);
     }
-    
+
     /// Close a dialog
     pub fn close_dialog(&mut self, dialog_type: DialogType) {
-        if self.dialog_states.insert(dialog_type, false).unwrap_or(false) {
+        if self
+            .dialog_states
+            .insert(dialog_type, false)
+            .unwrap_or(false)
+        {
             // Dialog was actually open, trigger callback
             if let Some(ref callback) = self.on_dialog_closed {
                 callback(dialog_type, false);
             }
         }
     }
-    
+
     /// Set dialog state
     pub fn set_dialog_state(&mut self, dialog_type: DialogType, state: bool) {
-        let was_open = self.dialog_states.insert(dialog_type, state).unwrap_or(false);
-        
+        let was_open = self
+            .dialog_states
+            .insert(dialog_type, state)
+            .unwrap_or(false);
+
         // If dialog was closed, trigger callback
-        if was_open && !state {
-            if let Some(ref callback) = self.on_dialog_closed {
-                callback(dialog_type, false);
-            }
+        if was_open
+            && !state
+            && let Some(ref callback) = self.on_dialog_closed
+        {
+            callback(dialog_type, false);
         }
     }
-    
+
     /// Set MAME finder data
     pub fn set_found_mame_executables(&mut self, executables: Vec<FoundMame>) {
         self.found_mame_executables = executables;
     }
-    
+
     /// Get MAME finder data
     pub fn get_found_mame_executables(&self) -> &[FoundMame] {
         &self.found_mame_executables
     }
-    
+
     /// Set game properties dialog
     pub fn set_game_properties_dialog(&mut self, dialog: Option<GamePropertiesDialog>) {
         self.game_properties_dialog = dialog;
     }
-    
+
     /// Set advanced MAME settings dialog
-    pub fn set_advanced_mame_settings_dialog(&mut self, dialog: Option<AdvancedMameSettingsDialog>) {
+    pub fn set_advanced_mame_settings_dialog(
+        &mut self,
+        dialog: Option<AdvancedMameSettingsDialog>,
+    ) {
         self.advanced_mame_settings_dialog = dialog;
     }
-    
+
     /// Get ROM verify dialog reference
     pub fn rom_verify_dialog(&mut self) -> &mut RomVerifyDialog {
         &mut self.rom_verify_dialog
@@ -161,7 +177,7 @@ impl DialogManager {
     pub fn verification_manager(&self) -> Arc<VerificationManager> {
         self.rom_verify_dialog.verification_manager()
     }
-    
+
     /// Render all open dialogs
     pub fn render_dialogs(
         &mut self,
@@ -173,80 +189,84 @@ impl DialogManager {
         need_reload_after_dialog: &mut bool,
     ) -> Vec<DialogAction> {
         let mut actions = Vec::new();
-        
+
         // Directories Dialog
         if self.is_dialog_open(DialogType::Directories) {
             let changed = DirectoriesDialog::show(
-                ctx, 
-                config, 
-                self.dialog_states.get_mut(&DialogType::Directories).unwrap()
+                ctx,
+                config,
+                self.dialog_states
+                    .get_mut(&DialogType::Directories)
+                    .unwrap(),
             );
-            
+
             // Check if dialog was closed
             if !self.is_dialog_open(DialogType::Directories) {
                 // Always save config when dialog is closed
                 actions.push(DialogAction::SaveConfig);
-                
-                // Check if catver.ini was just configured
-                if config.catver_ini_path.is_some() {
-                    actions.push(DialogAction::ReloadCategories);
-                } else if changed {
-                    // For other changes, reload everything
+
+                if changed {
                     *need_reload_after_dialog = true;
+                    if config.catver_ini_path.is_some() {
+                        actions.push(DialogAction::ReloadCategories);
+                    }
                 }
             }
-            
+
             if !self.is_dialog_open(DialogType::Directories) && *need_reload_after_dialog {
                 actions.push(DialogAction::OnDirectoriesChanged);
                 *need_reload_after_dialog = false;
             }
         }
-        
+
         // Preferences Dialog
         if self.is_dialog_open(DialogType::Preferences) {
             PreferencesDialog::show(
                 ctx,
                 &mut config.preferences,
                 &mut config.theme,
-                self.dialog_states.get_mut(&DialogType::Preferences).unwrap(),
-                config.catver_ini_path.is_some()
+                self.dialog_states
+                    .get_mut(&DialogType::Preferences)
+                    .unwrap(),
+                config.catver_ini_path.is_some(),
             );
-            
+
             // Check if dialog was closed
             if !self.is_dialog_open(DialogType::Preferences) {
                 // Save config when preferences dialog is closed
                 actions.push(DialogAction::SaveConfig);
             }
         }
-        
+
         // ROM Info Dialog
-        if self.is_dialog_open(DialogType::RomInfo) {
-            if let Some(idx) = selected_game {
-                if let Some(game) = games.get(idx) {
-                    RomInfoDialog::show(
-                        ctx,
-                        game,
-                        self.dialog_states.get_mut(&DialogType::RomInfo).unwrap()
-                    );
-                }
-            }
+        if self.is_dialog_open(DialogType::RomInfo)
+            && let Some(idx) = selected_game
+            && let Some(game) = games.get(idx)
+        {
+            RomInfoDialog::show(
+                ctx,
+                game,
+                self.dialog_states.get_mut(&DialogType::RomInfo).unwrap(),
+            );
         }
-        
+
         // About Dialog
         if self.is_dialog_open(DialogType::About) {
             self.render_about_dialog(ctx);
         }
-        
+
         // Hidden Categories Dialog
         if self.is_dialog_open(DialogType::HiddenCategories) {
             HiddenCategoriesDialog::show(
                 ctx,
                 &mut config.hidden_categories,
                 category_manager,
-                self.dialog_states.get_mut(&DialogType::HiddenCategories).unwrap()
+                self.dialog_states
+                    .get_mut(&DialogType::HiddenCategories)
+                    .unwrap(),
             );
         }
-        
+
         // MAME Finder Dialog
         if self.is_dialog_open(DialogType::MameFinder) {
             if !self.found_mame_executables.is_empty() {
@@ -268,71 +288,54 @@ impl DialogManager {
                 self.open_dialog(DialogType::ManualMame);
             }
         }
-        
+
         // Manual MAME Dialog
-        if self.is_dialog_open(DialogType::ManualMame) {
-            if MameFinderDialog::show_manual_selection_dialog(
+        if self.is_dialog_open(DialogType::ManualMame)
+            && MameFinderDialog::show_manual_selection_dialog(
                 ctx,
                 config,
                 self.dialog_states.get_mut(&DialogType::ManualMame).unwrap(),
-            ) {
-                actions.push(DialogAction::SaveConfig);
-                actions.push(DialogAction::StartInitialLoad);
-            }
+            )
+        {
+            actions.push(DialogAction::SaveConfig);
+            actions.push(DialogAction::StartInitialLoad);
         }
-        
+
         // ROM Verification Dialog
         if self.rom_verify_dialog.is_open() {
             self.rom_verify_dialog.show_window(ctx, config, games);
         }
-        
+
         // Game Properties Dialog
-        if self.is_dialog_open(DialogType::GameProperties) {
-            if let Some(dialog) = &mut self.game_properties_dialog {
-                if dialog.show(ctx, self.dialog_states.get_mut(&DialogType::GameProperties).unwrap(), config) {
-                    // Properties were applied
-                    actions.push(DialogAction::SaveConfig);
-                }
-            }
+        if self.is_dialog_open(DialogType::GameProperties)
+            && let Some(dialog) = &mut self.game_properties_dialog
+            && dialog.show(
+                ctx,
+                self.dialog_states
+                    .get_mut(&DialogType::GameProperties)
+                    .unwrap(),
+                config,
+            )
+        {
+            // Properties were applied
+            actions.push(DialogAction::SaveConfig);
         }
-        
+
         // Advanced MAME Settings Dialog
-        if self.is_dialog_open(DialogType::AdvancedMameSettings) {
-            if let Some(dialog) = &mut self.advanced_mame_settings_dialog {
-                if dialog.show(ctx, self.dialog_states.get_mut(&DialogType::AdvancedMameSettings).unwrap(), config) {
-                    // Settings were applied
-                    actions.push(DialogAction::SaveConfig);
-                }
-            }
+        if self.is_dialog_open(DialogType::AdvancedMameSettings)
+            && let Some(dialog) = &mut self.advanced_mame_settings_dialog
+            && dialog.show(
+                ctx,
+                self.dialog_states
+                    .get_mut(&DialogType::AdvancedMameSettings)
+                    .unwrap(),
+                config,
+            )
+        {
+            // Settings were applied
+            actions.push(DialogAction::SaveConfig);
         }
-        
-        // Directories & Paths Dialog (New modern UI)
-        if self.is_dialog_open(DialogType::DirectoriesPaths) {
-            // Create dialog if it doesn't exist
-            if self.directories_paths_dialog.is_none() {
-                self.directories_paths_dialog = Some(DirectoriesPathsDialog::new(config));
-            }
-            
-            if let Some(dialog) = &mut self.directories_paths_dialog {
-                let changed = dialog.show(ctx, config, self.dialog_states.get_mut(&DialogType::DirectoriesPaths).unwrap());
-                
-                // Check if dialog was closed
-                if !self.is_dialog_open(DialogType::DirectoriesPaths) {
-                    // Always save config when dialog is closed
-                    actions.push(DialogAction::SaveConfig);
-                    
-                    if changed {
-                        // Reload everything if changes were made
-                        *need_reload_after_dialog = true;
-                        actions.push(DialogAction::OnDirectoriesChanged);
-                    }
-                    
-                    // Clear the dialog instance
-                    self.directories_paths_dialog = None;
-                }
-            }
-        }
-        
+
         actions
     }
 
@@ -349,7 +352,7 @@ impl DialogManager {
                     ui.label("Version: 0.1.4");
                     ui.label("Built with Rust and egui");
                     ui.add_space(20.0);
-                    
+
                     ui.label(egui::RichText::new("🎮 Core Features").heading());
                     ui.label("• Fast game scanning and filtering (48,000+ games)");
                     ui.label("• Enhanced search capabilities with real-time results");
@@ -357,16 +360,20 @@ impl DialogManager {
                     ui.label("• Plugin support (hiscore, cheat, autofire)");
                     ui.label("• Virtual scrolling for smooth performance");
                     ui.add_space(10.0);
-                    
-                    ui.label(egui::RichText::new("🔍 ROM Verification - CLRMamePro Lite").heading());
+
+                    ui.label(
+                        egui::RichText::new("🔍 ROM Verification - CLRMamePro Lite").heading(),
+                    );
                     ui.label("• Real-time verification status with progress tracking");
-                    ui.label("• Color-coded game list (Green=Verified, Red=Failed, Yellow=Warning)");
+                    ui.label(
+                        "• Color-coded game list (Green=Verified, Red=Failed, Yellow=Warning)",
+                    );
                     ui.label("• Bulk actions: Find missing ROMs (No-Intro integration)");
                     ui.label("• Export reports in Text, CSV, and HTML formats");
                     ui.label("• Pause/Resume/Stop verification controls");
                     ui.label("• Detailed statistics and ETA calculations");
                     ui.add_space(10.0);
-                    
+
                     ui.label(egui::RichText::new("🎨 Graphics & Performance").heading());
                     ui.label("• BGFX multi-backend support (8 rendering backends)");
                     ui.label("• Embedded GLSL shaders (11 professional effects)");
@@ -374,7 +381,7 @@ impl DialogManager {
                     ui.label("• Core performance options and real-time configuration");
                     ui.label("• Hardware filtering by CPU, device, and sound chip");
                     ui.add_space(10.0);
-                    
+
                     ui.label(egui::RichText::new("⚙️ Advanced Features").heading());
                     ui.label("• Thread pool icon loading with 8x performance improvement");
                     ui.label("• Performance monitoring and adaptive loading");
@@ -384,13 +391,13 @@ impl DialogManager {
                 });
             });
     }
-    
+
     /// Initialize MAME finder dialog
     pub fn initialize_mame_finder(&mut self, config: &AppConfig) -> bool {
         if config.mame_executables.is_empty() {
             println!("First launch detected - searching for MAME executables...");
             let found_mames = MameFinderDialog::find_mame_executables();
-            
+
             if !found_mames.is_empty() {
                 println!("Found {} MAME executable(s)", found_mames.len());
                 for mame in &found_mames {
@@ -407,7 +414,7 @@ impl DialogManager {
         }
         false
     }
-    
+
     /// Close all dialogs
     pub fn close_all_dialogs(&mut self) {
         for dialog_type in [
@@ -426,4 +433,4 @@ impl DialogManager {
         }
         // self.rom_verify_dialog.close(); // Commented out as close method doesn't exist
     }
-} 
+}

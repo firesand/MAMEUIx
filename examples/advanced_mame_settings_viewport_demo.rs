@@ -1,5 +1,5 @@
 //! Advanced MAME Settings Viewport Demo
-//! 
+//!
 //! This example demonstrates the Advanced MAME Settings dialog
 //! using the viewport API to create a separate native window.
 
@@ -30,36 +30,40 @@ impl eframe::App for DemoApp {
         style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(51, 51, 51);
         style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(60, 60, 60);
         style.visuals.selection.bg_fill = egui::Color32::from_rgb(74, 158, 255);
-        style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(224, 224, 224));
-        style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(224, 224, 224));
-        style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 255, 255));
-        style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 255, 255));
+        style.visuals.widgets.noninteractive.fg_stroke =
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(224, 224, 224));
+        style.visuals.widgets.inactive.fg_stroke =
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(224, 224, 224));
+        style.visuals.widgets.hovered.fg_stroke =
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 255, 255));
+        style.visuals.widgets.active.fg_stroke =
+            egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 255, 255));
         ctx.set_style(style);
-        
+
         // Show the settings dialog as a separate window
         self.settings_dialog.show(ctx);
-        
+
         // Main window
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(50.0);
-                
+
                 ui.heading("Advanced MAME Settings Viewport Demo");
-                
+
                 ui.add_space(20.0);
-                
+
                 ui.label("This demo shows the Advanced MAME Settings dialog as a separate window.");
                 ui.label("The dialog uses egui's viewport API to create a native window that can be moved independently.");
-                
+
                 ui.add_space(40.0);
-                
+
                 // Button to open the settings dialog
                 let button_text = if self.settings_dialog.is_open() {
                     "Settings Window is Open"
                 } else {
                     "Open Advanced MAME Settings"
                 };
-                
+
                 let button = ui.add_sized(
                     egui::Vec2::new(250.0, 40.0),
                     egui::Button::new(button_text)
@@ -69,13 +73,13 @@ impl eframe::App for DemoApp {
                             egui::Color32::from_rgb(74, 158, 255)
                         })
                 );
-                
+
                 if button.clicked() && !self.settings_dialog.is_open() {
                     self.settings_dialog.open();
                 }
-                
+
                 ui.add_space(20.0);
-                
+
                 // Status
                 if self.settings_dialog.is_open() {
                     ui.colored_label(
@@ -88,9 +92,9 @@ impl eframe::App for DemoApp {
                         "Settings window is closed."
                     );
                 }
-                
+
                 ui.add_space(40.0);
-                
+
                 // Instructions
                 ui.group(|ui| {
                     ui.label("Instructions:");
@@ -99,9 +103,9 @@ impl eframe::App for DemoApp {
                     ui.label("• Close the settings window using the X button or the Cancel/Apply buttons");
                     ui.label("• The window remembers its position while the app is running");
                 });
-                
+
                 ui.add_space(40.0);
-                
+
                 // Show current settings (if any were applied)
                 if let Some(settings) = self.get_applied_settings() {
                     ui.separator();
@@ -117,7 +121,9 @@ impl eframe::App for DemoApp {
 }
 
 impl DemoApp {
-    fn get_applied_settings(&self) -> Option<&mameui::ui::components::advanced_mame_settings::MameSettings> {
+    fn get_applied_settings(
+        &self,
+    ) -> Option<&mameui::ui::components::advanced_mame_settings::MameSettings> {
         // In a real implementation, this would return settings if they were applied
         None
     }
@@ -125,7 +131,7 @@ impl DemoApp {
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init();
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([800.0, 600.0])
@@ -133,7 +139,7 @@ fn main() -> Result<(), eframe::Error> {
             .with_title("Advanced MAME Settings Viewport Demo"),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "Advanced MAME Settings Viewport Demo",
         options,

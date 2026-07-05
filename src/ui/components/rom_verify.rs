@@ -1,11 +1,11 @@
-use eframe::egui;
-use std::process::Command;
-use std::collections::HashMap;
 use crate::models::{AppConfig, Game, RomStatus, VerificationStatus};
-use std::sync::mpsc;
-use std::thread;
+use eframe::egui;
+use std::collections::HashMap;
 use std::fs;
+use std::process::Command;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 /// Global verification manager to track verification status across the application
 pub struct VerificationManager {
@@ -74,9 +74,16 @@ impl VerificationManager {
     /// Get verification statistics
     pub fn get_stats(&self) -> VerificationStats {
         let results = self.get_all_results();
-        let mut stats = VerificationStats::default();
-        stats.total_verified = results.len();
-        
+        let mut stats = VerificationStats {
+            total_verified: results.len(),
+            passed: 0,
+            failed: 0,
+            warnings: 0,
+            missing: 0,
+            incorrect: 0,
+            missing_chd: 0,
+        };
+
         for result in results {
             match result.status {
                 VerifyStatus::Passed => stats.passed += 1,
@@ -87,12 +94,12 @@ impl VerificationManager {
                     if result.chd_status.is_some() {
                         stats.missing_chd += 1;
                     }
-                },
+                }
                 VerifyStatus::Warning => stats.warnings += 1,
                 VerifyStatus::NotFound => stats.failed += 1,
             }
         }
-        
+
         stats
     }
 }
@@ -161,17 +168,12 @@ pub struct VerificationStats {
     pub missing_chd: usize,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub enum ExportFormat {
+    #[default]
     Text,
     CSV,
     HTML,
-}
-
-impl Default for ExportFormat {
-    fn default() -> Self {
-        ExportFormat::Text
-    }
 }
 
 enum VerifyMessage {
@@ -218,7 +220,7 @@ impl RomVerifyDialog {
     pub fn open(&mut self) {
         self.window_open = true;
     }
-    
+
     // New method to check if window is open
     pub fn is_open(&self) -> bool {
         self.window_open
@@ -260,7 +262,7 @@ impl RomVerifyDialog {
             }
             return;
         }
-        
+
         // Create a separate window that's not modal
         let mut window_open = self.window_open;
         egui::Window::new("🔍 ROM Verification - CLRMamePro Lite")
@@ -285,28 +287,32 @@ impl RomVerifyDialog {
             while let Ok(msg) = rx.try_recv() {
                 messages.push(msg);
             }
-            
+
             for msg in messages {
                 match msg {
                     VerifyMessage::Progress(progress, game) => {
                         self.current_progress = progress;
                         self.current_game = game;
                         self.verified_games += 1;
-                        
+
                         // Calculate estimated time remaining
                         if let Some(start_time) = self.start_time {
                             let elapsed = start_time.elapsed();
                             if self.verified_games > 0 {
-                                let avg_time_per_game = elapsed.as_secs_f32() / self.verified_games as f32;
+                                let avg_time_per_game =
+                                    elapsed.as_secs_f32() / self.verified_games as f32;
                                 let remaining_games = self.total_games - self.verified_games;
-                                let estimated_remaining = avg_time_per_game * remaining_games as f32;
-                                
+                                let estimated_remaining =
+                                    avg_time_per_game * remaining_games as f32;
+
                                 if estimated_remaining > 60.0 {
                                     let minutes = (estimated_remaining / 60.0) as u32;
                                     let seconds = (estimated_remaining % 60.0) as u32;
-                                    self.estimated_time = Some(format!("{}m {}s", minutes, seconds));
+                                    self.estimated_time =
+                                        Some(format!("{}m {}s", minutes, seconds));
                                 } else {
-                                    self.estimated_time = Some(format!("{:.0}s", estimated_remaining));
+                                    self.estimated_time =
+                                        Some(format!("{:.0}s", estimated_remaining));
                                 }
                             }
                         }
@@ -314,7 +320,8 @@ impl RomVerifyDialog {
                     VerifyMessage::Result(result) => {
                         self.verification_results.push(result.clone());
                         // Update verification manager
-                        self.verification_manager.update_result(result.game_name.clone(), result);
+                        self.verification_manager
+                            .update_result(result.game_name.clone(), result);
                         self.update_stats();
                     }
                     VerifyMessage::Complete => {
@@ -355,9 +362,10 @@ impl RomVerifyDialog {
                     if ui.button("🔍 Verify All ROMs").clicked() {
                         self.start_verification(config, games, None);
                     }
-                    
+
                     if ui.button("✓ Verify Available Only").clicked() {
-                        let available_games: Vec<_> = games.iter()
+                        let available_games: Vec<_> = games
+                            .iter()
                             .filter(|g| matches!(g.status, RomStatus::Available))
                             .cloned()
                             .collect();
@@ -374,30 +382,30 @@ impl RomVerifyDialog {
                     ui.add_enabled(false, egui::Button::new("⏳ Verifying..."));
                 }
             });
-            
+
             // Second row: Options and bulk actions
             ui.horizontal(|ui| {
                 ui.checkbox(&mut self.show_only_issues, "Show only issues");
                 ui.add_space(10.0);
                 ui.label(format!("Total: {}", games.len()));
-                
+
                 // Bulk actions
                 if !self.verification_results.is_empty() {
                     ui.add_space(20.0);
                     ui.separator();
                     ui.add_space(10.0);
-                    
+
                     if ui.button("🌐 Find Missing ROMs (No-Intro)").clicked() {
                         self.open_no_intro_search();
                     }
-                    
+
                     ui.add_space(10.0);
-                    
+
                     ui.label("Export:");
                     ui.radio_value(&mut self.export_format, ExportFormat::Text, "Text");
                     ui.radio_value(&mut self.export_format, ExportFormat::CSV, "CSV");
                     ui.radio_value(&mut self.export_format, ExportFormat::HTML, "HTML");
-                    
+
                     if ui.button("📄 Export Report").clicked() {
                         self.export_results();
                     }
@@ -416,8 +424,10 @@ impl RomVerifyDialog {
         // Filter controls
         ui.horizontal(|ui| {
             ui.label("Filter:");
-            ui.add(egui::TextEdit::singleline(&mut self.filter_text)
-                .desired_width(ui.available_width() - 120.0));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.filter_text)
+                    .desired_width(ui.available_width() - 120.0),
+            );
             if ui.button("Clear").clicked() {
                 self.filter_text.clear();
             }
@@ -432,7 +442,7 @@ impl RomVerifyDialog {
     fn show_stats_panel(&self, ui: &mut egui::Ui) {
         ui.group(|ui| {
             ui.heading("📊 Verification Statistics");
-            
+
             if self.verification_results.is_empty() {
                 ui.label("No verification results yet. Click 'Verify All ROMs' to start.");
                 return;
@@ -441,32 +451,40 @@ impl RomVerifyDialog {
             ui.horizontal_wrapped(|ui| {
                 // Main stats
                 ui.vertical(|ui| {
-                    ui.colored_label(egui::Color32::GREEN, format!("✅ Verified: {}", self.stats.passed));
-                    ui.colored_label(egui::Color32::RED, format!("❌ Failed: {}", self.stats.failed));
-                    ui.colored_label(egui::Color32::YELLOW, format!("⚠️ Warnings: {}", self.stats.warnings));
+                    ui.colored_label(
+                        egui::Color32::GREEN,
+                        format!("✅ Verified: {}", self.stats.passed),
+                    );
+                    ui.colored_label(
+                        egui::Color32::RED,
+                        format!("❌ Failed: {}", self.stats.failed),
+                    );
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        format!("⚠️ Warnings: {}", self.stats.warnings),
+                    );
                 });
-                
+
                 ui.add_space(20.0);
-                
+
                 // Detailed stats
                 ui.vertical(|ui| {
                     ui.label(format!("📁 Missing Files: {}", self.stats.missing));
                     ui.label(format!("🔧 Incorrect Files: {}", self.stats.incorrect));
                     ui.label(format!("💿 Missing CHD: {}", self.stats.missing_chd));
                 });
-                
+
                 ui.add_space(20.0);
-                
+
                 // Progress stats
                 ui.vertical(|ui| {
-                    let progress_percent = if self.total_games > 0 {
-                        (self.verified_games * 100) / self.total_games
-                    } else {
-                        0
-                    };
-                    ui.label(format!("📈 Progress: {} / {} ({}%)", 
-                        self.verified_games, self.total_games, progress_percent));
-                    
+                    let progress_percent =
+                        self.verified_games.saturating_mul(100) / self.total_games.max(1);
+                    ui.label(format!(
+                        "📈 Progress: {} / {} ({}%)",
+                        self.verified_games, self.total_games, progress_percent
+                    ));
+
                     if let Some(eta) = &self.estimated_time {
                         ui.label(format!("⏱️ ETA: {}", eta));
                     }
@@ -478,61 +496,84 @@ impl RomVerifyDialog {
     fn show_progress_panel(&mut self, ui: &mut egui::Ui) {
         ui.group(|ui| {
             ui.heading("⏳ Verification Progress");
-            
+
             // Enhanced progress bar with stats
             ui.horizontal(|ui| {
-                ui.add(egui::ProgressBar::new(self.current_progress)
-                    .show_percentage()
-                    .animate(true)
-                    .desired_width(ui.available_width() - 200.0));
-                
+                ui.add(
+                    egui::ProgressBar::new(self.current_progress)
+                        .show_percentage()
+                        .animate(true)
+                        .desired_width(ui.available_width() - 200.0),
+                );
+
                 if let Some(estimated) = &self.estimated_time {
                     ui.label(format!("ETA: {}", estimated));
                 }
             });
-            
+
             // Current status
             ui.horizontal(|ui| {
                 ui.label(format!("Current: {}", self.current_game));
                 ui.add_space(10.0);
-                ui.label(format!("Progress: {} / {}", self.verified_games, self.total_games));
+                ui.label(format!(
+                    "Progress: {} / {}",
+                    self.verified_games, self.total_games
+                ));
             });
-            
+
             // Live stats during verification
             if !self.verification_results.is_empty() {
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(egui::Color32::GREEN, format!("✅ {} passed", self.stats.passed));
-                    ui.colored_label(egui::Color32::RED, format!("❌ {} failed", self.stats.failed));
-                    ui.colored_label(egui::Color32::YELLOW, format!("⚠️ {} warnings", self.stats.warnings));
+                    ui.colored_label(
+                        egui::Color32::GREEN,
+                        format!("✅ {} passed", self.stats.passed),
+                    );
+                    ui.colored_label(
+                        egui::Color32::RED,
+                        format!("❌ {} failed", self.stats.failed),
+                    );
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        format!("⚠️ {} warnings", self.stats.warnings),
+                    );
                 });
             }
-            
+
             // Control buttons
             ui.horizontal_wrapped(|ui| {
                 if self.is_paused {
-                    if ui.add(egui::Button::new("▶ Resume").fill(egui::Color32::GREEN)).clicked() {
+                    if ui
+                        .add(egui::Button::new("▶ Resume").fill(egui::Color32::GREEN))
+                        .clicked()
+                    {
                         if let Some(sender) = &self.pause_sender {
                             let _ = sender.send(false);
                         }
                         self.is_paused = false;
                     }
                 } else {
-                    if ui.add(egui::Button::new("⏸ Pause").fill(egui::Color32::YELLOW)).clicked() {
+                    if ui
+                        .add(egui::Button::new("⏸ Pause").fill(egui::Color32::YELLOW))
+                        .clicked()
+                    {
                         if let Some(sender) = &self.pause_sender {
                             let _ = sender.send(true);
                         }
                         self.is_paused = true;
                     }
                 }
-                
-                if ui.add(egui::Button::new("⏹ Stop").fill(egui::Color32::RED)).clicked() {
+
+                if ui
+                    .add(egui::Button::new("⏹ Stop").fill(egui::Color32::RED))
+                    .clicked()
+                {
                     if let Some(sender) = &self.stop_sender {
                         let _ = sender.send(true);
                     }
                     self.should_stop = true;
                     self.is_verifying = false;
                 }
-                
+
                 // Show pause status
                 if self.is_paused {
                     ui.colored_label(egui::Color32::YELLOW, "⏸ PAUSED");
@@ -543,51 +584,78 @@ impl RomVerifyDialog {
 
     fn show_results_panel(&mut self, ui: &mut egui::Ui) {
         ui.heading("📋 Verification Results");
-        
-        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-            let filtered_results: Vec<_> = self.verification_results.iter()
-                .filter(|result| {
-                    let matches_filter = self.filter_text.is_empty() || 
-                        result.game_name.to_lowercase().contains(&self.filter_text.to_lowercase()) ||
-                        result.description.to_lowercase().contains(&self.filter_text.to_lowercase());
-                    
-                    let matches_show_only = !self.show_only_issues || 
-                        matches!(result.status, VerifyStatus::Failed | VerifyStatus::Warning);
-                    
-                    matches_filter && matches_show_only
-                })
-                .collect();
 
-            if filtered_results.is_empty() {
-                if self.verification_results.is_empty() {
-                    ui.centered_and_justified(|ui| {
-                        ui.label("No verification results yet. Click 'Verify All ROMs' to start.");
-                    });
+        egui::ScrollArea::vertical()
+            .max_height(300.0)
+            .show(ui, |ui| {
+                let filtered_results: Vec<_> = self
+                    .verification_results
+                    .iter()
+                    .filter(|result| {
+                        let matches_filter = self.filter_text.is_empty()
+                            || result
+                                .game_name
+                                .to_lowercase()
+                                .contains(&self.filter_text.to_lowercase())
+                            || result
+                                .description
+                                .to_lowercase()
+                                .contains(&self.filter_text.to_lowercase());
+
+                        let matches_show_only = !self.show_only_issues
+                            || matches!(
+                                result.status,
+                                VerifyStatus::Failed | VerifyStatus::Warning
+                            );
+
+                        matches_filter && matches_show_only
+                    })
+                    .collect();
+
+                if filtered_results.is_empty() {
+                    if self.verification_results.is_empty() {
+                        ui.centered_and_justified(|ui| {
+                            ui.label(
+                                "No verification results yet. Click 'Verify All ROMs' to start.",
+                            );
+                        });
+                    } else {
+                        ui.centered_and_justified(|ui| {
+                            ui.label("No results match the current filter.");
+                        });
+                    }
                 } else {
-                    ui.centered_and_justified(|ui| {
-                        ui.label("No results match the current filter.");
-                    });
+                    for result in filtered_results {
+                        self.render_result_item(ui, result);
+                    }
                 }
-            } else {
-                for result in filtered_results {
-                    self.render_result_item(ui, result);
-                }
-            }
-        });
+            });
     }
 
     fn render_result_item(&self, ui: &mut egui::Ui, result: &VerificationResult) {
-        let (bg_color, border_color) = match result.status {
-            VerifyStatus::Passed => (egui::Color32::from_rgba_premultiplied(0, 100, 0, 30), egui::Color32::GREEN),
-            VerifyStatus::Failed => (egui::Color32::from_rgba_premultiplied(100, 0, 0, 30), egui::Color32::RED),
-            VerifyStatus::Warning => (egui::Color32::from_rgba_premultiplied(100, 100, 0, 30), egui::Color32::YELLOW),
-            VerifyStatus::NotFound => (egui::Color32::from_rgba_premultiplied(50, 50, 50, 30), egui::Color32::GRAY),
+        let (bg_color, _border_color) = match result.status {
+            VerifyStatus::Passed => (
+                egui::Color32::from_rgba_premultiplied(0, 100, 0, 30),
+                egui::Color32::GREEN,
+            ),
+            VerifyStatus::Failed => (
+                egui::Color32::from_rgba_premultiplied(100, 0, 0, 30),
+                egui::Color32::RED,
+            ),
+            VerifyStatus::Warning => (
+                egui::Color32::from_rgba_premultiplied(100, 100, 0, 30),
+                egui::Color32::YELLOW,
+            ),
+            VerifyStatus::NotFound => (
+                egui::Color32::from_rgba_premultiplied(50, 50, 50, 30),
+                egui::Color32::GRAY,
+            ),
         };
 
         // Use a frame instead of group for better control over background
-        egui::Frame::none()
+        egui::Frame::NONE
             .fill(bg_color)
-            .rounding(4.0)
+            .corner_radius(4.0)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let status_icon = match result.status {
@@ -596,32 +664,32 @@ impl RomVerifyDialog {
                         VerifyStatus::Warning => "⚠️",
                         VerifyStatus::NotFound => "❓",
                     };
-                    
+
                     ui.label(status_icon);
                     ui.label(format!("{} - {}", result.game_name, result.description));
                 });
-                
+
                 if !result.missing_files.is_empty() {
                     ui.colored_label(egui::Color32::RED, "Missing files:");
                     for file in &result.missing_files {
                         ui.label(format!("  • {}", file));
                     }
                 }
-                
+
                 if !result.incorrect_files.is_empty() {
                     ui.colored_label(egui::Color32::YELLOW, "Incorrect files:");
                     for file in &result.incorrect_files {
                         ui.label(format!("  • {}", file));
                     }
                 }
-                
+
                 if !result.extra_files.is_empty() {
                     ui.colored_label(egui::Color32::BLUE, "Extra files:");
                     for file in &result.extra_files {
                         ui.label(format!("  • {}", file));
                     }
                 }
-                
+
                 if let Some(chd_status) = &result.chd_status {
                     ui.colored_label(egui::Color32::YELLOW, format!("CHD Status: {}", chd_status));
                 }
@@ -640,7 +708,12 @@ impl RomVerifyDialog {
         }
     }
 
-    fn start_verification(&mut self, config: &AppConfig, games: &[Game], specific_game: Option<&str>) {
+    fn start_verification(
+        &mut self,
+        config: &AppConfig,
+        games: &[Game],
+        specific_game: Option<&str>,
+    ) {
         if let Some(mame) = config.mame_executables.get(config.selected_mame_index) {
             self.is_verifying = true;
             self.should_stop = false;
@@ -648,14 +721,18 @@ impl RomVerifyDialog {
             self.verification_results.clear();
             self.stats = VerificationStats::default();
             self.current_progress = 0.0;
-            self.total_games = if specific_game.is_some() { 1 } else { games.len() };
+            self.total_games = if specific_game.is_some() {
+                1
+            } else {
+                games.len()
+            };
             self.verified_games = 0;
             self.start_time = Some(std::time::Instant::now());
 
             let (tx, rx) = mpsc::channel();
             let (pause_tx, pause_rx) = mpsc::channel();
             let (stop_tx, stop_rx) = mpsc::channel();
-            
+
             self.receiver = Some(rx);
             self.pause_sender = Some(pause_tx);
             self.stop_sender = Some(stop_tx);
@@ -681,7 +758,7 @@ impl RomVerifyDialog {
                         if let Ok(true) = stop_rx.try_recv() {
                             break;
                         }
-                        
+
                         // Check for pause signal
                         while let Ok(paused) = pause_rx.try_recv() {
                             if paused {
@@ -693,10 +770,10 @@ impl RomVerifyDialog {
                                 }
                             }
                         }
-                        
+
                         let progress = (idx + 1) as f32 / games_to_verify.len() as f32;
                         let _ = tx.send(VerifyMessage::Progress(progress, game.name.clone()));
-                        
+
                         let result = Self::verify_single_game(&mame_path, game);
                         verification_manager.update_result(game.name.clone(), result.clone());
                         let _ = tx.send(VerifyMessage::Result(result));
@@ -722,21 +799,23 @@ impl RomVerifyDialog {
 
                 Self::parse_verification_output(&game.name, &game.description, &combined_output)
             }
-            Err(e) => {
-                VerificationResult {
-                    game_name: game.name.clone(),
-                    description: game.description.clone(),
-                    status: VerifyStatus::Failed,
-                    missing_files: vec![format!("Error running verification: {}", e)],
-                    incorrect_files: vec![],
-                    extra_files: vec![],
-                    chd_status: None,
-                }
-            }
+            Err(e) => VerificationResult {
+                game_name: game.name.clone(),
+                description: game.description.clone(),
+                status: VerifyStatus::Failed,
+                missing_files: vec![format!("Error running verification: {}", e)],
+                incorrect_files: vec![],
+                extra_files: vec![],
+                chd_status: None,
+            },
         }
     }
 
-    fn parse_verification_output(game_name: &str, description: &str, output: &str) -> VerificationResult {
+    fn parse_verification_output(
+        game_name: &str,
+        description: &str,
+        output: &str,
+    ) -> VerificationResult {
         let mut missing_files = Vec::new();
         let mut incorrect_files = Vec::new();
         let mut extra_files = Vec::new();
@@ -745,7 +824,7 @@ impl RomVerifyDialog {
 
         for line in output.lines() {
             let line = line.trim();
-            
+
             if line.contains("NOT FOUND") {
                 if line.contains(".chd") {
                     chd_status = Some("CHD file not found".to_string());
@@ -786,12 +865,12 @@ impl RomVerifyDialog {
 
     fn extract_filename(line: &str) -> Option<String> {
         // Try to extract filename from various MAME output formats
-        if let Some(start) = line.find('"') {
-            if let Some(end) = line[start + 1..].find('"') {
-                return Some(line[start + 1..start + 1 + end].to_string());
-            }
+        if let Some(start) = line.find('"')
+            && let Some(end) = line[start + 1..].find('"')
+        {
+            return Some(line[start + 1..start + 1 + end].to_string());
         }
-        
+
         // Alternative format
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() > 1 {
@@ -807,13 +886,13 @@ impl RomVerifyDialog {
             ExportFormat::CSV => "csv",
             ExportFormat::HTML => "html",
         };
-        
+
         let file_name = format!("rom_verification_report.{}", file_extension);
-        
+
         if let Some(path) = rfd::FileDialog::new()
             .set_file_name(&file_name)
             .add_filter("Report files", &[file_extension])
-            .save_file() 
+            .save_file()
         {
             let content = match self.export_format {
                 ExportFormat::Text => self.generate_text_report(),
@@ -832,7 +911,7 @@ impl RomVerifyDialog {
         content.push_str("ROM Verification Report - CLRMamePro Lite\n");
         content.push_str("==========================================\n\n");
 
-        content.push_str(&format!("Summary:\n"));
+        content.push_str("Summary:\n");
         content.push_str(&format!("Total verified: {}\n", self.stats.total_verified));
         content.push_str(&format!("Passed: {}\n", self.stats.passed));
         content.push_str(&format!("Failed: {}\n", self.stats.failed));
@@ -842,7 +921,10 @@ impl RomVerifyDialog {
         content.push_str(&format!("Missing CHD: {}\n\n", self.stats.missing_chd));
 
         for result in &self.verification_results {
-            content.push_str(&format!("Game: {} ({})\n", result.game_name, result.description));
+            content.push_str(&format!(
+                "Game: {} ({})\n",
+                result.game_name, result.description
+            ));
             content.push_str(&format!("Status: {:?}\n", result.status));
 
             if !result.missing_files.is_empty() {
@@ -863,7 +945,7 @@ impl RomVerifyDialog {
                 content.push_str(&format!("CHD: {}\n", chd));
             }
 
-            content.push_str("\n");
+            content.push('\n');
         }
 
         content
@@ -871,25 +953,35 @@ impl RomVerifyDialog {
 
     fn generate_csv_report(&self) -> String {
         let mut content = String::new();
-        content.push_str("Game Name,Description,Status,Missing Files,Incorrect Files,Extra Files,CHD Status\n");
-        
+        content.push_str(
+            "Game Name,Description,Status,Missing Files,Incorrect Files,Extra Files,CHD Status\n",
+        );
+
         for result in &self.verification_results {
             let missing_files = result.missing_files.join(";");
             let incorrect_files = result.incorrect_files.join(";");
             let extra_files = result.extra_files.join(";");
             let chd_status = result.chd_status.as_deref().unwrap_or("");
-            
-            content.push_str(&format!("\"{}\",\"{}\",\"{:?}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
-                result.game_name, result.description, result.status,
-                missing_files, incorrect_files, extra_files, chd_status));
+
+            content.push_str(&format!(
+                "\"{}\",\"{}\",\"{:?}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
+                result.game_name,
+                result.description,
+                result.status,
+                missing_files,
+                incorrect_files,
+                extra_files,
+                chd_status
+            ));
         }
-        
+
         content
     }
 
     fn generate_html_report(&self) -> String {
         let mut content = String::new();
-        content.push_str(r#"<!DOCTYPE html>
+        content.push_str(
+            r#"<!DOCTYPE html>
 <html>
 <head>
     <title>ROM Verification Report - CLRMamePro Lite</title>
@@ -911,11 +1003,17 @@ impl RomVerifyDialog {
 <body>
     <div class="header">
         <h1>🔍 ROM Verification Report - CLRMamePro Lite</h1>
-        <p>Generated on: "#);
-        content.push_str(&chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string());
+        <p>Generated on: "#,
+        );
+        content.push_str(
+            &chrono::Utc::now()
+                .format("%Y-%m-%d %H:%M:%S UTC")
+                .to_string(),
+        );
         content.push_str("</p></div>");
-        
-        content.push_str(&format!(r#"
+
+        content.push_str(&format!(
+            r#"
     <div class="stats">
         <div class="stat passed">✅ Passed: {}</div>
         <div class="stat failed">❌ Failed: {}</div>
@@ -925,12 +1023,17 @@ impl RomVerifyDialog {
         <div class="stat failed">📁 Missing Files: {}</div>
         <div class="stat warning">🔧 Incorrect Files: {}</div>
         <div class="stat warning">💿 Missing CHD: {}</div>
-    </div>"#, 
-            self.stats.passed, self.stats.failed, self.stats.warnings,
-            self.stats.missing, self.stats.incorrect, self.stats.missing_chd));
-        
+    </div>"#,
+            self.stats.passed,
+            self.stats.failed,
+            self.stats.warnings,
+            self.stats.missing,
+            self.stats.incorrect,
+            self.stats.missing_chd
+        ));
+
         content.push_str("<h2>Detailed Results</h2>");
-        
+
         for result in &self.verification_results {
             let status_class = match result.status {
                 VerifyStatus::Passed => "passed",
@@ -938,12 +1041,14 @@ impl RomVerifyDialog {
                 VerifyStatus::Warning => "warning",
                 VerifyStatus::NotFound => "notfound",
             };
-            
-            content.push_str(&format!(r#"<div class="result {}">
+
+            content.push_str(&format!(
+                r#"<div class="result {}">
                 <h3>{} - {}</h3>
-                <p><strong>Status:</strong> {:?}</p>"#, 
-                status_class, result.game_name, result.description, result.status));
-            
+                <p><strong>Status:</strong> {:?}</p>"#,
+                status_class, result.game_name, result.description, result.status
+            ));
+
             if !result.missing_files.is_empty() {
                 content.push_str("<p><strong>Missing files:</strong></p><ul>");
                 for file in &result.missing_files {
@@ -951,7 +1056,7 @@ impl RomVerifyDialog {
                 }
                 content.push_str("</ul>");
             }
-            
+
             if !result.incorrect_files.is_empty() {
                 content.push_str("<p><strong>Incorrect files:</strong></p><ul>");
                 for file in &result.incorrect_files {
@@ -959,15 +1064,15 @@ impl RomVerifyDialog {
                 }
                 content.push_str("</ul>");
             }
-            
+
             if let Some(chd) = &result.chd_status {
                 content.push_str(&format!("<p><strong>CHD Status:</strong> {}</p>", chd));
             }
-            
+
             content.push_str("</div>");
         }
-        
+
         content.push_str("</body></html>");
         content
     }
-} 
+}

@@ -1,8 +1,8 @@
 // src/ui/artwork_panel.rs
-use eframe::egui;
 use crate::models::Game;
-use std::path::PathBuf;
 use crate::ui::panels::artwork_loader::{ArtworkLoader, ArtworkType};
+use eframe::egui;
+use std::path::PathBuf;
 
 pub struct ArtworkPanel {
     // Any state the artwork panel needs can go here
@@ -22,9 +22,9 @@ impl ArtworkPanel {
     /// This is now a method (takes &mut self) so it can be called on an instance
     /// The selected_game parameter is an Option<usize> representing the index
     pub fn show(
-        &mut self,  // This makes it a method instead of an associated function
+        &mut self, // This makes it a method instead of an associated function
         ui: &mut egui::Ui,
-        selected_game: &Option<usize>,  // Index into the games array
+        selected_game: &Option<usize>, // Index into the games array
         games: &[Game],
         _asset_dirs: &[PathBuf],
         config: &crate::models::config::AppConfig,
@@ -46,19 +46,39 @@ impl ArtworkPanel {
 
                 // Artwork type selection
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.selected_artwork_type, ArtworkType::Screenshot, "Screenshot");
-                    ui.selectable_value(&mut self.selected_artwork_type, ArtworkType::Cabinet, "Cabinet");
-                    ui.selectable_value(&mut self.selected_artwork_type, ArtworkType::Marquee, "Marquee");
-                    ui.selectable_value(&mut self.selected_artwork_type, ArtworkType::Title, "Title");
-                    ui.selectable_value(&mut self.selected_artwork_type, ArtworkType::Flyer, "Flyer");
+                    ui.selectable_value(
+                        &mut self.selected_artwork_type,
+                        ArtworkType::Screenshot,
+                        "Screenshot",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_artwork_type,
+                        ArtworkType::Cabinet,
+                        "Cabinet",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_artwork_type,
+                        ArtworkType::Marquee,
+                        "Marquee",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_artwork_type,
+                        ArtworkType::Title,
+                        "Title",
+                    );
+                    ui.selectable_value(
+                        &mut self.selected_artwork_type,
+                        ArtworkType::Flyer,
+                        "Flyer",
+                    );
                 });
 
                 ui.separator();
 
                 // Try to load and display artwork
-                let artwork_frame = egui::Frame::dark_canvas(ui.style())
-                    .inner_margin(egui::Vec2::splat(10.0));
-                
+                let artwork_frame =
+                    egui::Frame::dark_canvas(ui.style()).inner_margin(egui::Vec2::splat(10.0));
+
                 artwork_frame.show(ui, |ui| {
                     // Try to load the artwork
                     if let Some(texture) = self.artwork_loader.load_artwork(
@@ -70,13 +90,13 @@ impl ArtworkPanel {
                         // Calculate size to fit the available space while maintaining aspect ratio
                         let available_size = ui.available_size();
                         let texture_size = texture.size_vec2();
-                        
+
                         let scale = (available_size.x / texture_size.x)
                             .min(available_size.y / texture_size.y)
                             .min(1.0); // Don't scale up beyond original size
-                        
+
                         let display_size = texture_size * scale;
-                        
+
                         // Center the image
                         ui.centered_and_justified(|ui| {
                             ui.add(egui::Image::new(&texture).fit_to_exact_size(display_size));
@@ -84,15 +104,16 @@ impl ArtworkPanel {
                     } else {
                         // No artwork available
                         ui.centered_and_justified(|ui| {
-                            ui.label(format!("No {} available for {}",
-                                             match self.selected_artwork_type {
-                                                 ArtworkType::Screenshot => "screenshot",
-                                                 ArtworkType::Cabinet => "cabinet art",
-                                                 ArtworkType::Marquee => "marquee",
-                                                 ArtworkType::Title => "title screen",
-                                                 ArtworkType::Flyer => "flyer",
-                                             },
-                                             game.name
+                            ui.label(format!(
+                                "No {} available for {}",
+                                match self.selected_artwork_type {
+                                    ArtworkType::Screenshot => "screenshot",
+                                    ArtworkType::Cabinet => "cabinet art",
+                                    ArtworkType::Marquee => "marquee",
+                                    ArtworkType::Title => "title screen",
+                                    ArtworkType::Flyer => "flyer",
+                                },
+                                game.name
                             ));
                         });
                     }

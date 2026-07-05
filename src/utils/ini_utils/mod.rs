@@ -1,12 +1,12 @@
 // src/ini_utils/mod.rs
 use std::collections::HashSet;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 /// Represents a parsed MAME INI file with section headers
 #[derive(Debug, Clone)]
 pub struct MameIniFile {
-    pub sections: HashSet<String>,          // Normalized section headers (without brackets)
+    pub sections: HashSet<String>, // Normalized section headers (without brackets)
 }
 
 impl MameIniFile {
@@ -14,31 +14,31 @@ impl MameIniFile {
     pub fn parse<P: AsRef<Path>>(path: P) -> Result<HashSet<String>, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
         let mut section_names = HashSet::new();
-        
+
         for line in content.lines() {
             let line = line.trim();
-            
+
             // Skip empty lines and comments
             if line.is_empty() || line.starts_with(';') {
                 continue;
             }
-            
+
             // Check if this is a section header (starts and ends with brackets)
             if line.starts_with('[') && line.ends_with(']') {
                 // Extract the section name without brackets
-                let section_name = &line[1..line.len()-1];
+                let section_name = &line[1..line.len() - 1];
                 let normalized = Self::normalize_name(section_name);
                 section_names.insert(normalized);
             }
         }
-        
+
         Ok(section_names)
     }
 
     /// Normalize a name for comparison (lowercase, trim, replace special chars)
     fn normalize_name(name: &str) -> String {
         name.to_lowercase()
-            .replace(['(', ')', '[', ']', '\'', '"', '.', ','], "")
+            .replace(['(', ')', '[', ']', '\'', '"', '.', ',', '/'], "")
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
@@ -60,7 +60,7 @@ impl MameIniFilter {
     /// Normalize a name for comparison (lowercase, trim, replace special chars)
     fn normalize_name(name: &str) -> String {
         name.to_lowercase()
-            .replace(['(', ')', '[', ']', '\'', '"', '.', ','], "")
+            .replace(['(', ')', '[', ']', '\'', '"', '.', ',', '/'], "")
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
@@ -78,26 +78,50 @@ impl MameIniFilter {
         let cpu_sections = if let Some(path) = cpu_ini_path {
             if hide_cpu_names {
                 let set = MameIniFile::parse(path)?;
-                println!("[INI Filter] Loaded {} CPU sections from {}", set.len(), path);
+                println!(
+                    "[INI Filter] Loaded {} CPU sections from {}",
+                    set.len(),
+                    path
+                );
                 set
-            } else { HashSet::new() }
-        } else { HashSet::new() };
-        
+            } else {
+                HashSet::new()
+            }
+        } else {
+            HashSet::new()
+        };
+
         let device_sections = if let Some(path) = device_ini_path {
             if hide_device_names {
                 let set = MameIniFile::parse(path)?;
-                println!("[INI Filter] Loaded {} Device sections from {}", set.len(), path);
+                println!(
+                    "[INI Filter] Loaded {} Device sections from {}",
+                    set.len(),
+                    path
+                );
                 set
-            } else { HashSet::new() }
-        } else { HashSet::new() };
-        
+            } else {
+                HashSet::new()
+            }
+        } else {
+            HashSet::new()
+        };
+
         let sound_sections = if let Some(path) = sound_ini_path {
             if hide_sound_names {
                 let set = MameIniFile::parse(path)?;
-                println!("[INI Filter] Loaded {} Sound sections from {}", set.len(), path);
+                println!(
+                    "[INI Filter] Loaded {} Sound sections from {}",
+                    set.len(),
+                    path
+                );
                 set
-            } else { HashSet::new() }
-        } else { HashSet::new() };
+            } else {
+                HashSet::new()
+            }
+        } else {
+            HashSet::new()
+        };
 
         Ok(Self {
             cpu_sections,
@@ -153,14 +177,20 @@ mod tests {
     #[test]
     fn test_normalize_name() {
         assert_eq!(MameIniFilter::normalize_name("3DO DSPP"), "3do dspp");
-        assert_eq!(MameIniFilter::normalize_name("ADChips SE3208"), "adchips se3208");
-        assert_eq!(MameIniFilter::normalize_name("Fujitsu MB89363B I/O"), "fujitsu mb89363b io");
+        assert_eq!(
+            MameIniFilter::normalize_name("ADChips SE3208"),
+            "adchips se3208"
+        );
+        assert_eq!(
+            MameIniFilter::normalize_name("Fujitsu MB89363B I/O"),
+            "fujitsu mb89363b io"
+        );
     }
 
     #[test]
     fn test_filtering() {
         let filter = MameIniFilter::new(None, None, None, false, false, false).unwrap();
-        
+
         // With no INI files loaded, nothing should be filtered
         assert!(!filter.should_filter_out("pacman"));
         assert!(!filter.should_filter_out("donkeykong"));

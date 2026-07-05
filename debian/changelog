@@ -1,15 +1,6 @@
-mameuix (0.1.1-1) unstable; urgency=medium
+mameuix (0.1.5-1) unstable; urgency=medium
 
-  * Initial release
-  * Modern GUI frontend for MAME arcade emulator
-  * Features include:
-    - Fast game scanning and filtering
-    - Artwork display and management
-    - Multiple theme support (10 themes)
-    - ROM status detection
-    - Game history tracking
-    - Responsive and modern UI
-    - Persistent column widths
-    - Enhanced preferences dialog
+  * Update package metadata for MAMEUIx 0.1.5.
+  * Add stability, UI, and packaging improvements.
 
- -- MAMEUIx Team <mameuix@example.com>  $(date -R) 
+ -- edo hikmahtiar <edohikmahtiar@me.com>  Sun, 05 Jul 2026 10:59:14 +0700

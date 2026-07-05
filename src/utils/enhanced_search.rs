@@ -2,39 +2,40 @@
 // Enhanced search engine with fuzzy matching, full-text indexing, and regex caching
 
 use crate::models::{Game, SearchMode};
+use anyhow::Result;
 use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
-use tantivy::schema::*;
-use tantivy::{doc, collector::TopDocs, query::QueryParser, Index, IndexWriter, TantivyDocument};
+use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use lazy_static::lazy_static;
-use anyhow::Result;
+use tantivy::schema::*;
+use tantivy::{Index, IndexWriter, TantivyDocument, collector::TopDocs, doc, query::QueryParser};
 
 // Global regex cache for performance
 lazy_static! {
-    static ref REGEX_CACHE: Arc<Mutex<HashMap<String, Regex>>> = Arc::new(Mutex::new(HashMap::new()));
+    static ref REGEX_CACHE: Arc<Mutex<HashMap<String, Regex>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 }
 
 /// Configuration for search performance
 #[derive(Clone, Debug)]
 pub struct SearchConfig {
-    pub fuzzy_threshold: i64,           // Minimum fuzzy match score (0-100)
-    pub max_fuzzy_results: usize,       // Maximum results for fuzzy search
-    pub enable_fuzzy: bool,             // Enable/disable fuzzy search
-    pub enable_fulltext: bool,          // Enable/disable full-text search
-    pub enable_regex: bool,             // Enable/disable regex search
-    pub fulltext_limit: usize,          // Maximum full-text search results
+    pub fuzzy_threshold: i64,     // Minimum fuzzy match score (0-100)
+    pub max_fuzzy_results: usize, // Maximum results for fuzzy search
+    pub enable_fuzzy: bool,       // Enable/disable fuzzy search
+    pub enable_fulltext: bool,    // Enable/disable full-text search
+    pub enable_regex: bool,       // Enable/disable regex search
+    pub fulltext_limit: usize,    // Maximum full-text search results
 }
 
 impl Default for SearchConfig {
     fn default() -> Self {
         Self {
-            fuzzy_threshold: 30,        // 30% minimum match
+            fuzzy_threshold: 30, // 30% minimum match
             max_fuzzy_results: 100,
             enable_fuzzy: true,
             enable_fulltext: true,
-            enable_regex: false,        // Disabled by default for security
+            enable_regex: false, // Disabled by default for security
             fulltext_limit: 500,
         }
     }
@@ -44,15 +45,15 @@ impl Default for SearchConfig {
 pub struct EnhancedSearchEngine {
     // Fuzzy matching
     fuzzy_matcher: SkimMatcherV2,
-    
+
     // Full-text search
     fulltext_index: Option<Index>,
     fulltext_schema: Option<Schema>,
     query_parser: Option<QueryParser>,
-    
+
     // Search configuration
     config: SearchConfig,
-    
+
     // Performance metrics
     last_search_time: std::time::Instant,
     search_count: usize,
@@ -78,7 +79,10 @@ impl EnhancedSearchEngine {
             return Ok(());
         }
 
-        println!("Initializing full-text search index for {} games...", games.len());
+        println!(
+            "Initializing full-text search index for {} games...",
+            games.len()
+        );
         let start = std::time::Instant::now();
 
         // Create schema
@@ -92,20 +96,30 @@ impl EnhancedSearchEngine {
         let rom_name = schema_builder.add_text_field("rom_name", TEXT);
         let controls = schema_builder.add_text_field("controls", TEXT);
         let driver = schema_builder.add_text_field("driver", TEXT);
-        
+
         let schema = schema_builder.build();
 
         // Create in-memory index for speed
         let index = Index::create_in_ram(schema.clone());
-        
+
         // Create query parser for multiple fields
-        let query_parser = QueryParser::for_index(&index, vec![
-            title, description, manufacturer, year, category, rom_name, controls, driver
-        ]);
+        let query_parser = QueryParser::for_index(
+            &index,
+            vec![
+                title,
+                description,
+                manufacturer,
+                year,
+                category,
+                rom_name,
+                controls,
+                driver,
+            ],
+        );
 
         // Index all games
         let mut index_writer: IndexWriter = index.writer(50_000_000)?; // 50MB heap
-        
+
         for (idx, game) in games.iter().enumerate() {
             let doc = doc!(
                 game_id => idx as u64,
@@ -122,7 +136,7 @@ impl EnhancedSearchEngine {
         }
 
         index_writer.commit()?;
-        
+
         // Store everything
         self.fulltext_index = Some(index);
         self.fulltext_schema = Some(schema);
@@ -130,18 +144,23 @@ impl EnhancedSearchEngine {
 
         let elapsed = start.elapsed();
         println!("Full-text index built in {:.2}s", elapsed.as_secs_f32());
-        
+
         Ok(())
     }
 
     /// Perform fuzzy search
-    pub fn fuzzy_search(&self, games: &[Game], query: &str, search_mode: &SearchMode) -> Vec<(usize, i64)> {
+    pub fn fuzzy_search(
+        &self,
+        games: &[Game],
+        query: &str,
+        search_mode: &SearchMode,
+    ) -> Vec<(usize, i64)> {
         if !self.config.enable_fuzzy || query.is_empty() {
             return Vec::new();
         }
 
         let mut results = Vec::new();
-        
+
         for (idx, game) in games.iter().enumerate() {
             let search_text = match search_mode {
                 SearchMode::GameTitle => &game.description,
@@ -153,22 +172,24 @@ impl EnhancedSearchEngine {
                 SearchMode::Device => &game.controls,
                 SearchMode::Sound => &game.category,
                 // Enhanced search modes should use enhanced_search() instead
-                SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => &game.description,
+                SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                    &game.description
+                }
             };
 
-            if let Some(score) = self.fuzzy_matcher.fuzzy_match(search_text, query) {
-                if score >= self.config.fuzzy_threshold {
-                    results.push((idx, score));
-                }
+            if let Some(score) = self.fuzzy_matcher.fuzzy_match(search_text, query)
+                && score >= self.config.fuzzy_threshold
+            {
+                results.push((idx, score));
             }
         }
 
         // Sort by score (highest first)
-        results.sort_by(|a, b| b.1.cmp(&a.1));
-        
+        results.sort_by_key(|b| std::cmp::Reverse(b.1));
+
         // Limit results
         results.truncate(self.config.max_fuzzy_results);
-        
+
         results
     }
 
@@ -194,22 +215,21 @@ impl EnhancedSearchEngine {
         };
 
         let game_id_field = schema.get_field("game_id").unwrap();
-        
+
         // Parse query and search
         let query = query_parser.parse_query(query)?;
         let reader = index.reader()?;
-        
+
         let searcher = reader.searcher();
         let top_docs = searcher.search(&query, &TopDocs::with_limit(self.config.fulltext_limit))?;
 
         let mut results = Vec::new();
         for (_score, doc_address) in top_docs {
-            if let Ok(retrieved_doc) = searcher.doc::<TantivyDocument>(doc_address) {
-                if let Some(game_id_value) = retrieved_doc.get_first(game_id_field) {
-                    if let Some(game_id) = game_id_value.as_u64() {
-                        results.push(game_id as usize);
-                    }
-                }
+            if let Ok(retrieved_doc) = searcher.doc::<TantivyDocument>(doc_address)
+                && let Some(game_id_value) = retrieved_doc.get_first(game_id_field)
+                && let Some(game_id) = game_id_value.as_u64()
+            {
+                results.push(game_id as usize);
             }
         }
 
@@ -217,7 +237,12 @@ impl EnhancedSearchEngine {
     }
 
     /// Perform regex search with caching
-    pub fn regex_search(&self, games: &[Game], pattern: &str, search_mode: &SearchMode) -> Result<Vec<usize>> {
+    pub fn regex_search(
+        &self,
+        games: &[Game],
+        pattern: &str,
+        search_mode: &SearchMode,
+    ) -> Result<Vec<usize>> {
         if !self.config.enable_regex || pattern.is_empty() {
             return Ok(Vec::new());
         }
@@ -235,7 +260,7 @@ impl EnhancedSearchEngine {
         };
 
         let mut results = Vec::new();
-        
+
         for (idx, game) in games.iter().enumerate() {
             let search_text = match search_mode {
                 SearchMode::GameTitle => &game.description,
@@ -247,7 +272,9 @@ impl EnhancedSearchEngine {
                 SearchMode::Device => &game.controls,
                 SearchMode::Sound => &game.category,
                 // Enhanced search modes should use enhanced_search() instead
-                SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => &game.description,
+                SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                    &game.description
+                }
             };
 
             if regex.is_match(search_text) {
@@ -259,7 +286,12 @@ impl EnhancedSearchEngine {
     }
 
     /// Combined search using multiple strategies
-    pub fn enhanced_search(&mut self, games: &[Game], query: &str, search_mode: &SearchMode) -> Result<Vec<usize>> {
+    pub fn enhanced_search(
+        &mut self,
+        games: &[Game],
+        query: &str,
+        search_mode: &SearchMode,
+    ) -> Result<Vec<usize>> {
         self.search_count += 1;
         self.last_search_time = std::time::Instant::now();
 
@@ -278,28 +310,29 @@ impl EnhancedSearchEngine {
             }
         }
 
-        // 2. Full-text search 
-        if self.config.enable_fulltext {
-            if let Ok(fulltext_results) = self.fulltext_search(query) {
-                for idx in fulltext_results {
-                    let current_score = result_scores.get(&idx).unwrap_or(&0.0);
-                    result_scores.insert(idx, current_score + 0.6); // 60% weight for full-text
-                    if !all_results.contains(&idx) {
-                        all_results.push(idx);
-                    }
+        // 2. Full-text search
+        if self.config.enable_fulltext
+            && let Ok(fulltext_results) = self.fulltext_search(query)
+        {
+            for idx in fulltext_results {
+                let current_score = result_scores.get(&idx).unwrap_or(&0.0);
+                result_scores.insert(idx, current_score + 0.6); // 60% weight for full-text
+                if !all_results.contains(&idx) {
+                    all_results.push(idx);
                 }
             }
         }
 
         // 3. Regex search (if enabled)
-        if self.config.enable_regex && (query.contains(".*") || query.contains("^") || query.contains("$")) {
-            if let Ok(regex_results) = self.regex_search(games, query, search_mode) {
-                for idx in regex_results {
-                    let current_score = result_scores.get(&idx).unwrap_or(&0.0);
-                    result_scores.insert(idx, current_score + 0.8); // High weight for regex matches
-                    if !all_results.contains(&idx) {
-                        all_results.push(idx);
-                    }
+        if self.config.enable_regex
+            && (query.contains(".*") || query.contains("^") || query.contains("$"))
+            && let Ok(regex_results) = self.regex_search(games, query, search_mode)
+        {
+            for idx in regex_results {
+                let current_score = result_scores.get(&idx).unwrap_or(&0.0);
+                result_scores.insert(idx, current_score + 0.8); // High weight for regex matches
+                if !all_results.contains(&idx) {
+                    all_results.push(idx);
                 }
             }
         }
@@ -308,7 +341,9 @@ impl EnhancedSearchEngine {
         all_results.sort_by(|a, b| {
             let score_a = result_scores.get(a).unwrap_or(&0.0);
             let score_b = result_scores.get(b).unwrap_or(&0.0);
-            score_b.partial_cmp(score_a).unwrap_or(std::cmp::Ordering::Equal)
+            score_b
+                .partial_cmp(score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         Ok(all_results)
@@ -350,4 +385,4 @@ pub struct SearchStats {
     pub fuzzy_enabled: bool,
     pub regex_enabled: bool,
     pub regex_cache_size: usize,
-} 
+}

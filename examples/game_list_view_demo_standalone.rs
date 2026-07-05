@@ -2,7 +2,9 @@
 // Standalone demo untuk GameListView - tidak memerlukan import dari crate utama
 
 use eframe::egui;
-use egui::{Color32, FontId, RichText, Vec2, Pos2, Rect, Response, Sense, Ui, FontFamily, TextStyle};
+use egui::{
+    Color32, FontFamily, FontId, Pos2, Rect, Response, RichText, Sense, TextStyle, Ui, Vec2,
+};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -33,12 +35,18 @@ impl GameIndex {
 
     fn add_game(&mut self, game: &Game, idx: usize) {
         if let Some(parent) = &game.parent {
-            self.parent_to_clones.entry(parent.clone()).or_insert_with(Vec::new).push(idx);
+            self.parent_to_clones
+                .entry(parent.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
         }
     }
 
     fn get_clones(&self, parent: &str) -> Vec<usize> {
-        self.parent_to_clones.get(parent).cloned().unwrap_or_default()
+        self.parent_to_clones
+            .get(parent)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -133,7 +141,7 @@ impl GameListView {
             ui.add(
                 egui::TextEdit::singleline(&mut self.state.search_query)
                     .desired_width(ui.available_width() - 40.0)
-                    .hint_text("Search games...")
+                    .hint_text("Search games..."),
             );
         });
 
@@ -144,11 +152,13 @@ impl GameListView {
         ui.label(
             RichText::new(format!("Showing {} games", self.filtered_indices.len()))
                 .size(12.0)
-                .color(Color32::from_rgb(136, 136, 136))
+                .color(Color32::from_rgb(136, 136, 136)),
         );
 
         // Clean up animations
-        self.state.expansion_animations.retain(|_, anim| !anim.is_finished());
+        self.state
+            .expansion_animations
+            .retain(|_, anim| !anim.is_finished());
         if !self.state.expansion_animations.is_empty() {
             ui.ctx().request_repaint();
         }
@@ -225,32 +235,30 @@ impl GameListView {
                     Color32::from_rgb(74, 158, 255)
                 } else {
                     Color32::from_rgb(51, 51, 51)
-                }
+                },
             ))
             .rounding(8.0);
 
         frame.show(ui, |ui| {
             // Header
-            let header_response = ui.allocate_response(
-                Vec2::new(ui.available_width(), item_height),
-                Sense::click()
-            );
+            let header_response =
+                ui.allocate_response(Vec2::new(ui.available_width(), item_height), Sense::click());
 
             if header_response.clicked() {
                 if clone_count > 0 && !game.is_clone {
                     let current = expanded_parents.get(&game.name).copied().unwrap_or(false);
                     expanded_parents.insert(game.name.clone(), !current);
-                    
+
                     let target_height = (clone_count as f32 * 56.0) + 8.0;
                     if !current {
                         self.state.expansion_animations.insert(
                             game.name.clone(),
-                            AnimationState::new(0.2, 0.0, target_height)
+                            AnimationState::new(0.2, 0.0, target_height),
                         );
                     } else {
                         self.state.expansion_animations.insert(
                             game.name.clone(),
-                            AnimationState::new(0.2, target_height, 0.0)
+                            AnimationState::new(0.2, target_height, 0.0),
                         );
                     }
                 } else {
@@ -275,20 +283,25 @@ impl GameListView {
                     // Expand arrow
                     if clone_count > 0 && !game.is_clone {
                         let arrow = if is_expanded { "▼" } else { "▶" };
-                        ui.label(RichText::new(arrow).size(12.0).color(Color32::from_rgb(102, 102, 102)));
+                        ui.label(
+                            RichText::new(arrow)
+                                .size(12.0)
+                                .color(Color32::from_rgb(102, 102, 102)),
+                        );
                     } else {
                         ui.add_space(20.0);
                     }
 
                     // Game icon placeholder
                     let preview_rect = ui.allocate_space(Vec2::new(64.0, 48.0)).1;
-                    ui.painter().rect_filled(preview_rect, 4.0, Color32::from_rgb(34, 34, 34));
+                    ui.painter()
+                        .rect_filled(preview_rect, 4.0, Color32::from_rgb(34, 34, 34));
                     ui.painter().text(
                         preview_rect.center(),
                         egui::Align2::CENTER_CENTER,
                         "🎮",
                         FontId::proportional(24.0),
-                        Color32::WHITE
+                        Color32::WHITE,
                     );
 
                     ui.add_space(16.0);
@@ -301,9 +314,9 @@ impl GameListView {
                                 RichText::new(&game.description)
                                     .size(16.0)
                                     .color(Color32::from_rgb(224, 224, 224))
-                                    .strong()
+                                    .strong(),
                             );
-                            
+
                             if clone_count > 0 && !game.is_clone {
                                 ui.add_space(8.0);
                                 egui::Frame::new()
@@ -315,16 +328,19 @@ impl GameListView {
                                             RichText::new("PARENT")
                                                 .size(10.0)
                                                 .color(Color32::from_rgb(255, 255, 255))
-                                                .strong()
+                                                .strong(),
                                         );
                                     });
                             }
                         });
-                        
+
                         ui.label(
-                            RichText::new(format!("{} • {} • {}", game.manufacturer, game.year, game.category))
-                                .size(13.0)
-                                .color(Color32::from_rgb(136, 136, 136))
+                            RichText::new(format!(
+                                "{} • {} • {}",
+                                game.manufacturer, game.year, game.category
+                            ))
+                            .size(13.0)
+                            .color(Color32::from_rgb(136, 136, 136)),
                         );
                     });
 
@@ -345,7 +361,7 @@ impl GameListView {
                                         RichText::new(format!("{} versions", clone_count))
                                             .size(12.0)
                                             .color(Color32::from_rgb(255, 255, 255))
-                                            .strong()
+                                            .strong(),
                                     );
                                 });
                             ui.add_space(8.0);
@@ -353,9 +369,21 @@ impl GameListView {
 
                         // Status badge
                         let (text, bg_color, text_color) = match game.driver_status.as_str() {
-                            "good" => ("WORKING", Color32::from_rgba_premultiplied(39, 201, 63, 51), Color32::from_rgb(255, 255, 255)),
-                            "imperfect" => ("ISSUES", Color32::from_rgba_premultiplied(255, 189, 46, 51), Color32::from_rgb(255, 255, 255)),
-                            _ => ("NOT WORKING", Color32::from_rgba_premultiplied(255, 95, 86, 51), Color32::from_rgb(255, 255, 255)),
+                            "good" => (
+                                "WORKING",
+                                Color32::from_rgba_premultiplied(39, 201, 63, 51),
+                                Color32::from_rgb(255, 255, 255),
+                            ),
+                            "imperfect" => (
+                                "ISSUES",
+                                Color32::from_rgba_premultiplied(255, 189, 46, 51),
+                                Color32::from_rgb(255, 255, 255),
+                            ),
+                            _ => (
+                                "NOT WORKING",
+                                Color32::from_rgba_premultiplied(255, 95, 86, 51),
+                                Color32::from_rgb(255, 255, 255),
+                            ),
                         };
 
                         egui::Frame::new()
@@ -375,12 +403,15 @@ impl GameListView {
                         } else {
                             Color32::from_rgb(100, 100, 110)
                         };
-                        
-                        if ui.add(
-                            egui::Button::new(RichText::new(star).color(star_color).size(18.0))
-                                .fill(Color32::TRANSPARENT)
-                                .stroke(egui::Stroke::NONE)
-                        ).clicked() {
+
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new(star).color(star_color).size(18.0))
+                                    .fill(Color32::TRANSPARENT)
+                                    .stroke(egui::Stroke::NONE),
+                            )
+                            .clicked()
+                        {
                             favorite_toggled = Some(game.name.clone());
                         }
                     });
@@ -421,13 +452,14 @@ impl GameListView {
 
                 // Clone icon
                 let icon_rect = ui.allocate_space(Vec2::new(32.0, 32.0)).1;
-                ui.painter().rect_filled(icon_rect, 4.0, Color32::from_rgb(34, 34, 34));
+                ui.painter()
+                    .rect_filled(icon_rect, 4.0, Color32::from_rgb(34, 34, 34));
                 ui.painter().text(
                     icon_rect.center(),
                     egui::Align2::CENTER_CENTER,
                     "🎯",
                     FontId::proportional(18.0),
-                    Color32::WHITE
+                    Color32::WHITE,
                 );
 
                 ui.add_space(12.0);
@@ -437,12 +469,12 @@ impl GameListView {
                     ui.label(
                         RichText::new(&clone.description)
                             .size(14.0)
-                            .color(Color32::from_rgb(224, 224, 224))
+                            .color(Color32::from_rgb(224, 224, 224)),
                     );
                     ui.label(
                         RichText::new(format!("Clone • {} • {}", clone.year, clone.name))
                             .size(12.0)
-                            .color(Color32::from_rgb(102, 102, 102))
+                            .color(Color32::from_rgb(102, 102, 102)),
                     );
                 });
 
@@ -453,17 +485,18 @@ impl GameListView {
 
     fn update_filtered_indices(&mut self, games: &[Game], query: &str) {
         self.filtered_indices.clear();
-        
+
         if query.is_empty() {
             self.filtered_indices = (0..games.len()).collect();
         } else {
             let query_lower = query.to_lowercase();
-            self.filtered_indices = games.iter()
+            self.filtered_indices = games
+                .iter()
                 .enumerate()
                 .filter(|(_, game)| {
-                    game.description.to_lowercase().contains(&query_lower) ||
-                    game.manufacturer.to_lowercase().contains(&query_lower) ||
-                    game.name.to_lowercase().contains(&query_lower)
+                    game.description.to_lowercase().contains(&query_lower)
+                        || game.manufacturer.to_lowercase().contains(&query_lower)
+                        || game.name.to_lowercase().contains(&query_lower)
                 })
                 .map(|(idx, _)| idx)
                 .collect();
@@ -560,39 +593,37 @@ impl eframe::App for GameListViewDemo {
                         ui.heading(
                             RichText::new("KMameUI - List View Demo")
                                 .size(24.0)
-                                .color(Color32::from_rgb(224, 224, 224))
+                                .color(Color32::from_rgb(224, 224, 224)),
                         );
                     });
-                
+
                 // Main content
-                egui::Frame::new()
-                    .inner_margin(20.0)
-                    .show(ui, |ui| {
-                        let (double_clicked, favorite_toggled) = self.list_view.show(
-                            ui,
-                            &self.games,
-                            &mut self.selected,
-                            &mut self.expanded_parents,
-                            &self.favorites,
-                            &self.game_index,
-                        );
+                egui::Frame::new().inner_margin(20.0).show(ui, |ui| {
+                    let (double_clicked, favorite_toggled) = self.list_view.show(
+                        ui,
+                        &self.games,
+                        &mut self.selected,
+                        &mut self.expanded_parents,
+                        &self.favorites,
+                        &self.game_index,
+                    );
 
-                        if double_clicked {
-                            if let Some(idx) = self.selected {
-                                if let Some(game) = self.games.get(idx) {
-                                    println!("Launching: {}", game.description);
-                                }
+                    if double_clicked {
+                        if let Some(idx) = self.selected {
+                            if let Some(game) = self.games.get(idx) {
+                                println!("Launching: {}", game.description);
                             }
                         }
+                    }
 
-                        if let Some(name) = favorite_toggled {
-                            if self.favorites.contains(&name) {
-                                self.favorites.remove(&name);
-                            } else {
-                                self.favorites.insert(name);
-                            }
+                    if let Some(name) = favorite_toggled {
+                        if self.favorites.contains(&name) {
+                            self.favorites.remove(&name);
+                        } else {
+                            self.favorites.insert(name);
                         }
-                    });
+                    }
+                });
             });
     }
 }

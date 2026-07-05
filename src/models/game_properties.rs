@@ -1,5 +1,4 @@
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameProperties {
@@ -9,8 +8,8 @@ pub struct GameProperties {
     pub screen: ScreenProperties,
     pub sound: SoundProperties,
     pub miscellaneous: MiscProperties,
-    pub sdl_options: SDLDriverOptions,  // New field for SDL options
-    pub osd_options: OSDOptions,        // New field for OSD options
+    pub sdl_options: SDLDriverOptions, // New field for SDL options
+    pub osd_options: OSDOptions,       // New field for OSD options
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,8 +37,8 @@ pub struct DisplayProperties {
     pub horizontal_scale_factor: u8,
     pub vertical_scale_factor: u8,
     // Auto rotation options
-    pub auto_rotate_right: bool,  // -autoror
-    pub auto_rotate_left: bool,   // -autorol
+    pub auto_rotate_right: bool, // -autoror
+    pub auto_rotate_left: bool,  // -autorol
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -93,24 +92,24 @@ pub struct AdvancedProperties {
     pub dont_use_gl_arb_texture_rectangle: bool,
     pub enable_vbo: bool,
     pub enable_pbo: bool,
-    
+
     // GLSL Shader paths (10 slots each for mame and screen)
     // Use Vec<String> instead of Vec<Option<String>> to avoid TOML serialization issues
     // Empty strings represent None values
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub glsl_shader_mame: Vec<String>,  // 0-9, empty string = None
+    pub glsl_shader_mame: Vec<String>, // 0-9, empty string = None
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub glsl_shader_screen: Vec<String>, // 0-9, empty string = None
-    
+
     // BGFX settings
     pub bgfx_settings: BGFXSettings,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum GLSLFilter {
-    Plain,      // 0
-    Bilinear,   // 1 (default)
-    Bicubic,    // 2
+    Plain,    // 0
+    Bilinear, // 1 (default)
+    Bicubic,  // 2
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,13 +151,9 @@ impl BGFXBackend {
     pub fn available_backends() -> Vec<BGFXBackend> {
         #[cfg(target_os = "linux")]
         {
-            vec![
-                BGFXBackend::Auto,
-                BGFXBackend::OpenGL,
-                BGFXBackend::Vulkan,
-            ]
+            vec![BGFXBackend::Auto, BGFXBackend::OpenGL, BGFXBackend::Vulkan]
         }
-        
+
         #[cfg(target_os = "windows")]
         {
             vec![
@@ -170,25 +165,18 @@ impl BGFXBackend {
                 BGFXBackend::Vulkan,
             ]
         }
-        
+
         #[cfg(target_os = "macos")]
         {
-            vec![
-                BGFXBackend::Auto,
-                BGFXBackend::Metal,
-                BGFXBackend::OpenGL,
-            ]
+            vec![BGFXBackend::Auto, BGFXBackend::Metal, BGFXBackend::OpenGL]
         }
-        
+
         #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
         {
-            vec![
-                BGFXBackend::Auto,
-                BGFXBackend::OpenGL,
-            ]
+            vec![BGFXBackend::Auto, BGFXBackend::OpenGL]
         }
     }
-    
+
     /// Check if this backend is available on current platform
     pub fn is_available(&self) -> bool {
         Self::available_backends().contains(self)
@@ -210,9 +198,9 @@ pub struct ScreenProperties {
     pub full_screen_contrast: f32,
     pub seconds_to_run: u32,
     // Core Performance Options
-    pub auto_frameskip: bool,      // -autoframeskip
-    pub frameskip_value: u8,       // -frameskip (0-10)
-    pub sleep_when_idle: bool,     // -sleep
+    pub auto_frameskip: bool,  // -autoframeskip
+    pub frameskip_value: u8,   // -frameskip (0-10)
+    pub sleep_when_idle: bool, // -sleep
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -262,38 +250,38 @@ pub struct MiscProperties {
     pub switch_resolutions_to_fit: bool,
     pub custom_args: String,
     // Performance options
-    pub num_processors: Option<u32>,  // None means use system default, Some(n) means override
+    pub num_processors: Option<u32>, // None means use system default, Some(n) means override
     // Core Configuration options
-    pub write_config: bool,           // -writeconfig
-    pub auto_save: bool,              // -autosave
-    pub rewind: bool,                 // -rewind
-    pub exit_after: bool,             // -exit_after
-    pub bilinear: bool,               // -bilinear
-    pub burnin: bool,                 // -burnin
-    pub crop: bool,                   // -crop
+    pub write_config: bool, // -writeconfig
+    pub auto_save: bool,    // -autosave
+    pub rewind: bool,       // -rewind
+    pub exit_after: bool,   // -exit_after
+    pub bilinear: bool,     // -bilinear
+    pub burnin: bool,       // -burnin
+    pub crop: bool,         // -crop
     // Core Input options
-    pub multi_keyboard: bool,         // -multikeyboard
-    pub multi_mouse: bool,            // -multimouse
-    pub steady_key: bool,             // -steadykey
-    pub ui_active: bool,              // -ui_active
-    pub offscreen_reload: bool,       // -offscreen_reload
-    pub contradictory: bool,           // -contradictory
-    pub natural: bool,                // -natural
+    pub multi_keyboard: bool,   // -multikeyboard
+    pub multi_mouse: bool,      // -multimouse
+    pub steady_key: bool,       // -steadykey
+    pub ui_active: bool,        // -ui_active
+    pub offscreen_reload: bool, // -offscreen_reload
+    pub contradictory: bool,    // -contradictory
+    pub natural: bool,          // -natural
     // Core Debug options
-    pub verbose: bool,                 // -verbose
-    pub log: bool,                     // -log
-    pub oslog: bool,                   // -oslog
-    pub debug: bool,                   // -debug
-    pub update_pause: bool,            // -update_pause
-    pub debuglog: bool,                // -debuglog
-    pub drc_c: bool,                   // -drc_c
-    pub log_uml: bool,                 // -log_uml
-    pub log_native: bool,              // -log_native
-    pub cheat: bool,                   // -cheat
-    pub skip: bool,                    // -skip
-    pub confirm: bool,                 // -confirm
-    pub console: bool,                 // -console
-    pub switchres: bool,               // -switchres
+    pub verbose: bool,      // -verbose
+    pub log: bool,          // -log
+    pub oslog: bool,        // -oslog
+    pub debug: bool,        // -debug
+    pub update_pause: bool, // -update_pause
+    pub debuglog: bool,     // -debuglog
+    pub drc_c: bool,        // -drc_c
+    pub log_uml: bool,      // -log_uml
+    pub log_native: bool,   // -log_native
+    pub cheat: bool,        // -cheat
+    pub skip: bool,         // -skip
+    pub confirm: bool,      // -confirm
+    pub console: bool,      // -console
+    pub switchres: bool,    // -switchres
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -316,32 +304,32 @@ pub enum ViewSelection {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SDLDriverOptions {
-    pub video_driver: Option<String>,      // x11, wayland, directfb, auto
-    pub render_driver: Option<String>,     // software, opengl, opengles2, auto
-    pub audio_driver: Option<String>,      // alsa, pulse, jack, auto
-    pub gl_lib: Option<String>,           // path to alternative libGL.so
-    
+    pub video_driver: Option<String>,  // x11, wayland, directfb, auto
+    pub render_driver: Option<String>, // software, opengl, opengles2, auto
+    pub audio_driver: Option<String>,  // alsa, pulse, jack, auto
+    pub gl_lib: Option<String>,        // path to alternative libGL.so
+
     // SDL Performance Options
     pub show_video_fps: bool,
-    
+
     // SDL Video Options
     pub center_horizontal: bool,
     pub center_vertical: bool,
     pub scale_mode: SDLScaleMode,
-    
+
     // SDL Full Screen Options
     pub use_all_heads: bool,
     pub attach_window: Option<String>,
-    
+
     // SDL Keyboard Mapping
     pub enable_keymap: bool,
     pub keymap_file: Option<String>,
-    
+
     // SDL Input Options
     pub enable_touch: bool,
     pub sixaxis_support: bool,
     pub dual_lightgun: bool,
-    
+
     // SDL Lightgun Mapping (8 slots)
     // Use Vec<String> instead of Vec<Option<String>> to avoid TOML serialization issues
     // Empty strings represent None values
@@ -377,32 +365,32 @@ impl std::fmt::Display for SDLScaleMode {
 impl Default for SDLDriverOptions {
     fn default() -> Self {
         Self {
-            video_driver: None,    // None means don't pass the option (use SDL default)
+            video_driver: None, // None means don't pass the option (use SDL default)
             render_driver: None,
             audio_driver: None,
             gl_lib: None,
-            
+
             // SDL Performance Options
             show_video_fps: false,
-            
+
             // SDL Video Options
             center_horizontal: false,
             center_vertical: false,
             scale_mode: SDLScaleMode::None,
-            
+
             // SDL Full Screen Options
             use_all_heads: false,
             attach_window: None,
-            
+
             // SDL Keyboard Mapping
             enable_keymap: false,
             keymap_file: None,
-            
+
             // SDL Input Options
             enable_touch: false,
             sixaxis_support: false,
             dual_lightgun: false,
-            
+
             // SDL Lightgun Mapping
             lightgun_mappings: vec![String::new(); 8], // Empty strings instead of None
         }
@@ -415,7 +403,7 @@ pub struct OSDOptions {
     pub ui_mode_key: Option<String>,
     pub controller_map_file: Option<String>,
     pub background_input: bool,
-    
+
     // Providers
     pub ui_font_provider: OSDProvider,
     pub output_provider: OutputProvider,
@@ -458,7 +446,7 @@ pub enum JoystickProvider {
 impl Default for OSDOptions {
     fn default() -> Self {
         Self {
-            ui_mode_key: None,  // None means use MAME default (ScrollLock)
+            ui_mode_key: None, // None means use MAME default (ScrollLock)
             controller_map_file: None,
             background_input: false,
             ui_font_provider: OSDProvider::Auto,
@@ -524,8 +512,8 @@ impl Default for AdvancedProperties {
             glsl_filter: GLSLFilter::Bilinear,
             force_power_of_two_textures: false,
             dont_use_gl_arb_texture_rectangle: true, // default on per MAME
-            enable_vbo: true,  // default on per MAME
-            enable_pbo: true,  // default on per MAME
+            enable_vbo: true,                        // default on per MAME
+            enable_pbo: true,                        // default on per MAME
             glsl_shader_mame: vec![String::new(); 10], // Empty strings instead of None
             glsl_shader_screen: vec![String::new(); 10], // Empty strings instead of None
             bgfx_settings: BGFXSettings::default(),
@@ -600,7 +588,7 @@ impl Default for MiscProperties {
             aspect_ratio: (4, 3),
             switch_resolutions_to_fit: false,
             custom_args: String::new(),
-            num_processors: None,  // Use system default
+            num_processors: None, // Use system default
             write_config: false,
             auto_save: false,
             rewind: false,
@@ -632,4 +620,4 @@ impl Default for MiscProperties {
             switchres: false,
         }
     }
-} 
+}

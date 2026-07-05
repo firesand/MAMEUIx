@@ -3,4 +3,4 @@
 
 pub mod mame_app;
 
-pub use mame_app::MameApp; 
+pub use mame_app::MameApp;

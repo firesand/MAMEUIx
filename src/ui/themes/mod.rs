@@ -3,6 +3,3 @@
 
 pub mod theme;
 pub mod theme_demo;
-
-pub use theme::*;
-pub use theme_demo::*; 

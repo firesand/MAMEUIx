@@ -9,15 +9,15 @@ pub struct BasicEnhancedDemo {
     /// Demo data
     demo_games: Vec<DemoGame>,
     selected_game: Option<usize>,
-    
+
     /// UI state
     view_mode: ViewMode,
-    
+
     /// Enhanced features
     search_text: String,
     filter_category: String,
     sort_by: SortBy,
-    
+
     /// Performance tracking
     frame_count: u32,
     last_fps_update: std::time::Instant,
@@ -133,7 +133,7 @@ impl eframe::App for BasicEnhancedDemo {
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("🎮 Basic Enhanced UI Demo");
-                
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Performance indicator
                     if let Some(avg_fps) = self.fps_history.last() {
@@ -146,9 +146,9 @@ impl eframe::App for BasicEnhancedDemo {
                         };
                         ui.colored_label(color, format!("FPS: {:.1}", avg_fps));
                     }
-                    
+
                     ui.separator();
-                    
+
                     // View mode buttons
                     ui.selectable_value(&mut self.view_mode, ViewMode::Table, "📊 Table");
                     ui.selectable_value(&mut self.view_mode, ViewMode::Grid, "⊞ Grid");
@@ -162,10 +162,16 @@ impl eframe::App for BasicEnhancedDemo {
             ui.horizontal(|ui| {
                 ui.label(format!("Games: {}", self.demo_games.len()));
                 ui.separator();
-                ui.label(format!("Available: {}", self.demo_games.iter().filter(|g| g.available).count()));
+                ui.label(format!(
+                    "Available: {}",
+                    self.demo_games.iter().filter(|g| g.available).count()
+                ));
                 ui.separator();
-                ui.label(format!("Favorites: {}", self.demo_games.iter().filter(|g| g.favorite).count()));
-                
+                ui.label(format!(
+                    "Favorites: {}",
+                    self.demo_games.iter().filter(|g| g.favorite).count()
+                ));
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label("Basic Enhanced UI Demo • egui_extras");
                 });
@@ -179,27 +185,47 @@ impl eframe::App for BasicEnhancedDemo {
                 ui.vertical(|ui| {
                     ui.heading("Filters");
                     ui.separator();
-                    
+
                     // Search
                     ui.label("Search:");
                     ui.text_edit_singleline(&mut self.search_text);
-                    
+
                     ui.add_space(8.0);
-                    
+
                     // Category filter
                     ui.label("Category:");
                     egui::ComboBox::from_id_salt("category_filter")
                         .selected_text(&self.filter_category)
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.filter_category, "All".to_string(), "All");
-                            ui.selectable_value(&mut self.filter_category, "Fighting".to_string(), "Fighting");
-                            ui.selectable_value(&mut self.filter_category, "Platform".to_string(), "Platform");
-                            ui.selectable_value(&mut self.filter_category, "Shooter".to_string(), "Shooter");
-                            ui.selectable_value(&mut self.filter_category, "Maze".to_string(), "Maze");
+                            ui.selectable_value(
+                                &mut self.filter_category,
+                                "All".to_string(),
+                                "All",
+                            );
+                            ui.selectable_value(
+                                &mut self.filter_category,
+                                "Fighting".to_string(),
+                                "Fighting",
+                            );
+                            ui.selectable_value(
+                                &mut self.filter_category,
+                                "Platform".to_string(),
+                                "Platform",
+                            );
+                            ui.selectable_value(
+                                &mut self.filter_category,
+                                "Shooter".to_string(),
+                                "Shooter",
+                            );
+                            ui.selectable_value(
+                                &mut self.filter_category,
+                                "Maze".to_string(),
+                                "Maze",
+                            );
                         });
-                    
+
                     ui.add_space(8.0);
-                    
+
                     // Sort options
                     ui.label("Sort by:");
                     egui::ComboBox::from_id_salt("sort_by")
@@ -207,69 +233,77 @@ impl eframe::App for BasicEnhancedDemo {
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut self.sort_by, SortBy::Name, "Name");
                             ui.selectable_value(&mut self.sort_by, SortBy::Year, "Year");
-                            ui.selectable_value(&mut self.sort_by, SortBy::Manufacturer, "Manufacturer");
+                            ui.selectable_value(
+                                &mut self.sort_by,
+                                SortBy::Manufacturer,
+                                "Manufacturer",
+                            );
                             ui.selectable_value(&mut self.sort_by, SortBy::Category, "Category");
                             ui.selectable_value(&mut self.sort_by, SortBy::PlayTime, "Play Time");
                         });
-                    
+
                     ui.add_space(16.0);
-                    
+
                     // Actions
                     ui.label("Actions:");
                     if ui.button("🔄 Refresh").clicked() {
                         // Demo refresh action
                     }
-                    
+
                     if ui.button("⭐ Toggle Favorites").clicked() {
                         // Demo favorite toggle
                     }
-                    
+
                     if ui.button("📊 Statistics").clicked() {
                         // Demo statistics
                     }
                 });
-                
+
                 ui.separator();
-                
+
                 // Main content area
-                ui.vertical(|ui| {
-                    match self.view_mode {
-                        ViewMode::Table => self.show_enhanced_table(ui),
-                        ViewMode::Grid => self.show_grid_view(ui),
-                        ViewMode::List => self.show_list_view(ui),
-                    }
+                ui.vertical(|ui| match self.view_mode {
+                    ViewMode::Table => self.show_enhanced_table(ui),
+                    ViewMode::Grid => self.show_grid_view(ui),
+                    ViewMode::List => self.show_list_view(ui),
                 });
-                
+
                 ui.separator();
-                
+
                 // Right info panel
                 ui.vertical(|ui| {
                     ui.heading("Info Panel");
                     ui.separator();
-                    
+
                     if let Some(selected_idx) = self.selected_game {
                         if let Some(game) = self.demo_games.get(selected_idx) {
                             ui.label(egui::RichText::new(&game.name).heading());
                             ui.add_space(8.0);
-                            
+
                             ui.label(format!("Year: {}", game.year));
                             ui.label(format!("Manufacturer: {}", game.manufacturer));
                             ui.label(format!("Category: {}", game.category));
-                            ui.label(format!("Available: {}", if game.available { "Yes" } else { "No" }));
-                            ui.label(format!("Favorite: {}", if game.favorite { "Yes" } else { "No" }));
+                            ui.label(format!(
+                                "Available: {}",
+                                if game.available { "Yes" } else { "No" }
+                            ));
+                            ui.label(format!(
+                                "Favorite: {}",
+                                if game.favorite { "Yes" } else { "No" }
+                            ));
                             ui.label(format!("Play Time: {} minutes", game.play_time));
-                            
+
                             ui.add_space(16.0);
-                            
+
                             ui.horizontal(|ui| {
                                 if ui.button("▶ Play").clicked() {
                                     // Demo play action
                                 }
-                                
+
                                 if ui.button("⭐ Toggle Favorite").clicked() {
                                     // Demo favorite toggle
                                 }
-                                
+
                                 if ui.button("ℹ Info").clicked() {
                                     // Demo info action
                                 }
@@ -289,34 +323,37 @@ impl BasicEnhancedDemo {
     fn show_enhanced_table(&mut self, ui: &mut egui::Ui) {
         ui.heading("Enhanced Table View");
         ui.separator();
-        
+
         // Filter and sort games
         let mut filtered_games: Vec<_> = self.demo_games.iter().enumerate().collect();
-        
+
         // Apply search filter
         if !self.search_text.is_empty() {
             filtered_games.retain(|(_, game)| {
-                game.name.to_lowercase().contains(&self.search_text.to_lowercase()) ||
-                game.manufacturer.to_lowercase().contains(&self.search_text.to_lowercase())
+                game.name
+                    .to_lowercase()
+                    .contains(&self.search_text.to_lowercase())
+                    || game
+                        .manufacturer
+                        .to_lowercase()
+                        .contains(&self.search_text.to_lowercase())
             });
         }
-        
+
         // Apply category filter
         if self.filter_category != "All" {
             filtered_games.retain(|(_, game)| game.category == self.filter_category);
         }
-        
+
         // Apply sorting
-        filtered_games.sort_by(|(_, a), (_, b)| {
-            match self.sort_by {
-                SortBy::Name => a.name.cmp(&b.name),
-                SortBy::Year => a.year.cmp(&b.year),
-                SortBy::Manufacturer => a.manufacturer.cmp(&b.manufacturer),
-                SortBy::Category => a.category.cmp(&b.category),
-                SortBy::PlayTime => a.play_time.cmp(&b.play_time),
-            }
+        filtered_games.sort_by(|(_, a), (_, b)| match self.sort_by {
+            SortBy::Name => a.name.cmp(&b.name),
+            SortBy::Year => a.year.cmp(&b.year),
+            SortBy::Manufacturer => a.manufacturer.cmp(&b.manufacturer),
+            SortBy::Category => a.category.cmp(&b.category),
+            SortBy::PlayTime => a.play_time.cmp(&b.play_time),
         });
-        
+
         // Show table using egui_extras
         TableBuilder::new(ui)
             .striped(true)
@@ -328,71 +365,92 @@ impl BasicEnhancedDemo {
             .column(egui_extras::Column::auto().resizable(true))
             .column(egui_extras::Column::auto().resizable(true))
             .header(20.0, |mut header| {
-                header.col(|ui| { ui.strong("Name"); });
-                header.col(|ui| { ui.strong("Year"); });
-                header.col(|ui| { ui.strong("Manufacturer"); });
-                header.col(|ui| { ui.strong("Category"); });
-                header.col(|ui| { ui.strong("Available"); });
-                header.col(|ui| { ui.strong("Play Time"); });
+                header.col(|ui| {
+                    ui.strong("Name");
+                });
+                header.col(|ui| {
+                    ui.strong("Year");
+                });
+                header.col(|ui| {
+                    ui.strong("Manufacturer");
+                });
+                header.col(|ui| {
+                    ui.strong("Category");
+                });
+                header.col(|ui| {
+                    ui.strong("Available");
+                });
+                header.col(|ui| {
+                    ui.strong("Play Time");
+                });
             })
             .body(|mut body| {
                 for (_idx, (original_idx, game)) in filtered_games.iter().enumerate() {
                     let is_selected = self.selected_game == Some(*original_idx);
                     let mut selected = is_selected;
-                    
+
                     body.row(30.0, |mut row| {
                         row.col(|ui| {
                             ui.horizontal(|ui| {
                                 if ui.checkbox(&mut selected, "").clicked() {
-                                    self.selected_game = if selected { Some(*original_idx) } else { None };
+                                    self.selected_game =
+                                        if selected { Some(*original_idx) } else { None };
                                 }
                                 ui.label(&game.name);
                             });
                         });
-                        row.col(|ui| { ui.label(game.year.to_string()); });
-                        row.col(|ui| { ui.label(&game.manufacturer); });
-                        row.col(|ui| { ui.label(&game.category); });
-                        row.col(|ui| { 
+                        row.col(|ui| {
+                            ui.label(game.year.to_string());
+                        });
+                        row.col(|ui| {
+                            ui.label(&game.manufacturer);
+                        });
+                        row.col(|ui| {
+                            ui.label(&game.category);
+                        });
+                        row.col(|ui| {
                             if game.available {
                                 ui.label("✅");
                             } else {
                                 ui.label("❌");
                             }
                         });
-                        row.col(|ui| { ui.label(format!("{} min", game.play_time)); });
+                        row.col(|ui| {
+                            ui.label(format!("{} min", game.play_time));
+                        });
                     });
                 }
             });
     }
-    
+
     fn show_grid_view(&mut self, ui: &mut egui::Ui) {
         ui.heading("Grid View");
         ui.separator();
-        
+
         // Filter games
         let mut filtered_games: Vec<_> = self.demo_games.iter().enumerate().collect();
-        
+
         if !self.search_text.is_empty() {
             filtered_games.retain(|(_, game)| {
-                game.name.to_lowercase().contains(&self.search_text.to_lowercase())
+                game.name
+                    .to_lowercase()
+                    .contains(&self.search_text.to_lowercase())
             });
         }
-        
+
         if self.filter_category != "All" {
             filtered_games.retain(|(_, game)| game.category == self.filter_category);
         }
-        
+
         // Sort games
-        filtered_games.sort_by(|(_, a), (_, b)| {
-            match self.sort_by {
-                SortBy::Name => a.name.cmp(&b.name),
-                SortBy::Year => a.year.cmp(&b.year),
-                SortBy::Manufacturer => a.manufacturer.cmp(&b.manufacturer),
-                SortBy::Category => a.category.cmp(&b.category),
-                SortBy::PlayTime => a.play_time.cmp(&b.play_time),
-            }
+        filtered_games.sort_by(|(_, a), (_, b)| match self.sort_by {
+            SortBy::Name => a.name.cmp(&b.name),
+            SortBy::Year => a.year.cmp(&b.year),
+            SortBy::Manufacturer => a.manufacturer.cmp(&b.manufacturer),
+            SortBy::Category => a.category.cmp(&b.category),
+            SortBy::PlayTime => a.play_time.cmp(&b.play_time),
         });
-        
+
         // Show grid
         egui::Grid::new("game_grid")
             .num_columns(3)
@@ -401,97 +459,101 @@ impl BasicEnhancedDemo {
                 for (original_idx, game) in filtered_games {
                     let is_selected = self.selected_game == Some(original_idx);
                     let mut selected = is_selected;
-                    
+
                     ui.vertical(|ui| {
                         ui.horizontal(|ui| {
                             if ui.checkbox(&mut selected, "").clicked() {
-                                self.selected_game = if selected { Some(original_idx) } else { None };
+                                self.selected_game =
+                                    if selected { Some(original_idx) } else { None };
                             }
                             ui.label(egui::RichText::new(&game.name).heading());
                         });
-                        
+
                         ui.label(format!("{} • {}", game.year, game.manufacturer));
                         ui.label(&game.category);
-                        
+
                         ui.horizontal(|ui| {
                             if game.available {
                                 ui.label("✅");
                             } else {
                                 ui.label("❌");
                             }
-                            
+
                             if game.favorite {
                                 ui.label("⭐");
                             }
-                            
+
                             ui.label(format!("{} min", game.play_time));
                         });
                     });
-                    
+
                     ui.end_row();
                 }
             });
     }
-    
+
     fn show_list_view(&mut self, ui: &mut egui::Ui) {
         ui.heading("List View");
         ui.separator();
-        
+
         // Filter games
         let mut filtered_games: Vec<_> = self.demo_games.iter().enumerate().collect();
-        
+
         if !self.search_text.is_empty() {
             filtered_games.retain(|(_, game)| {
-                game.name.to_lowercase().contains(&self.search_text.to_lowercase())
+                game.name
+                    .to_lowercase()
+                    .contains(&self.search_text.to_lowercase())
             });
         }
-        
+
         if self.filter_category != "All" {
             filtered_games.retain(|(_, game)| game.category == self.filter_category);
         }
-        
+
         // Sort games
-        filtered_games.sort_by(|(_, a), (_, b)| {
-            match self.sort_by {
-                SortBy::Name => a.name.cmp(&b.name),
-                SortBy::Year => a.year.cmp(&b.year),
-                SortBy::Manufacturer => a.manufacturer.cmp(&b.manufacturer),
-                SortBy::Category => a.category.cmp(&b.category),
-                SortBy::PlayTime => a.play_time.cmp(&b.play_time),
-            }
+        filtered_games.sort_by(|(_, a), (_, b)| match self.sort_by {
+            SortBy::Name => a.name.cmp(&b.name),
+            SortBy::Year => a.year.cmp(&b.year),
+            SortBy::Manufacturer => a.manufacturer.cmp(&b.manufacturer),
+            SortBy::Category => a.category.cmp(&b.category),
+            SortBy::PlayTime => a.play_time.cmp(&b.play_time),
         });
-        
+
         // Show list
         egui::ScrollArea::vertical().show(ui, |ui| {
             for (original_idx, game) in filtered_games {
                 let is_selected = self.selected_game == Some(original_idx);
                 let mut selected = is_selected;
-                
+
                 ui.horizontal(|ui| {
                     if ui.checkbox(&mut selected, "").clicked() {
                         self.selected_game = if selected { Some(original_idx) } else { None };
                     }
-                    
+
                     ui.vertical(|ui| {
                         ui.label(egui::RichText::new(&game.name).heading());
-                        ui.label(format!("{} • {} • {}", game.year, game.manufacturer, game.category));
+                        ui.label(format!(
+                            "{} • {} • {}",
+                            game.year, game.manufacturer, game.category
+                        ));
                     });
-                    
+
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if game.available {
                             ui.label("✅");
                         } else {
                             ui.label("❌");
                         }
-                        
+
                         if game.favorite {
                             ui.label("⭐");
                         }
-                        
+
                         ui.label(format!("{} min", game.play_time));
                     });
                 });
-                
+
                 if original_idx < self.demo_games.len() - 1 {
                     ui.separator();
                 }
@@ -506,4 +568,4 @@ fn main() -> Result<(), eframe::Error> {
         eframe::NativeOptions::default(),
         Box::new(|_cc| Ok(Box::new(BasicEnhancedDemo::default()))),
     )
-} 
+}

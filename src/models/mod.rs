@@ -2,15 +2,15 @@
 // File ini mendefinisikan semua model data yang digunakan aplikasi
 // Termasuk struktur baru untuk optimasi performance
 
-pub mod game;
 pub mod config;
 pub mod filters;
+pub mod game;
 pub mod game_properties;
 
 // Re-export everything from submodules
-pub use game::*;
 pub use config::*;
 pub use filters::*;
+pub use game::*;
 pub use game_properties::*;
 
 use serde::{Deserialize, Serialize};
@@ -79,29 +79,29 @@ impl GameIndex {
             if matches!(game.status, RomStatus::Available) {
                 self.available_games.push(i);
             }
-            
+
             // Missing games
             if matches!(game.status, RomStatus::Missing) {
                 self.missing_games.push(i);
             }
-            
+
             // Favorite games
             if self.favorites.contains(&game.name) {
                 self.favorite_games.push(i);
             }
-            
+
             // Parent games (non-clones)
             if !game.is_clone {
                 self.parent_games.push(i);
             } else {
                 self.clone_games.push(i);
             }
-            
+
             // Working games
             if game.driver_status == "good" {
                 self.working_games.push(i);
             }
-            
+
             // CHD games
             if game.requires_chd {
                 self.chd_games.push(i);
@@ -110,14 +110,17 @@ impl GameIndex {
     }
 
     pub fn has_clones(&self, game_name: &str) -> bool {
-        self.games.iter().any(|g| g.parent.as_ref().map(|p| p.as_str()) == Some(game_name))
+        self.games
+            .iter()
+            .any(|g| g.parent.as_deref() == Some(game_name))
     }
 
     pub fn get_clones(&self, game_name: &str) -> Vec<usize> {
-        self.games.iter()
+        self.games
+            .iter()
             .enumerate()
             .filter_map(|(i, g)| {
-                if g.parent.as_ref().map(|p| p.as_str()) == Some(game_name) {
+                if g.parent.as_deref() == Some(game_name) {
                     Some(i)
                 } else {
                     None
@@ -177,8 +180,9 @@ pub trait CategoryLoader: Send + Sync {
 }
 
 // FilterCategory enum - kategori filter untuk game list
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum FilterCategory {
+    #[default]
     All,
     Available,
     Missing,
@@ -189,7 +193,7 @@ pub enum FilterCategory {
     Working,
     NotWorking,
     Parents,
-    ChdGames, // New filter for CHD games
+    ChdGames,  // New filter for CHD games
     NonMerged, // Special filter for non-merged sets (parents only)
 }
 
@@ -203,15 +207,15 @@ pub enum FilterCategoryGroup {
 }
 
 impl FilterCategoryGroup {
-    pub fn to_filter_category(&self) -> FilterCategory {
+    pub fn to_filter_category(self) -> FilterCategory {
         match self {
             FilterCategoryGroup::All => FilterCategory::All,
-            FilterCategoryGroup::Availability(cat) => *cat,
-            FilterCategoryGroup::Status(cat) => *cat,
-            FilterCategoryGroup::Others(cat) => *cat,
+            FilterCategoryGroup::Availability(cat) => cat,
+            FilterCategoryGroup::Status(cat) => cat,
+            FilterCategoryGroup::Others(cat) => cat,
         }
     }
-    
+
     pub fn display_name(&self) -> &'static str {
         match self {
             FilterCategoryGroup::All => "All Games",
@@ -225,7 +229,7 @@ impl FilterCategoryGroup {
             _ => "Unknown",
         }
     }
-    
+
     pub fn group_name(&self) -> &'static str {
         match self {
             FilterCategoryGroup::All => "All",
@@ -236,24 +240,13 @@ impl FilterCategoryGroup {
     }
 }
 
-impl Default for FilterCategory {
-    fn default() -> Self {
-        FilterCategory::All
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum RomSetType {
-    NonMerged,  // Each game is independent with all required files
-    Split,      // Parent contains normal data, clones contain only changes
-    Merged,     // All clones are merged into parent archive
-    Unknown,    // Type not detected yet
-}
-
-impl Default for RomSetType {
-    fn default() -> Self {
-        RomSetType::Unknown
-    }
+    NonMerged, // Each game is independent with all required files
+    Split,     // Parent contains normal data, clones contain only changes
+    Merged,    // All clones are merged into parent archive
+    #[default]
+    Unknown, // Type not detected yet
 }
 
 // GameStats melacak statistik bermain untuk setiap game
@@ -274,7 +267,7 @@ pub struct VisibleColumns {
     pub driver: bool,
     pub category: bool,
     pub rom: bool,
-    pub chd: bool, // CHD column visibility
+    pub chd: bool,           // CHD column visibility
     pub driver_status: bool, // Driver status column visibility
 }
 
@@ -288,7 +281,7 @@ impl Default for VisibleColumns {
             driver: false,
             category: true,
             rom: false,
-            chd: false, // CHD column hidden by default
+            chd: false,          // CHD column hidden by default
             driver_status: true, // Driver status column visible by default
         }
     }
@@ -321,6 +314,16 @@ pub struct Preferences {
 
     // BARU: Performance settings
     pub performance: PerformanceSettings,
+
+    // v0.1.5: Layout and notifications
+    #[serde(default = "default_true")]
+    pub use_dock_layout: bool,
+    #[serde(default = "default_true")]
+    pub enable_toast_notifications: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Preferences {
@@ -341,6 +344,8 @@ impl Default for Preferences {
             visible_columns: VisibleColumns::default(),
             clone_color: [0.7, 0.7, 1.0],
             performance: PerformanceSettings::default(),
+            use_dock_layout: true,
+            enable_toast_notifications: true,
         }
     }
 }
@@ -356,11 +361,11 @@ pub struct PerformanceSettings {
 
     // Icon loading - lazy load untuk memory efficiency
     pub enable_lazy_icons: bool,
-    pub icon_cache_size: usize,       // Maksimum icons di memory
+    pub icon_cache_size: usize, // Maksimum icons di memory
 
     // Search optimization
-    pub search_debounce_ms: u64,      // Delay sebelum search dijalankan
-    pub enable_search_cache: bool,     // Cache hasil search
+    pub search_debounce_ms: u64,   // Delay sebelum search dijalankan
+    pub enable_search_cache: bool, // Cache hasil search
 
     // Render optimization
     pub enable_fps_limit: bool,
@@ -372,11 +377,11 @@ impl Default for PerformanceSettings {
     fn default() -> Self {
         Self {
             enable_virtual_scrolling: true,
-            virtual_scroll_buffer: 20,    // 20 items di atas/bawah viewport
-            max_visible_items: 100,       // Maksimal render 100 items
+            virtual_scroll_buffer: 20, // 20 items di atas/bawah viewport
+            max_visible_items: 100,    // Maksimal render 100 items
             enable_lazy_icons: true,
-            icon_cache_size: 500,         // Cache 500 icons
-            search_debounce_ms: 300,      // 300ms delay untuk search
+            icon_cache_size: 500,    // Cache 500 icons
+            search_debounce_ms: 300, // 300ms delay untuk search
             enable_search_cache: true,
             enable_fps_limit: true,
             target_fps: 60,
@@ -386,8 +391,9 @@ impl Default for PerformanceSettings {
 }
 
 // centralized sort enums
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum SortColumn {
+    #[default]
     Name,
     Manufacturer,
     Year,
@@ -395,29 +401,9 @@ pub enum SortColumn {
     Category,
 }
 
-impl Default for SortColumn {
-    fn default() -> Self {
-        Self::Name
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum SortDirection {
+    #[default]
     Ascending,
     Descending,
 }
-
-impl Default for SortDirection {
-    fn default() -> Self {
-        Self::Ascending
-    }
-}
-
-
-
-
-
-
-
-
-

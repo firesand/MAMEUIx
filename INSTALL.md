@@ -78,8 +78,8 @@ The installation scripts will automatically:
 1. **Update your system packages**
 2. **Install system dependencies** including:
    - Build tools (gcc, make, cmake)
-   - Development libraries (GTK3, WebKit, OpenSSL)
-   - Multimedia libraries (GStreamer)
+   - X11, XCB, xkbcommon, and Wayland development libraries
+   - Rust 1.85+ and Cargo
    - Git for cloning the repository
 
 3. **Install MAME** from your distribution's package manager
@@ -118,30 +118,29 @@ If you prefer to install manually or the scripts don't work for your setup:
 #### Debian/Ubuntu:
 ```bash
 sudo apt update
-sudo apt install build-essential curl pkg-config libssl-dev \
-    libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev \
-    librsvg2-dev gstreamer1.0-dev gstreamer1.0-plugins-base-dev \
-    gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
-    gstreamer1.0-plugins-ugly gstreamer1.0-libav cmake git mame
+sudo apt install build-essential curl pkg-config cmake git mame \
+    rustc cargo devscripts debhelper \
+    libx11-dev libx11-xcb-dev libxcb1-dev libxcb-render0-dev \
+    libxcb-shape0-dev libxcb-xfixes0-dev libxrandr-dev \
+    libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev \
+    libwayland-dev
 ```
 
 #### Fedora/RHEL/CentOS:
 ```bash
 sudo dnf update
-sudo dnf install gcc gcc-c++ curl pkg-config openssl-devel \
-    gtk3-devel webkit2gtk3-devel libappindicator-gtk3-devel \
-    librsvg2-devel gstreamer1-devel gstreamer1-plugins-base-devel \
-    gstreamer1-plugins-good gstreamer1-plugins-bad-free \
-    gstreamer1-plugins-ugly-free gstreamer1-libav cmake git mame
+sudo dnf install gcc gcc-c++ curl pkgconfig cmake git mame \
+    rust cargo rpm-build libxcb-devel libxkbcommon-devel \
+    libX11-devel libXcursor-devel libXi-devel libXinerama-devel \
+    libXrandr-devel wayland-devel
 ```
 
 #### Arch Linux:
 ```bash
 sudo pacman -Sy
-sudo pacman -S base-devel curl pkg-config openssl gtk3 webkit2gtk \
-    libappindicator-gtk3 librsvg gstreamer gst-plugins-base \
-    gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav \
-    cmake git mame
+sudo pacman -S base-devel curl rust pkgconf zstd cmake ninja mame \
+    libx11 libxcb libxrandr libxinerama libxcursor libxi \
+    libxkbcommon wayland
 ```
 
 ### 2. Install Rust
@@ -154,9 +153,9 @@ source ~/.cargo/env
 ### 3. Clone and Build
 
 ```bash
-git clone https://github.com/yourusername/mameuix.git
-cd mameuix
-cargo build --release
+git clone https://github.com/firesand/MAMEUIx.git
+cd MAMEUIx
+cargo build --release --locked
 ```
 
 ### 4. Create Desktop Integration
@@ -223,7 +222,7 @@ If you encounter issues:
 
 1. **Check the logs**: Run with debug output: `RUST_LOG=debug ./target/release/mameuix`
 2. **Verify dependencies**: Ensure all system packages are installed
-3. **Check Rust version**: `rustc --version` (should be 1.70+)
+3. **Check Rust version**: `rustc --version` (should be 1.85+)
 4. **Report issues**: Create an issue on GitHub with your distribution and error details
 
 ## Post-Installation

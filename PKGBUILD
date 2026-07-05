@@ -1,22 +1,23 @@
 # Maintainer: edo hikmahtiar <edohikmahtiar@me.com>
 pkgname=mameuix
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="Modern GUI frontend for MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification"
 arch=('x86_64')
 url="https://github.com/firesand/MAMEUIx"
 license=('MIT')
 depends=('mame>=0.200' 'glibc' 'gcc-libs' 'libx11' 'libxcb' 'libxrandr' 'libxinerama' 'libxcursor' 'libxi')
-makedepends=('rust>=1.70' 'pkgconf' 'zstd' 'git' 'cmake' 'ninja')
+makedepends=('rust>=1.85' 'pkgconf' 'zstd' 'cmake' 'ninja')
 optdepends=('mame-roms: Game ROMs for MAME')
 provides=('mameuix')
 conflicts=('mameuix-git')
-source=('git+https://github.com/firesand/MAMEUIx.git#tag=v0.1.4')
+source=("$pkgname-$pkgver.tar.gz")
 sha256sums=('SKIP')
 validpgpkeys=()
 
 prepare() {
-    cd "$srcdir/MAMEUIx"
+    cd "$srcdir/$pkgname-$pkgver"
+    export CARGO_HOME="$srcdir/cargo"
     
     # Ensure we have the latest dependencies
     cargo fetch --locked
@@ -26,12 +27,13 @@ prepare() {
 }
 
 build() {
-    cd "$srcdir/MAMEUIx"
+    cd "$srcdir/$pkgname-$pkgver"
+    export CARGO_HOME="$srcdir/cargo"
     
     # Set environment variables for optimal build
     export ZSTD_LIB_DIR=/usr/lib
     export ZSTD_STATIC=0
-    export RUSTFLAGS="-C link-arg=-lzstd -C target-cpu=native -C codegen-units=1"
+    export RUSTFLAGS="-C link-arg=-lzstd"
     export CARGO_INCREMENTAL=0
     export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
     export CARGO_PROFILE_RELEASE_LTO=true
@@ -53,7 +55,8 @@ build() {
 }
 
 check() {
-    cd "$srcdir/MAMEUIx"
+    cd "$srcdir/$pkgname-$pkgver"
+    export CARGO_HOME="$srcdir/cargo"
     
     # Run tests if available (don't fail if tests don't exist)
     cargo test --release --locked --frozen || true
@@ -66,7 +69,7 @@ check() {
 }
 
 package() {
-    cd "$srcdir/MAMEUIx"
+    cd "$srcdir/$pkgname-$pkgver"
     
     # Install binary
     install -Dm755 target/release/mameuix "$pkgdir/usr/bin/mameuix"
@@ -98,7 +101,7 @@ package() {
     fi
     
     # Install man page
-    install -Dm644 mameuix.1 "$pkgdir/usr/share/man/man1/mameuix.1"
+    install -Dm644 debian/mameuix.1 "$pkgdir/usr/share/man/man1/mameuix.1"
     
     # Install documentation
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
