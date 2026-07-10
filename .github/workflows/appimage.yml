@@ -10,6 +10,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 env:
   APPIMAGE_EXTRACT_AND_RUN: 1
   SKIP_GLIBC_CHECK: 1
