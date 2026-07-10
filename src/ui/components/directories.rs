@@ -1,9 +1,9 @@
 // src/ui/dialogs/directories.rs
 use crate::models::{AppConfig, MameExecutable};
+use crate::ui::components::mame_finder::MameFinderDialog;
 use crate::ui::components::steam_ui::SteamUi;
 use eframe::egui;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 // Smart directory memory categories
 const CATEGORY_ROM: &str = "rom_directories";
@@ -610,13 +610,15 @@ impl DirectoriesDialog {
                                         file_dialog
                                     }
                                 } else if cfg!(target_os = "linux") {
-                                    file_dialog.set_directory("/usr/bin")
+                                    file_dialog.set_directory(MameFinderDialog::linux_browse_directory())
                                 } else {
                                     file_dialog
                                 };
 
                                 if let Some(path) = file_dialog.pick_file() {
-                                    exe.path = path.display().to_string();
+                                    exe.path = MameFinderDialog::resolve_executable_path(
+                                        &path.display().to_string(),
+                                    );
                                     modified = true;
                                 }
                             }
@@ -694,52 +696,7 @@ impl DirectoriesDialog {
 
     /// Validasi MAME executable - versi lebih permisif
     fn validate_mame_executable(path: &str) -> Result<(String, usize), String> {
-        // Cek file exists
-        if !std::path::Path::new(path).exists() {
-            return Err("File not found".to_string());
-        }
-
-        // Coba jalankan dengan -version
-        match Command::new(path).arg("-version").output() {
-            Ok(output) => {
-                if output.status.success() {
-                    let version_output = String::from_utf8_lossy(&output.stdout);
-                    let version_line = version_output
-                        .lines()
-                        .find(|line| !line.trim().is_empty())
-                        .unwrap_or("Unknown version");
-
-                    // Sangat permisif - terima apapun yang respond ke -version
-                    let version = version_line.trim().to_string();
-
-                    // Estimasi jumlah game berdasarkan versi
-                    let game_count = if version.contains("0.27") || version.contains("0.28") {
-                        40000
-                    } else if version.contains("0.26") {
-                        39000
-                    } else if version.contains("0.25") {
-                        38000
-                    } else {
-                        35000 // Estimasi konservatif
-                    };
-
-                    Ok((version, game_count))
-                } else {
-                    let error = String::from_utf8_lossy(&output.stderr);
-                    Err(format!(
-                        "Failed: {}",
-                        error.lines().next().unwrap_or("Unknown error")
-                    ))
-                }
-            }
-            Err(e) => {
-                if e.kind() == std::io::ErrorKind::PermissionDenied {
-                    Err("Permission denied - check file permissions".to_string())
-                } else {
-                    Err(format!("Cannot run: {}", e))
-                }
-            }
-        }
+        MameFinderDialog::validate_mame_executable(path)
     }
 
     /// Handle path lists - return true jika dimodifikasi

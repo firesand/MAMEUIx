@@ -13,16 +13,80 @@ pub struct FoundMame {
 }
 
 impl MameFinderDialog {
+    /// Preferred starting directory for the Linux file picker.
+    pub fn linux_browse_directory() -> &'static str {
+        if Path::new("/usr/games/mame").exists() {
+            "/usr/games"
+        } else if Path::new("/usr/bin/mame").exists() {
+            "/usr/bin"
+        } else {
+            "/usr"
+        }
+    }
+
+    /// If the user picks a directory (or a games folder), resolve to the binary inside.
+    pub fn resolve_executable_path(path: &str) -> String {
+        let candidate = Path::new(path);
+        if candidate.is_file() {
+            return path.to_string();
+        }
+
+        if candidate.is_dir() {
+            for name in ["mame", "mame64", "advmame", "sdlmame"] {
+                let inner = candidate.join(name);
+                if inner.is_file() {
+                    return inner.display().to_string();
+                }
+            }
+        }
+
+        path.to_string()
+    }
+
     /// Search for MAME executables in standard locations
     pub fn find_mame_executables() -> Vec<FoundMame> {
         let mut found_executables = Vec::new();
+
+        // Well-known install locations (Debian/Ubuntu often use /usr/games/mame).
+        let known_paths = [
+            "/usr/games/mame",
+            "/usr/games/mame64",
+            "/usr/bin/mame",
+            "/usr/bin/mame64",
+            "/usr/local/games/mame",
+            "/usr/local/bin/mame",
+            "/opt/mame/bin/mame",
+            "/snap/bin/mame",
+        ];
+
+        for path in known_paths {
+            if let Ok((version, game_count)) = Self::validate_mame_executable(path) {
+                found_executables.push(FoundMame {
+                    path: path.to_string(),
+                    version,
+                    game_count,
+                });
+            }
+        }
+
+        if let Some(path) = Self::find_mame_on_path()
+            && let Ok((version, game_count)) = Self::validate_mame_executable(&path)
+        {
+            found_executables.push(FoundMame {
+                path,
+                version,
+                game_count,
+            });
+        }
 
         // Standard search paths for MAME
         let home = std::env::var("HOME").unwrap_or_default();
         let home_local_bin = format!("{}/.local/bin", home);
         let home_bin = format!("{}/bin", home);
         let search_paths = vec![
+            "/usr/games",
             "/usr/bin",
+            "/usr/local/games",
             "/usr/local/bin",
             "/opt/mame/bin",
             "/snap/bin",
@@ -78,8 +142,32 @@ impl MameFinderDialog {
         found_executables
     }
 
+    fn find_mame_on_path() -> Option<String> {
+        let output = Command::new("sh")
+            .arg("-lc")
+            .arg("command -v mame 2>/dev/null || command -v mame64 2>/dev/null")
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if path.is_empty() {
+            None
+        } else {
+            Some(path)
+        }
+    }
+
     /// Validate a MAME executable and get its version
-    fn validate_mame_executable(path: &str) -> Result<(String, usize), String> {
+    pub fn validate_mame_executable(path: &str) -> Result<(String, usize), String> {
+        let resolved = Self::resolve_executable_path(path);
+        Self::validate_mame_executable_at(&resolved)
+    }
+
+    fn validate_mame_executable_at(path: &str) -> Result<(String, usize), String> {
         if !Path::new(path).exists() {
             return Err("File not found".to_string());
         }
@@ -290,11 +378,11 @@ impl MameFinderDialog {
                         let mut dialog = rfd::FileDialog::new().set_title("Select MAME Executable");
 
                         if cfg!(target_os = "linux") {
-                            dialog = dialog.set_directory("/usr/bin");
+                            dialog = dialog.set_directory(Self::linux_browse_directory());
                         }
 
                         if let Some(path) = dialog.pick_file() {
-                            path_buffer = path.display().to_string();
+                            path_buffer = Self::resolve_executable_path(&path.display().to_string());
                         }
                     }
                 });
@@ -317,6 +405,7 @@ impl MameFinderDialog {
 
                 ui.add_space(20.0);
                 ui.label("Common MAME locations:");
+                ui.label("• /usr/games/mame  (Debian/Ubuntu)");
                 ui.label("• /usr/bin/mame");
                 ui.label("• /usr/local/bin/mame");
                 ui.label("• /snap/bin/mame");
