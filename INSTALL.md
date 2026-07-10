@@ -85,6 +85,7 @@ Or download a pre-built AppImage from [GitHub Releases](https://github.com/fires
 - Set the MAME executable path in **Options → Directories & Paths** if it is not on `PATH`
 - If FUSE is unavailable: `APPIMAGE_EXTRACT_AND_RUN=1 ./MAMEUIx-*.AppImage`
 - For Gentoo users: `app-emulation/mameuix` is also available via the [EDORP overlay](https://github.com/firesand/edorp-overlay) (`/home/edo/EDORP` locally)
+- **glibc:** Release AppImages are built on **Ubuntu 22.04** (glibc 2.35). If you see `GLIBC_2.43 not found`, download the AppImage from [GitHub Releases](https://github.com/firesand/MAMEUIx/releases) again — do not use builds made on bleeding-edge hosts without the portable pipeline.
 
 ## What the Installation Scripts Do
 
@@ -225,6 +226,13 @@ chmod +x target/release/mameuix
 #### "MAME not found" error
 - Ensure MAME is installed: `mame -version`
 - Set the correct MAME path in the application settings
+
+#### `GLIBC_2.43 not found` (or similar) when running AppImage
+
+The AppImage was built on a system with a **newer glibc** than your machine. Official release AppImages are built on Ubuntu 22.04 (glibc 2.35).
+
+- Re-download from [GitHub Releases](https://github.com/firesand/MAMEUIx/releases) after the portable build is published
+- Maintainers: build with `./build-appimage-docker.sh` or `gh workflow run appimage.yml`
 
 #### Build failures
 - Check that all dependencies are installed

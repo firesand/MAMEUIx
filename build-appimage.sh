@@ -19,6 +19,41 @@ print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Portable AppImages should be built on glibc <= 2.35 (Ubuntu 22.04).
+# Building on newer hosts (e.g. Gentoo 2.43) breaks older distros at runtime.
+MAX_PORTABLE_GLIBC="2.35"
+
+glibc_version() {
+    getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}'
+}
+
+glibc_ge() {
+    # Returns 0 when $1 >= $2 (version compare).
+    printf '%s\n%s\n' "$2" "$1" | sort -C -V
+}
+
+check_build_host_glibc() {
+    if [[ "${SKIP_GLIBC_CHECK:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    local host_glibc
+    host_glibc=$(glibc_version || true)
+    if [[ -z "${host_glibc}" ]]; then
+        return 0
+    fi
+
+    if glibc_ge "${host_glibc}" "${MAX_PORTABLE_GLIBC}" && [[ "${host_glibc}" != "${MAX_PORTABLE_GLIBC}" ]]; then
+        print_warning "Host glibc ${host_glibc} is newer than portable target ${MAX_PORTABLE_GLIBC}."
+        print_warning "AppImages built here may fail on older Linux (e.g. GLIBC_2.43 not found)."
+        print_warning "Use one of:"
+        print_warning "  ./build-appimage-docker.sh     # Ubuntu 22.04 container"
+        print_warning "  gh workflow run appimage.yml   # GitHub Actions (ubuntu-22.04)"
+        print_error "Refusing to build. Set SKIP_GLIBC_CHECK=1 to override (not recommended for release)."
+        exit 1
+    fi
+}
+
 if [[ ! -f Cargo.toml ]]; then
     print_error "Cargo.toml not found. Run this script from the project root."
     exit 1
@@ -150,6 +185,7 @@ main() {
     print_status "MAMEUIx AppImage Builder"
     print_status "========================"
 
+    check_build_host_glibc
     ensure_tools
     build_binary
     assemble_appdir
