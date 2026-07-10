@@ -59,6 +59,8 @@ node_modules/
 *.pkg.tar.zst
 *.tar.gz
 *.zip
+*.AppImage
+AppDir/
 pkg/
 
 # Test files

@@ -70,7 +70,7 @@ create_source_tarball() {
         --exclude='pS_CatVer_277' --exclude='MAMEUI-inifiles' \
         --exclude='memory.md' --exclude='*.log' --exclude='*.tmp' --exclude='*.temp' \
         --exclude='*.deb' --exclude='*.rpm' --exclude='*.pkg.tar.zst' \
-        --exclude='*.pkg.tar.zst.sig' \
+        --exclude='*.pkg.tar.zst.sig' --exclude='*.AppImage' --exclude='AppDir' \
         --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \
         --exclude='*.changes' --exclude='*.dsc' \
         -cf - . | tar -C "$tmp_dir/$source_root" -xf -
@@ -173,6 +173,20 @@ build_arch() {
     ls -la mameuix-$VERSION*.pkg.tar.zst 2>/dev/null || print_warning "No .pkg.tar.zst files found"
 }
 
+# Function to build AppImage
+build_appimage() {
+    print_status "Building AppImage..."
+
+    if [[ ! -x build-appimage.sh ]]; then
+        chmod +x build-appimage.sh
+    fi
+
+    ./build-appimage.sh
+
+    print_success "AppImage built successfully!"
+    ls -la MAMEUIx-*.AppImage 2>/dev/null || print_warning "No .AppImage files found"
+}
+
 # Main script
 main() {
     print_status "MAMEUIx Package Builder"
@@ -191,6 +205,7 @@ main() {
     BUILD_DEB=false
     BUILD_RPM=false
     BUILD_ARCH=false
+    BUILD_APPIMAGE=false
     
     if [ $# -eq 0 ]; then
         # No arguments, detect and build for current distro
@@ -228,10 +243,14 @@ main() {
                 "arch"|"archlinux")
                     BUILD_ARCH=true
                     ;;
+                "appimage")
+                    BUILD_APPIMAGE=true
+                    ;;
                 "all")
                     BUILD_DEB=true
                     BUILD_RPM=true
                     BUILD_ARCH=true
+                    BUILD_APPIMAGE=true
                     ;;
                 "--help"|"-h"|"help")
                     print_status "MAMEUIx Package Builder"
@@ -241,6 +260,7 @@ main() {
                     print_status "  deb, debian    - Build Debian package (.deb)"
                     print_status "  rpm, redhat    - Build RPM package (.rpm)"
                     print_status "  arch, archlinux - Build Arch package (.pkg.tar.zst)"
+                    print_status "  appimage       - Build portable AppImage"
                     print_status "  all            - Build all package types"
                     print_status ""
                     print_status "Examples:"
@@ -248,6 +268,7 @@ main() {
                     print_status "  $0 deb          - Build Debian package only"
                     print_status "  $0 rpm          - Build RPM package only"
                     print_status "  $0 arch         - Build Arch package only"
+                    print_status "  $0 appimage     - Build AppImage only"
                     print_status "  $0 all          - Build all package types"
                     print_status ""
                     print_status "Dependencies:"
@@ -258,7 +279,7 @@ main() {
                     ;;
                 *)
                     print_warning "Unknown package type: $arg"
-                    print_status "Available types: deb, rpm, arch, all"
+                    print_status "Available types: deb, rpm, arch, appimage, all"
                     print_status "Use '$0 --help' for more information"
                     exit 1
                     ;;
@@ -278,10 +299,14 @@ main() {
     if [ "$BUILD_ARCH" = true ]; then
         build_arch
     fi
+
+    if [ "$BUILD_APPIMAGE" = true ]; then
+        build_appimage
+    fi
     
     print_success "Package building completed!"
     print_status "Built packages:"
-    ls -la *.deb *.rpm *.pkg.tar.zst 2>/dev/null || print_warning "No packages found in current directory"
+    ls -la *.deb *.rpm *.pkg.tar.zst MAMEUIx-*.AppImage 2>/dev/null || print_warning "No packages found in current directory"
 }
 
 # Run main function with all arguments

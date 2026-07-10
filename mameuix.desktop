@@ -8,4 +8,4 @@ Icon=mameuix
 Terminal=false
 Categories=Game;Emulator;
 Keywords=mame;arcade;emulator;game;
-StartupNotify=true 
+StartupNotify=true

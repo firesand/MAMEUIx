@@ -71,6 +71,21 @@ chmod +x install-arch.sh
 - Garuda Linux
 - Artix Linux
 
+#### AppImage (portable, any x86_64/aarch64 Linux)
+```bash
+chmod +x build-appimage.sh
+./build-appimage.sh
+./MAMEUIx-0.1.5-$(uname -m).AppImage
+```
+
+Or download a pre-built AppImage from [GitHub Releases](https://github.com/firesand/MAMEUIx/releases).
+
+**Notes:**
+- The AppImage bundles MAMEUIx and its GUI libraries only — **MAME must be installed separately**
+- Set the MAME executable path in **Options → Directories & Paths** if it is not on `PATH`
+- If FUSE is unavailable: `APPIMAGE_EXTRACT_AND_RUN=1 ./MAMEUIx-*.AppImage`
+- For Gentoo users: `app-emulation/mameuix` is also available via the [EDORP overlay](https://github.com/firesand/edorp-overlay) (`/home/edo/EDORP` locally)
+
 ## What the Installation Scripts Do
 
 The installation scripts will automatically:

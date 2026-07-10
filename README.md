@@ -214,6 +214,18 @@ sudo dnf install mameuix-*.rpm
 sudo pacman -U mameuix-*.pkg.tar.zst
 ```
 
+#### AppImage (portable)
+```bash
+# Build the AppImage
+./build-appimage.sh
+
+# Run (MAME must be installed separately)
+./MAMEUIx-0.1.5-$(uname -m).AppImage
+```
+
+Pre-built AppImages are attached to [GitHub Releases](https://github.com/firesand/MAMEUIx/releases).
+On Gentoo, you can also install via the [EDORP overlay](https://github.com/firesand/edorp-overlay): `emerge -av app-emulation/mameuix`.
+
 #### Universal Package Builder
 ```bash
 # Build for your current distribution (auto-detected)
@@ -223,6 +235,7 @@ sudo pacman -U mameuix-*.pkg.tar.zst
 ./build-packages.sh deb    # Debian package only
 ./build-packages.sh rpm    # RPM package only
 ./build-packages.sh arch   # Arch package only
+./build-packages.sh appimage  # Portable AppImage
 ./build-packages.sh all    # All package types
 ```
 
