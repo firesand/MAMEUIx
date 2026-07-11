@@ -57,10 +57,10 @@ check_dependencies() {
     fi
 }
 
-# RPM and Arch packaging expect the archive to extract into mameuix-$VERSION/.
+# RPM uses mameuix-$VERSION/; Arch passes the GitHub-style MAMEUIx-$VERSION/.
 create_source_tarball() {
     local version="$1"
-    local source_root="mameuix-$version"
+    local source_root="${2:-mameuix-$version}"
     local tmp_dir
 
     tmp_dir=$(mktemp -d)
@@ -156,11 +156,14 @@ build_arch() {
     VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
     
     # Create source tarball
-    create_source_tarball "$VERSION"
+    create_source_tarball "$VERSION" "MAMEUIx-$VERSION"
+    SOURCE_SHA256=$(sha256sum "mameuix-$VERSION.tar.gz" | cut -d' ' -f1)
 
-    # Run makepkg outside the project root so it cannot collide with the Rust src/ directory.
+    # Keep the tracked PKGBUILD identical to AUR while packaging the current working tree.
+    # makepkg finds the local archive first; only its temporary checksum needs changing.
     ARCH_BUILD_DIR=$(mktemp -d)
-    cp PKGBUILD .SRCINFO "mameuix-$VERSION.tar.gz" "$ARCH_BUILD_DIR/"
+    cp PKGBUILD "mameuix-$VERSION.tar.gz" "$ARCH_BUILD_DIR/"
+    sed -i "s/^sha256sums=.*/sha256sums=('$SOURCE_SHA256')/" "$ARCH_BUILD_DIR/PKGBUILD"
 
     # Build the package
     if (cd "$ARCH_BUILD_DIR" && makepkg -f); then

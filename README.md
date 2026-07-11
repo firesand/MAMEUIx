@@ -181,6 +181,23 @@ chmod +x MAMEUIx-*.AppImage
 
 Pre-built AppImages are attached to [GitHub Releases](https://github.com/firesand/MAMEUIx/releases). MAME must be installed separately.
 
+### Arch Linux (AUR)
+
+Use the standard AUR workflow:
+
+```bash
+git clone https://aur.archlinux.org/mameuix.git
+cd mameuix
+makepkg -si
+```
+
+Alternatively, use an installed AUR helper:
+
+```bash
+yay -S mameuix
+# or: paru -S mameuix
+```
+
 ### Build from source
 
 ```bash
@@ -190,7 +207,7 @@ cargo build --release --locked
 ./target/release/mameuix
 ```
 
-Native Debian, RPM, Arch, Gentoo, dependency, and experimental FreeBSD instructions are in the [installation guide](docs/INSTALL.md). The public documentation index is under [`docs/`](docs/README.md).
+Packaging recipes for Debian, RPM, Arch, and Gentoo, plus dependency and experimental FreeBSD instructions, are in the [installation guide](docs/INSTALL.md). The Arch AUR package has passed a clean build; the Debian and RPM recipes still require clean-distribution validation. The public documentation index is under [`docs/`](docs/README.md).
 
 ## Configuration
 
@@ -346,7 +363,7 @@ The application is optimized for performance:
 
 ✅ **Current Release**: v0.1.6 keeps the dock-panel UI as the default and adds opt-in previews
 🔄 **Active Development**: Ongoing UI, performance, and packaging refinements
-📦 **Packaging**: Complete Linux distribution support (Debian, RPM, Arch)
+📦 **Packaging**: Verified Arch AUR package; Debian and RPM recipes are available but still need clean-distribution validation
 🧪 **FreeBSD**: Experimental amd64 source-build path; native validation is still required
 🎯 **Roadmap**: Performance optimizations and feature enhancements
 🔧 **New Features**: Experimental redesign, Software Lists preview, ROM verification, BGFX launch configuration, and experimental GLSL tooling
@@ -510,7 +527,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **Enhanced UI**: Improved preferences dialog with theme selection
 - **Better Performance**: Optimized rendering and reduced UI lag
 - **Bug Fixes**: Fixed borrow checker issues and compilation warnings
-- **Packaging**: Complete Linux distribution support (Debian, RPM, Arch)
+- **Packaging**: Added initial Debian, RPM, and Arch packaging recipes
 
 ### v0.1.0
 - Initial release
