@@ -521,7 +521,7 @@ impl DirectoriesPathsDialog {
             // Executable box
             egui::Frame::NONE
                 .fill(*bg_color)
-                .stroke(egui::Stroke::new(1.0, *border_color))
+                .stroke(egui::Stroke::new(1.0_f32, *border_color))
                 .corner_radius(egui::CornerRadius::same(6))
                 .inner_margin(egui::Margin::same(16))
                 .show(ui, |ui| {

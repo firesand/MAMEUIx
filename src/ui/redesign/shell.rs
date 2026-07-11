@@ -45,7 +45,7 @@ impl RedesignShell {
             .frame(
                 egui::Frame::new()
                     .fill(RedesignTokens::BG_PANEL)
-                    .stroke(egui::Stroke::new(1.0, RedesignTokens::BORDER))
+                    .stroke(egui::Stroke::new(1.0_f32, RedesignTokens::BORDER))
                     .inner_margin(egui::Margin::symmetric(16, 0)),
             )
             .show(ctx, |ui| {

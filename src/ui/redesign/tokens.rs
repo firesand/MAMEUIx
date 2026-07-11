@@ -71,7 +71,7 @@ impl RedesignTokens {
         visuals.hyperlink_color = Self::ACCENT;
         visuals.override_text_color = Some(Self::TEXT_PRIMARY);
         visuals.selection.bg_fill = Self::BG_RAISED;
-        visuals.selection.stroke = egui::Stroke::new(1.0, Self::ACCENT);
+        visuals.selection.stroke = egui::Stroke::new(1.0_f32, Self::ACCENT);
         visuals.window_corner_radius = egui::CornerRadius::same(Self::RADIUS_LG);
         visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(Self::RADIUS_MD);
         visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(Self::RADIUS_MD);
@@ -80,17 +80,17 @@ impl RedesignTokens {
 
         visuals.widgets.noninteractive.bg_fill = Self::BG_SURFACE;
         visuals.widgets.noninteractive.weak_bg_fill = Self::BG_SURFACE;
-        visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, Self::TEXT_SECONDARY);
+        visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0_f32, Self::TEXT_SECONDARY);
         visuals.widgets.inactive.bg_fill = Self::BG_SURFACE;
         visuals.widgets.inactive.weak_bg_fill = Self::BG_SURFACE;
-        visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, Self::BORDER_STRONG);
-        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Self::TEXT_PRIMARY);
+        visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, Self::BORDER_STRONG);
+        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, Self::TEXT_PRIMARY);
         visuals.widgets.hovered.bg_fill = Self::BG_HOVER;
         visuals.widgets.hovered.weak_bg_fill = Self::BG_HOVER;
-        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, Self::BORDER_STRONG);
+        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, Self::BORDER_STRONG);
         visuals.widgets.active.bg_fill = Self::BG_RAISED;
         visuals.widgets.active.weak_bg_fill = Self::BG_RAISED;
-        visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, Self::ACCENT);
+        visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, Self::ACCENT);
 
         ctx.set_style(style);
     }

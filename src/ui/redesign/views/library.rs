@@ -42,7 +42,7 @@ pub fn show(ctx: &egui::Context, app: &mut MameApp, state: &mut RedesignState) -
             .frame(
                 egui::Frame::new()
                     .fill(RedesignTokens::BG_PANEL)
-                    .stroke(egui::Stroke::new(1.0, RedesignTokens::BORDER))
+                    .stroke(egui::Stroke::new(1.0_f32, RedesignTokens::BORDER))
                     .inner_margin(0.0),
             )
             .show(ctx, |ui| {
@@ -83,7 +83,7 @@ fn enforce_visible_filter_state(state: &mut RedesignState) {
 fn show_compact_toolbar(ui: &mut egui::Ui, state: &mut RedesignState) {
     egui::Frame::new()
         .fill(RedesignTokens::BG_PANEL)
-        .stroke(egui::Stroke::new(1.0, RedesignTokens::BORDER))
+        .stroke(egui::Stroke::new(1.0_f32, RedesignTokens::BORDER))
         .inner_margin(egui::Margin::symmetric(10, 7))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -535,7 +535,7 @@ fn show_sidebar(
                                     ));
                                     if selected {
                                         button = button
-                                            .stroke(egui::Stroke::new(1.0, RedesignTokens::ACCENT));
+                                            .stroke(egui::Stroke::new(1.0_f32, RedesignTokens::ACCENT));
                                     }
                                     if ui.add(button).clicked() {
                                         state.year_decade =

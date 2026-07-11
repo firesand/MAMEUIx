@@ -63,39 +63,39 @@ impl SteamUi {
         visuals.hyperlink_color = Self::ACCENT;
         visuals.override_text_color = Some(Self::TEXT);
         visuals.selection.bg_fill = Self::ACCENT_DARK;
-        visuals.selection.stroke = egui::Stroke::new(1.0, Self::ACCENT);
+        visuals.selection.stroke = egui::Stroke::new(1.0_f32, Self::ACCENT);
         visuals.window_corner_radius = egui::CornerRadius::same(8);
         visuals.menu_corner_radius = egui::CornerRadius::same(6);
-        visuals.window_stroke = egui::Stroke::new(1.0, Self::BORDER);
+        visuals.window_stroke = egui::Stroke::new(1.0_f32, Self::BORDER);
 
         visuals.widgets.noninteractive.bg_fill = Self::PANEL;
         visuals.widgets.noninteractive.weak_bg_fill = Self::PANEL;
-        visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, Self::BORDER);
-        visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, Self::TEXT_SECONDARY);
+        visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, Self::BORDER);
+        visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0_f32, Self::TEXT_SECONDARY);
         visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(6);
 
         visuals.widgets.inactive.bg_fill = Self::PANEL_ALT;
         visuals.widgets.inactive.weak_bg_fill = Self::PANEL;
-        visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, Self::BORDER);
-        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, Self::TEXT);
+        visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, Self::BORDER);
+        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, Self::TEXT);
         visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(6);
 
         visuals.widgets.hovered.bg_fill = Self::HOVER;
         visuals.widgets.hovered.weak_bg_fill = Self::HOVER;
-        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, Self::ACCENT);
-        visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, Self::TEXT);
+        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, Self::ACCENT);
+        visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, Self::TEXT);
         visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(6);
 
         visuals.widgets.active.bg_fill = Self::ACCENT_DARK;
         visuals.widgets.active.weak_bg_fill = Self::ACCENT_DARK;
-        visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, Self::ACCENT);
-        visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+        visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, Self::ACCENT);
+        visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
         visuals.widgets.active.corner_radius = egui::CornerRadius::same(6);
 
         visuals.widgets.open.bg_fill = Self::PANEL_ALT;
         visuals.widgets.open.weak_bg_fill = Self::PANEL_ALT;
-        visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0, Self::ACCENT);
-        visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, Self::TEXT);
+        visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0_f32, Self::ACCENT);
+        visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0_f32, Self::TEXT);
         visuals.widgets.open.corner_radius = egui::CornerRadius::same(6);
 
         ctx.set_style(style);
@@ -104,7 +104,7 @@ impl SteamUi {
     pub fn window_frame() -> egui::Frame {
         egui::Frame::window(&egui::Style::default())
             .fill(Self::BG)
-            .stroke(egui::Stroke::new(1.0, Self::BORDER))
+            .stroke(egui::Stroke::new(1.0_f32, Self::BORDER))
             .corner_radius(egui::CornerRadius::same(8))
             .inner_margin(egui::Margin::symmetric(18, 16))
     }
@@ -115,7 +115,7 @@ impl SteamUi {
     ) -> egui::InnerResponse<R> {
         egui::Frame::new()
             .fill(Self::PANEL)
-            .stroke(egui::Stroke::new(1.0, Self::BORDER))
+            .stroke(egui::Stroke::new(1.0_f32, Self::BORDER))
             .corner_radius(egui::CornerRadius::same(7))
             .inner_margin(egui::Margin::symmetric(16, 14))
             .show(ui, content)
@@ -127,7 +127,7 @@ impl SteamUi {
     ) -> egui::InnerResponse<R> {
         egui::Frame::new()
             .fill(Self::PANEL_ALT)
-            .stroke(egui::Stroke::new(1.0, Self::BORDER))
+            .stroke(egui::Stroke::new(1.0_f32, Self::BORDER))
             .corner_radius(egui::CornerRadius::same(6))
             .inner_margin(egui::Margin::symmetric(12, 10))
             .show(ui, content)
@@ -238,7 +238,7 @@ impl SteamUi {
             )
             .fill(fill)
             .stroke(if selected {
-                egui::Stroke::new(1.0, Self::ACCENT)
+                egui::Stroke::new(1.0_f32, Self::ACCENT)
             } else {
                 egui::Stroke::NONE
             }),

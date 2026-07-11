@@ -15,7 +15,7 @@ pub fn section_header(ui: &mut egui::Ui, label: &str) {
 pub fn card_frame() -> egui::Frame {
     egui::Frame::new()
         .fill(RedesignTokens::BG_PANEL)
-        .stroke(egui::Stroke::new(1.0, RedesignTokens::BORDER))
+        .stroke(egui::Stroke::new(1.0_f32, RedesignTokens::BORDER))
         .corner_radius(egui::CornerRadius::same(RedesignTokens::RADIUS_LG))
         .inner_margin(egui::Margin::symmetric(16, 14))
 }
@@ -151,11 +151,11 @@ pub fn checkbox_row(
         } else {
             egui::Color32::TRANSPARENT
         },
-        egui::Stroke::new(1.0, egui::Color32::from_rgb(58, 63, 73)),
+        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(58, 63, 73)),
         egui::StrokeKind::Inside,
     );
     if *checked {
-        let stroke = egui::Stroke::new(1.8, RedesignTokens::ACCENT_TEXT);
+        let stroke = egui::Stroke::new(1.8_f32, RedesignTokens::ACCENT_TEXT);
         painter.line_segment(
             [
                 egui::pos2(rect.left() + 3.0, rect.center().y),

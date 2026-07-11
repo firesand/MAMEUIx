@@ -439,7 +439,7 @@ fn artwork_box(
     ui.painter().rect_stroke(
         rect,
         egui::CornerRadius::same(RedesignTokens::RADIUS_LG),
-        egui::Stroke::new(1.0, RedesignTokens::BORDER_STRONG),
+        egui::Stroke::new(1.0_f32, RedesignTokens::BORDER_STRONG),
         egui::StrokeKind::Inside,
     );
 }

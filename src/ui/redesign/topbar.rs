@@ -48,7 +48,7 @@ pub fn show_top_bar(
     painter.rect_stroke(
         logo_rect,
         egui::CornerRadius::same(RedesignTokens::RADIUS_MD),
-        egui::Stroke::new(1.0, RedesignTokens::BORDER_STRONG),
+        egui::Stroke::new(1.0_f32, RedesignTokens::BORDER_STRONG),
         egui::StrokeKind::Inside,
     );
     painter.text(

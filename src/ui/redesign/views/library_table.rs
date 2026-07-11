@@ -706,7 +706,7 @@ fn render_table_row(
     hover_painter.hline(
         row_x_range,
         row_response.rect.bottom() - 0.5,
-        egui::Stroke::new(1.0, RedesignTokens::ROW_DIVIDER),
+        egui::Stroke::new(1.0_f32, RedesignTokens::ROW_DIVIDER),
     );
     if row_response.clicked() && !suppress_row_open {
         action.open_detail = Some(index);

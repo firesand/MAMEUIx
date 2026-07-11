@@ -52,7 +52,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut MameApp, section: &mut SettingsSection)
                     );
                     ui.painter().line_segment(
                         [rect.right_top(), rect.right_bottom()],
-                        egui::Stroke::new(1.0, RedesignTokens::BORDER),
+                        egui::Stroke::new(1.0_f32, RedesignTokens::BORDER),
                     );
                     ui.set_min_height(available_height);
                     ui.set_width(sidebar_w);
@@ -164,7 +164,7 @@ fn show_compact_section_switcher(ui: &mut egui::Ui, section: &mut SettingsSectio
             )
             .selected(selected);
             if selected {
-                button = button.stroke(egui::Stroke::new(1.0, RedesignTokens::ACCENT));
+                button = button.stroke(egui::Stroke::new(1.0_f32, RedesignTokens::ACCENT));
             }
             if ui.add(button).clicked() {
                 *section = sec;
@@ -571,7 +571,7 @@ fn path_field(ui: &mut egui::Ui, path: &str, width: f32) {
         rect,
         egui::CornerRadius::same(RedesignTokens::RADIUS_MD),
         RedesignTokens::BG_SURFACE,
-        egui::Stroke::new(1.0, RedesignTokens::BORDER_STRONG),
+        egui::Stroke::new(1.0_f32, RedesignTokens::BORDER_STRONG),
         egui::StrokeKind::Inside,
     );
 
@@ -669,9 +669,9 @@ fn show_theme_card(
 ) {
     let selected = app.config.theme == *theme;
     let stroke = if selected {
-        egui::Stroke::new(1.0, RedesignTokens::ACCENT)
+        egui::Stroke::new(1.0_f32, RedesignTokens::ACCENT)
     } else {
-        egui::Stroke::new(1.0, RedesignTokens::BORDER)
+        egui::Stroke::new(1.0_f32, RedesignTokens::BORDER)
     };
     let background = ui.painter().add(egui::Shape::Noop);
     let response = egui::Frame::new()
@@ -687,7 +687,7 @@ fn show_theme_card(
                 rect,
                 egui::CornerRadius::same(RedesignTokens::RADIUS_MD),
                 theme_swatch_color(theme),
-                egui::Stroke::new(1.0, RedesignTokens::BORDER_STRONG),
+                egui::Stroke::new(1.0_f32, RedesignTokens::BORDER_STRONG),
                 egui::StrokeKind::Inside,
             );
             ui.add_space(8.0);

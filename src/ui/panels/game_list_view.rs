@@ -401,7 +401,7 @@ impl GameListView {
                 Color32::from_rgb(26, 26, 26)
             })
             .stroke(egui::Stroke::new(
-                1.0,
+                1.0_f32,
                 if is_selected {
                     Color32::from_rgb(74, 158, 255)
                 } else {
@@ -672,7 +672,7 @@ impl GameListView {
                     Color32::from_rgb(20, 20, 20)
                 })
                 .stroke(egui::Stroke::new(
-                    1.0,
+                    1.0_f32,
                     if is_selected {
                         Color32::from_rgb(74, 158, 255)
                     } else {
