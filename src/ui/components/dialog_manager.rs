@@ -46,6 +46,7 @@ pub struct DialogManager {
 
     // Dialog-specific data
     found_mame_executables: Vec<FoundMame>,
+    directories_dialog: DirectoriesDialog,
     rom_verify_dialog: RomVerifyDialog,
     game_properties_dialog: Option<GamePropertiesDialog>,
     advanced_mame_settings_dialog: Option<AdvancedMameSettingsDialog>,
@@ -77,6 +78,7 @@ impl DialogManager {
         Self {
             dialog_states,
             found_mame_executables: Vec::new(),
+            directories_dialog: DirectoriesDialog::new(),
             rom_verify_dialog: RomVerifyDialog::default(),
             game_properties_dialog: None,
             advanced_mame_settings_dialog: None,
@@ -112,6 +114,10 @@ impl DialogManager {
         } else {
             dialog_type
         };
+
+        if dialog_type == DialogType::Directories && !self.is_dialog_open(dialog_type) {
+            self.directories_dialog.reset();
+        }
         self.dialog_states.insert(dialog_type, true);
     }
 
@@ -122,6 +128,9 @@ impl DialogManager {
             .insert(dialog_type, false)
             .unwrap_or(false)
         {
+            if dialog_type == DialogType::Directories {
+                self.directories_dialog.reset();
+            }
             // Dialog was actually open, trigger callback
             if let Some(ref callback) = self.on_dialog_closed {
                 callback(dialog_type, false);
@@ -135,6 +144,10 @@ impl DialogManager {
             .dialog_states
             .insert(dialog_type, state)
             .unwrap_or(false);
+
+        if dialog_type == DialogType::Directories && was_open != state {
+            self.directories_dialog.reset();
+        }
 
         // If dialog was closed, trigger callback
         if was_open
@@ -192,7 +205,7 @@ impl DialogManager {
 
         // Directories Dialog
         if self.is_dialog_open(DialogType::Directories) {
-            let changed = DirectoriesDialog::show(
+            let changed = self.directories_dialog.show(
                 ctx,
                 config,
                 self.dialog_states
@@ -340,54 +353,14 @@ impl DialogManager {
     }
 
     fn render_about_dialog(&mut self, ctx: &egui::Context) {
-        egui::Window::new("About MAMEuix")
+        egui::Window::new("About MAMEUIx")
             .open(self.dialog_states.get_mut(&DialogType::About).unwrap())
-            .default_size([500.0, 450.0])
-            .resizable(false)
+            .fixed_size([440.0, 90.0])
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.heading("MAMEuix");
-                    ui.label("A modern MAME frontend with enhanced features");
+                    ui.label("A Modern MAME Frontend with enhanced features");
                     ui.add_space(10.0);
-                    ui.label("Version: 0.1.4");
                     ui.label("Built with Rust and egui");
-                    ui.add_space(20.0);
-
-                    ui.label(egui::RichText::new("🎮 Core Features").heading());
-                    ui.label("• Fast game scanning and filtering (48,000+ games)");
-                    ui.label("• Enhanced search capabilities with real-time results");
-                    ui.label("• Customizable UI themes (10 beautiful themes)");
-                    ui.label("• Plugin support (hiscore, cheat, autofire)");
-                    ui.label("• Virtual scrolling for smooth performance");
-                    ui.add_space(10.0);
-
-                    ui.label(
-                        egui::RichText::new("🔍 ROM Verification - CLRMamePro Lite").heading(),
-                    );
-                    ui.label("• Real-time verification status with progress tracking");
-                    ui.label(
-                        "• Color-coded game list (Green=Verified, Red=Failed, Yellow=Warning)",
-                    );
-                    ui.label("• Bulk actions: Find missing ROMs (No-Intro integration)");
-                    ui.label("• Export reports in Text, CSV, and HTML formats");
-                    ui.label("• Pause/Resume/Stop verification controls");
-                    ui.label("• Detailed statistics and ETA calculations");
-                    ui.add_space(10.0);
-
-                    ui.label(egui::RichText::new("🎨 Graphics & Performance").heading());
-                    ui.label("• BGFX multi-backend support (8 rendering backends)");
-                    ui.label("• Embedded GLSL shaders (11 professional effects)");
-                    ui.label("• Integer scaling for pixel-perfect display");
-                    ui.label("• Core performance options and real-time configuration");
-                    ui.label("• Hardware filtering by CPU, device, and sound chip");
-                    ui.add_space(10.0);
-
-                    ui.label(egui::RichText::new("⚙️ Advanced Features").heading());
-                    ui.label("• Thread pool icon loading with 8x performance improvement");
-                    ui.label("• Performance monitoring and adaptive loading");
-                    ui.label("• Column width persistence and resizable tables");
-                    ui.label("• Category support with catver.ini integration");
-                    ui.label("• CHD game support and artwork display");
                 });
             });
     }

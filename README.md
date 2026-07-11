@@ -2,9 +2,21 @@
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
-**Current Version: 0.1.5** - Stability, Parser, and Build Gate Improvements
+**Current Version: 0.1.6** - Experimental Redesign and Software Lists Preview
 
-## Recent Improvements (v0.1.5)
+## Recent Improvements (v0.1.6)
+
+- Added an opt-in, experimental redesigned UI; the dock-panel UI remains the default
+- Added a Software Lists preview for browsing MAME hash XML and checking best-effort media-path presence
+- Made `Ctrl`/`Cmd`+`F` focus the redesign search field and separated Missing from Issues filtering
+- Added scrolling to redesign settings and prevented legacy themes from replacing redesign styles
+- Replaced misleading redesign shader Apply controls with read-only BGFX status and clear integration limits
+- Simplified the About dialog and reorganized public guides under `docs/`
+- Added initial, unverified FreeBSD amd64 source-build readiness
+
+Enable the redesign from **Preferences → UI shell → Redesign preview (experimental)** or launch MAMEUIx with `--redesign`. You can switch back to the default dock-panel UI at any time.
+
+## Previous Improvements (v0.1.5)
 
 - Fixed core unit tests and restored a clean `cargo test --bin mameuix` baseline
 - Excluded stale auto-discovered examples from the default test/build gate
@@ -37,7 +49,7 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - **No-Intro Integration**: One-click access to find missing ROMs
 - **Visual Feedback**: Color-coded backgrounds and status indicators
 
-### Performance and Shader System (v0.1.4)
+### Performance System (v0.1.4)
 - **Thread Pool Icon Loading**: Parallel processing for 48,000+ games with up to 8x performance improvement
 - **Performance Monitoring**: Real-time metrics and statistics for icon loading
 - **Adaptive Loading**: Dynamic rate adjustment based on system performance
@@ -62,16 +74,12 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - **Column Resizing**: Fully resizable table columns with persistent widths
 - **Background Processing**: Non-blocking UI during large ROM scans (48,000+ games)
 
-### 🎨 Enhanced Shader System
-- **Embedded Shaders**: 11 high-quality shaders included in binary (no download required)
-- **Enhanced Validation**: Automatic GLSL syntax checking with detailed error reporting
-- **Performance Analysis**: Detects expensive operations and provides optimization hints
-- **Modern GLSL Support**: Validates GLSL 330+ compatibility and suggests modern alternatives
-- **Offline Operation**: Complete shader system works without internet connection
-- **Shader Categories**: Organized by CRT Effects, LCD Effects, Retro Effects, and Scaling
-- **Extraction Feature**: Users can extract embedded shaders to filesystem if needed
-- **BGFX Integration**: Multi-backend rendering support (OpenGL, DirectX11/12, Vulkan, Metal)
-- **GLSL Shader System**: Custom shader management with CRT, LCD, and scanline effects
+### 🎨 MAME Graphics Configuration
+- **Active BGFX Launch Options**: MAMEUIx passes the selected video mode, backend, screen chain, debug, shadow-mask, and LUT options to the external MAME process
+- **Platform-aware Backend Choices**: The UI filters backend choices by host platform; actual availability depends on the installed MAME build and graphics driver
+- **MAME-owned Rendering**: MAME renders the emulated game and applies BGFX chains; the MAMEUIx window continues to use `eframe`/`egui`
+- **Experimental GLSL Tooling**: Preset helpers, validation code, and embedded GLSL sources exist, but custom/embedded shader selection is not yet connected end-to-end to the active launcher
+- **Technical Guide**: See [BGFX and GLSL Configuration](docs/BGFX_GLSL_INTEGRATION.md) for the supported path and current limitations
 - **Integer Scaling**: Complete implementation of MAME's integer scaling options
 - **Core Performance Options**: Comprehensive emulation performance controls
 - **SDL Driver Options**: Enhanced Linux/Unix system support
@@ -80,8 +88,7 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - **Clean Builds**: `cargo clean` removes 2.6GB of build artifacts
 - **Fast Compilation**: Optimized for quick development cycles
 - **Cross-Platform**: Tested on Linux with comprehensive packaging support
-- **New Modules**: Added hardware filtering, INI utilities, and graphics shader support
-- **Testing Tools**: Added test binaries for category system and BGFX/GLSL integration
+- **New Modules**: Added hardware filtering, INI utilities, and experimental graphics helpers
 
 ## Features
 
@@ -115,33 +122,32 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
   - **No-Intro Integration**: Direct access to ROM database for missing files
   - **Advanced Controls**: Pause, resume, and stop verification with ETA
   - **Global State**: Verification status persists across the entire application
-### 🎨 Shader Management
-- **Embedded Shaders**: 11 professional-quality shaders included automatically
-  - CRT Effects: crt-geom, crt-royale with scanlines and curvature
-  - LCD Effects: lcd-grid for handheld games
-  - Retro Effects: ntsc color space, scanlines
-  - Scaling: pixel-perfect integer scaling
-- **Enhanced Validation**: Real-time GLSL syntax checking with line numbers
-- **Performance Hints**: Automatic detection of expensive operations
-- **Modernization Suggestions**: Recommends current GLSL features
-- **Offline Support**: Complete shader system works without internet
-- **Extraction Tools**: Save embedded shaders to filesystem for customization
-- **Debug Tools**: Comprehensive logging and debugging options
-- **Cross-Platform**: Runs on Windows, macOS, and Linux
+
+### 🎨 Graphics and Integration
+- **BGFX Launch Configuration**: Active launcher support for MAME's BGFX video mode, platform-appropriate backend selection, screen chains, debug mode, shadow masks, and LUTs
+- **External Chain Assets**: BGFX chain names must exist in the installed MAME data; embedded `.vert`/`.frag` sources are not MAME BGFX chain definitions
+- **Experimental Custom GLSL**: UI fields, command-preview code, presets, validation helpers, and embedded sources are present, but the launcher does not yet forward custom GLSL selections
+- **Implementation Status**: See [BGFX and GLSL Configuration](docs/BGFX_GLSL_INTEGRATION.md)
+- **Platform status**: Linux supported; FreeBSD amd64 source builds are experimental
 - **Hardware Filtering**: Filter games by CPU, device, and sound chip types
-- **BGFX/GLSL Support**: Advanced graphics backend integration with shader support
 - **INI File Processing**: Support for MAME INI files and hardware categorization
 - **Plugin Detection**: Automatic detection of MAME plugins (hiscore, cheat, autofire)
 
 ### 🎯 Graphics & Performance
-- **BGFX Backend Support**: 8 rendering backends (Auto, OpenGL, DirectX11/12, Vulkan, Metal, Gnm, Nvn)
-- **GLSL Shader Templates**: Pre-built CRT geometry, LCD sharp, and scanline effects
+- **BGFX Backend Configuration**: Backend choices are filtered for Linux, Windows, and macOS; MAME determines whether a selected backend is usable
+- **BGFX Screen Chains**: MAMEUIx can pass a configured chain name to MAME
+- **Experimental Shader Helpers**: CRT, LCD, scanline, and other GLSL sources are development assets, not a fully wired runtime shader system
 - **Integer Scaling**: Pixel-perfect scaling with manual scale factors (1x-10x)
 - **Core Performance Options**: Auto-frameskip, frameskip value, sleep when idle, emulation speed
-- **Real-time Configuration**: Dynamic parameter adjustment for shaders and performance
-- **Graphics Presets**: Pre-configured visual settings for different use cases
 
 ## Screenshots
+
+### Experimental Redesign Preview (v0.1.6)
+![Redesigned Library](screenshot/Redesign_Library.png)
+
+![Redesigned Game Detail](screenshot/Redesign_Game_Detail.png)
+
+![Redesigned Settings](screenshot/Redesign_Settings.png)
 
 ### Main Interface
 ![Main Window](screenshot/Main_Window.png)
@@ -157,114 +163,34 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 
 ## System Requirements
 
-- **Rust**: 1.88.0 or later (recommended)
+- **OS**: Linux; FreeBSD amd64 is an experimental source-build target
+- **Rust**: 1.85.0 or later when building from source
 - **MAME**: Any recent version (0.200+ recommended)
 - **Memory**: 4GB RAM minimum, 8GB recommended for large ROM collections
 - **Storage**: 100MB for application, additional space for ROMs and artwork
-- **Graphics**: OpenGL 3.3+ for BGFX support, DirectX 11+ for Windows
+- **Graphics**: OpenGL-capable driver; additional MAME backends depend on the platform
 
 ## Installation
 
-### Quick Installation (Linux)
-
-For Linux users, we provide automated installation scripts:
+### AppImage (recommended for Linux)
 
 ```bash
-# Universal installer (detects your distribution automatically)
-chmod +x install.sh
-./install.sh
-
-# Or use distribution-specific installers:
-./install-debian.sh    # For Ubuntu, Debian, Linux Mint, etc.
-./install-rpm.sh       # For Fedora, RHEL, CentOS, etc.
-./install-arch.sh      # For Arch Linux, Manjaro, etc.
+chmod +x MAMEUIx-*.AppImage
+./MAMEUIx-*.AppImage
 ```
 
-See [INSTALL.md](INSTALL.md) for detailed installation instructions.
+Pre-built AppImages are attached to [GitHub Releases](https://github.com/firesand/MAMEUIx/releases). MAME must be installed separately.
 
-### Package Installation
+### Build from source
 
-We also provide native packages for easy installation:
-
-#### Debian/Ubuntu (.deb)
 ```bash
-# Build the package
-./build-deb.sh
-
-# Install the package
-sudo dpkg -i ../mameuix_*.deb
-sudo apt-get install -f  # Install dependencies if needed
+git clone https://github.com/firesand/MAMEUIx.git
+cd MAMEUIx
+cargo build --release --locked
+./target/release/mameuix
 ```
 
-#### Red Hat/Fedora (.rpm)
-```bash
-# Build the package
-./build-rpm.sh
-
-# Install the package
-sudo dnf install mameuix-*.rpm
-```
-
-#### Arch Linux (.pkg.tar.zst)
-```bash
-# Build the package
-./build-arch.sh
-
-# Install the package
-sudo pacman -U mameuix-*.pkg.tar.zst
-```
-
-#### AppImage (portable)
-```bash
-# Build the AppImage
-./build-appimage.sh
-
-# Run (MAME must be installed separately)
-./MAMEUIx-0.1.5-$(uname -m).AppImage
-```
-
-Pre-built AppImages are attached to [GitHub Releases](https://github.com/firesand/MAMEUIx/releases).
-On Gentoo, you can also install via the [EDORP overlay](https://github.com/firesand/edorp-overlay): `emerge -av app-emulation/mameuix`.
-
-#### Universal Package Builder
-```bash
-# Build for your current distribution (auto-detected)
-./build-packages.sh
-
-# Or build specific package types
-./build-packages.sh deb    # Debian package only
-./build-packages.sh rpm    # RPM package only
-./build-packages.sh arch   # Arch package only
-./build-packages.sh appimage  # Portable AppImage
-./build-packages.sh all    # All package types
-```
-
-### Manual Installation
-
-#### Prerequisites
-- **Rust**: Install Rust from [rustup.rs](https://rustup.rs/)
-- **MAME**: Install MAME on your system
-  - **Linux**: `sudo pacman -S mame` (Arch) or `sudo apt install mame` (Ubuntu)
-  - **Windows**: Download from [mamedev.org](https://www.mamedev.org/)
-  - **macOS**: `brew install mame`
-
-#### Building from Source
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/firesand/MAMEUIx.git
-   cd MAMEUIx
-   ```
-
-2. **Build the project**:
-   ```bash
-   cargo build --release
-   ```
-
-3. **Run the application**:
-   ```bash
-   cargo run --release
-   ```
+Native Debian, RPM, Arch, Gentoo, dependency, and experimental FreeBSD instructions are in the [installation guide](docs/INSTALL.md). The public documentation index is under [`docs/`](docs/README.md).
 
 ## Configuration
 
@@ -290,22 +216,19 @@ To enable the Category column in the game list:
 
 ### Graphics Configuration
 1. Go to **Options → Default Game Properties → Video Settings**
-2. Configure BGFX backend and GLSL shaders
-3. Set integer scaling options for pixel-perfect display
-4. Adjust core performance options for optimal emulation
+2. Select the BGFX video mode and a backend supported by your MAME build
+3. Optionally enter a BGFX screen-chain name already available to MAME
+4. Set integer scaling and core performance options as needed
+
+Custom and embedded GLSL selection is currently experimental and is not yet
+forwarded by the active launcher. See [BGFX and GLSL Configuration](docs/BGFX_GLSL_INTEGRATION.md).
 
 ## Usage
+
 ### 🎨 Shader Features
-- **Embedded Shaders**: High-quality shaders included automatically
-  - No download required - works out of the box
-  - Professional CRT, LCD, and retro effects
-  - Pixel-perfect scaling options
-- **Enhanced Validation**: Automatic error detection and suggestions
-  - Syntax checking with line numbers
-  - Performance optimization hints
-  - Modern GLSL compatibility warnings
-- **Shader Categories**: Organized browsing by effect type
-- **Extraction**: Save embedded shaders for customization
+- **BGFX**: Select the BGFX video mode, backend, and an optional MAME screen chain in game properties
+- **Custom GLSL**: UI and helper code exists, but applying custom or embedded GLSL during launch is still experimental
+- **Renderer Boundary**: These settings affect the external MAME process, not the `egui` frontend renderer
 
 ### Basic Navigation
 - **Game List**: Browse and select games from the main list
@@ -336,21 +259,16 @@ To enable the Category column in the game list:
 - **Show Issues Only**: Check "Show only issues" to focus on problematic ROMs
 
 ### Graphics & Performance Features
-- **BGFX Backend Selection**: Choose from 8 rendering backends for optimal performance
-- **GLSL Shader Effects**: Apply CRT, LCD, and scanline effects for authentic arcade look
+- **BGFX Backend Selection**: Choose from the backends exposed for the host platform; availability is determined by MAME and the graphics driver
+- **BGFX Screen Chains**: Pass a chain name that exists in the installed MAME data
 - **Integer Scaling**: Set pixel-perfect scaling factors (1x-10x) for crisp graphics
-### 🎨 Using Embedded Shaders
-- **Automatic Access**: Shaders are included in the binary - no setup required
-- **Shader Categories**:
-  - **CRT Effects**: crt-geom, crt-royale for authentic arcade look
-  - **LCD Effects**: lcd-grid for handheld games and LCD displays
-  - **Retro Effects**: ntsc color space, scanlines for vintage feel
-  - **Scaling**: pixel-perfect integer scaling for crisp graphics
-- **Enhanced Validation**: Real-time feedback on shader syntax and performance
-- **Extraction**: Save embedded shaders to filesystem for customization
-- **Offline Operation**: Complete shader system works without internet connection
 - **Core Performance Options**: Fine-tune emulation speed, frame skipping, and system usage
-- **Real-time Parameter Adjustment**: Modify shader and performance settings on-the-fly
+
+### 🎨 Embedded and Custom GLSL (Experimental)
+- The repository includes GLSL sources, templates, presets, and basic validation helpers
+- The active launcher does not yet emit the custom GLSL fields or apply the embedded-shader selection
+- Embedded `.vert` and `.frag` files cannot be used as MAME BGFX chains without the chain format and assets expected by MAME
+- See [BGFX and GLSL Configuration](docs/BGFX_GLSL_INTEGRATION.md) before testing or extending this path
 
 ### Column Customization
 The game list table supports full column customization:
@@ -393,7 +311,7 @@ src/
 │   ├── scanner.rs          # Game list XML parsing (quick-xml)
 │   └── category_loader.rs  # Category loading from catver.ini
 ├── models/                 # Data models (game, config, filters)
-├── embedded_shaders/       # Built-in GLSL shaders
+├── embedded_shaders/       # Experimental embedded GLSL sources
 ├── ui/
 │   ├── dock.rs             # Dockable panel layout (egui_dock)
 │   ├── notifications.rs    # Toast notifications
@@ -406,7 +324,7 @@ src/
     ├── ini_utils/          # INI file helpers
     ├── hardware_filter.rs  # CPU/device/sound filtering
     ├── enhanced_search.rs  # Fuzzy/full-text search
-    └── graphics/           # Shader management and validation
+    └── graphics/           # Experimental presets, loading, and validation
 ```
 
 ## Performance
@@ -421,16 +339,17 @@ The application is optimized for performance:
 - **Column Width Caching**: Persistent column widths for consistent UI experience
 - **Smart Repaint Scheduling**: Adaptive frame rate based on activity
 - **Icon Management**: Lazy loading and caching of game icons
-- **BGFX Performance**: Hardware-accelerated rendering with multiple backends
-- **GLSL Optimization**: Efficient shader compilation and caching
+- **BGFX Launch Configuration**: MAMEUIx forwards supported BGFX options; rendering performance is determined by MAME, its backend, and the graphics driver
+- **Experimental GLSL Path**: Helper and validation modules exist, but no end-to-end shader compilation or caching is claimed
 
 ## Development Status
 
-✅ **Stable Release**: v0.1.5 is production-ready with stability and packaging improvements
+✅ **Current Release**: v0.1.6 keeps the dock-panel UI as the default and adds opt-in previews
 🔄 **Active Development**: Ongoing UI, performance, and packaging refinements
 📦 **Packaging**: Complete Linux distribution support (Debian, RPM, Arch)
+🧪 **FreeBSD**: Experimental amd64 source-build path; native validation is still required
 🎯 **Roadmap**: Performance optimizations and feature enhancements
-🔧 **New Features**: ROM verification system, BGFX/GLSL support, core performance options
+🔧 **New Features**: Experimental redesign, Software Lists preview, ROM verification, BGFX launch configuration, and experimental GLSL tooling
 
 ## Troubleshooting
 
@@ -442,14 +361,13 @@ The application is optimized for performance:
 - **Status Not Updating**: Verification status updates automatically; refresh if needed
 
 ### Shader Issues
-- **Enhanced Validation**: The new shader system provides detailed error messages
-- **Common Shader Errors**:
-  - Missing #version directive: Add `#version 330` at the top
-  - Deprecated functions: Replace `texture2D()` with `texture()`
-  - Performance warnings: Consider alternatives to expensive operations
-- **Embedded Shaders**: 11 professional shaders are included automatically
-- **Offline Operation**: No internet required - all shaders work offline
-- **Extraction**: Use extraction tools to save embedded shaders for customization
+- Test the equivalent MAME command directly before diagnosing the frontend, for example `mame pacman -video bgfx`
+- If a backend fails, omit `-bgfx_backend` to let MAME choose, or select another backend supported by that MAME build
+- If a screen chain fails, remove `-bgfx_screen_chains` and verify MAME's `bgfx_path` and chain assets
+- Custom or embedded GLSL having no effect is a known integration limitation: those selections are not yet forwarded by the active launcher
+- A debug build (`cargo run`) prints the generated MAME command after a game is launched from the UI
+- See [BGFX and GLSL Configuration](docs/BGFX_GLSL_INTEGRATION.md) for details
+
 ### Common Issues
 
 **"MAME executable not found"**
@@ -472,27 +390,13 @@ The application is optimized for performance:
 - Use appropriate BGFX backend for your system
 
 **"Graphics issues"**
-- Try different BGFX backends (OpenGL, DirectX, Vulkan)
-- Disable GLSL shaders if causing problems
+- Use a BGFX backend supported by the host platform, installed MAME build, and graphics driver
+- Remove the screen-chain option to test plain BGFX first
 - Check integer scaling settings
+
 ### v0.1.4
-- **🎨 Enhanced Shader System**: Complete overhaul of shader management
-  - Embedded shaders included in binary (no download required)
-  - 11 professional-quality shaders: CRT, LCD, retro effects, and scaling
-  - Enhanced GLSL validation with syntax checking and error reporting
-  - Performance analysis and optimization hints
-  - Modern GLSL compatibility warnings and suggestions
-  - Offline operation - no internet connection required
-  - Shader extraction tools for customization
-- **🔧 Improved User Experience**:
-  - Zero setup for shaders - works out of the box
-  - Real-time validation feedback
-  - Organized shader categories for easy browsing
-  - Professional-grade shader quality
-- **📦 Build System**:
-  - Shaders automatically embedded during build
-  - Enhanced validation integrated into build process
-  - Improved error handling and reporting
+- **🎨 Graphics foundations**: Added BGFX/GLSL configuration models, UI controls, command preview, presets, validation helpers, and embedded GLSL source assets
+- **Current limitation**: The active launcher applies BGFX settings, while custom/embedded GLSL forwarding remains experimental
 - Verify graphics drivers are up to date
 
 ### Debug Mode
@@ -522,7 +426,20 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Version History
 
-### v0.1.5 (Latest Release)
+### v0.1.6 (Latest Release)
+- **Experimental redesign preview**:
+  - Opt-in Steam-inspired Library, game detail, verification, and settings views
+  - Public Sans typography, responsive layouts, and redesign-specific styling
+  - Search focus, distinct Missing/Issues filters, and scrollable settings fixes
+- **Software Lists preview**:
+  - Browse and search entries from configured MAME hash XML files
+  - Check best-effort media-path presence without auditing archive or CHD contents
+- **Release readiness**:
+  - Simplified About content and reorganized public documentation
+  - Added an experimental, unverified FreeBSD amd64 source-build path
+  - Updated Linux package and AppImage release metadata
+
+### v0.1.5
 - **Stability and build gate improvements**:
   - Restored a clean `cargo test --bin mameuix` baseline
   - Replaced the main MAME XML scanner path with `quick-xml`
@@ -551,11 +468,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
   - Professional-grade verification accuracy and reporting
 
 ### v0.1.3 (Previous Release)
-- **BGFX/GLSL Integration**: Complete multi-backend graphics support
-  - 8 rendering backends (Auto, OpenGL, DirectX11/12, Vulkan, Metal, Gnm, Nvn)
-  - GLSL shader system with CRT, LCD, and scanline effects
-  - Real-time parameter adjustment for shaders
-  - Graphics presets for common configurations
+- **BGFX/GLSL configuration foundations**:
+  - Added MAME video/backend and screen-chain controls with command preview
+  - Added custom GLSL fields, presets, templates, and validation helpers
+  - Active launches currently apply BGFX settings; custom/embedded GLSL remains experimental
 - **Integer Scaling**: Complete implementation of MAME's scaling options
   - Manual scale factors (1x-10x) for pixel-perfect scaling
   - Non-integer scaling options for better screen fit
@@ -584,8 +500,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
   - Categories load immediately when first configured (no restart required)
   - Games without categories display "Misc." correctly
   - Improved category loader with case-insensitive matching
-- **New Modules**: Added hardware filtering, INI utilities, and graphics shader support
-- **Testing Tools**: Added test binaries for category system and BGFX/GLSL integration
+- **New Modules**: Added hardware filtering, INI utilities, and experimental graphics helpers
 - **Plugin Detection**: Automatic detection of MAME plugins (hiscore, cheat, autofire)
 - **Enhanced UI**: Improved preferences dialog and theme system
 

@@ -292,6 +292,12 @@ impl FilterSettings {
             || other_active
             || !self.search_text.is_empty()
             || self.catver_category.is_some()
+            || !self.selected_manufacturers.is_empty()
+            || !self.year_from.trim().is_empty()
+            || !self.year_to.trim().is_empty()
+            || !self.cpu_filter.is_empty()
+            || !self.device_filter.is_empty()
+            || !self.sound_filter.is_empty()
     }
 
     /// Count active filters
@@ -340,6 +346,9 @@ impl FilterSettings {
         if !self.selected_manufacturers.is_empty() {
             count += 1;
         }
+        if !self.year_from.trim().is_empty() || !self.year_to.trim().is_empty() {
+            count += 1;
+        }
 
         count
     }
@@ -347,5 +356,66 @@ impl FilterSettings {
     /// Whether a game's manufacturer passes the manufacturer filter.
     pub fn manufacturer_matches(&self, manufacturer: &str) -> bool {
         self.selected_manufacturers.is_empty() || self.selected_manufacturers.contains(manufacturer)
+    }
+
+    /// Whether a game's four-digit year falls inside the configured inclusive range.
+    /// Empty or incomplete bounds stay open so an in-progress text edit does not
+    /// unexpectedly hide the whole library. Unknown game years do not match an
+    /// active, valid range.
+    pub fn year_matches(&self, year: &str) -> bool {
+        fn parse_bound(value: &str) -> Option<u16> {
+            let value = value.trim();
+            (value.len() == 4 && value.bytes().all(|byte| byte.is_ascii_digit()))
+                .then(|| value.parse::<u16>().ok())
+                .flatten()
+        }
+
+        let year_from = parse_bound(&self.year_from);
+        let year_to = parse_bound(&self.year_to);
+
+        if year_from.is_none() && year_to.is_none() {
+            return true;
+        }
+
+        let Ok(year) = year.trim().parse::<u16>() else {
+            return false;
+        };
+
+        year_from.is_none_or(|from| year >= from) && year_to.is_none_or(|to| year <= to)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FilterSettings;
+
+    #[test]
+    fn year_range_is_inclusive_and_rejects_unknown_years() {
+        let filters = FilterSettings {
+            year_from: "1970".to_string(),
+            year_to: "1979".to_string(),
+            ..FilterSettings::default()
+        };
+
+        assert!(filters.year_matches("1970"));
+        assert!(filters.year_matches("1979"));
+        assert!(!filters.year_matches("1969"));
+        assert!(!filters.year_matches("1980"));
+        assert!(!filters.year_matches("????"));
+    }
+
+    #[test]
+    fn year_range_supports_open_and_incomplete_bounds() {
+        let mut filters = FilterSettings {
+            year_from: "1990".to_string(),
+            ..FilterSettings::default()
+        };
+        assert!(!filters.year_matches("1989"));
+        assert!(filters.year_matches("1990"));
+        assert!(filters.year_matches("2024"));
+
+        filters.year_from = "19".to_string();
+        assert!(filters.year_matches("1989"));
+        assert!(filters.year_matches("????"));
     }
 }

@@ -71,6 +71,7 @@ impl ArtworkPanel {
                         ArtworkType::Flyer,
                         "Flyer",
                     );
+                    ui.selectable_value(&mut self.selected_artwork_type, ArtworkType::Pcb, "PCB");
                 });
 
                 ui.separator();
@@ -112,6 +113,7 @@ impl ArtworkPanel {
                                     ArtworkType::Marquee => "marquee",
                                     ArtworkType::Title => "title screen",
                                     ArtworkType::Flyer => "flyer",
+                                    ArtworkType::Pcb => "PCB",
                                 },
                                 game.name
                             ));

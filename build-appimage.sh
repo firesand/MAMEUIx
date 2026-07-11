@@ -48,7 +48,7 @@ check_build_host_glibc() {
         print_warning "AppImages built here may fail on older Linux (e.g. GLIBC_2.43 not found)."
         print_warning "Use one of:"
         print_warning "  ./build-appimage-docker.sh     # Ubuntu 22.04 container"
-        print_warning "  gh workflow run appimage.yml   # GitHub Actions (ubuntu-22.04)"
+        print_warning "  gh workflow run appimage.yml -f build_tag=v${VERSION} -f upload_to_release=false"
         print_error "Refusing to build. Set SKIP_GLIBC_CHECK=1 to override (not recommended for release)."
         exit 1
     fi
@@ -61,11 +61,11 @@ fi
 
 VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
 ARCH=$(uname -m)
+BUILD_TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 APPIMAGE_NAME="MAMEUIx-${VERSION}-${ARCH}.AppImage"
 APPDIR="AppDir"
 TOOLS_DIR="${TOOLS_DIR:-${HOME}/.cache/mameuix-appimage-tools}"
 LINUXDEPLOY="${TOOLS_DIR}/linuxdeploy-${ARCH}.AppImage"
-APPIMAGETOOL="${TOOLS_DIR}/appimagetool-${ARCH}.AppImage"
 
 download_if_missing() {
     local url="$1"
@@ -102,9 +102,6 @@ ensure_tools() {
     download_if_missing \
         "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${ARCH}.AppImage" \
         "${LINUXDEPLOY}"
-    download_if_missing \
-        "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${ARCH}.AppImage" \
-        "${APPIMAGETOOL}"
 }
 
 prepare_icon() {
@@ -144,10 +141,14 @@ assemble_appdir() {
     mkdir -p "${APPDIR}/usr/share/applications"
     mkdir -p "${APPDIR}/usr/share/doc/mameuix"
 
-    cp target/release/mameuix "${APPDIR}/usr/bin/"
+    cp "${BUILD_TARGET_DIR}/release/mameuix" "${APPDIR}/usr/bin/"
     chmod +x "${APPDIR}/usr/bin/mameuix"
     cp mameuix.desktop "${APPDIR}/usr/share/applications/"
-    cp README.md CHANGELOG.md "${APPDIR}/usr/share/doc/mameuix/" 2>/dev/null || true
+    cp README.md CHANGELOG.md LICENSE "${APPDIR}/usr/share/doc/mameuix/" 2>/dev/null || true
+    cp docs/INSTALL.md docs/MAME_FOLDER_STRUCTURE.md docs/BGFX_GLSL_INTEGRATION.md \
+        "${APPDIR}/usr/share/doc/mameuix/"
+    cp assets/fonts/public_sans/OFL.txt \
+        "${APPDIR}/usr/share/doc/mameuix/PublicSans-OFL.txt"
 
     prepare_icon
 }
@@ -195,6 +196,7 @@ main() {
     ls -lh "${APPIMAGE_NAME}"
     print_warning "MAME is not included. Install MAME separately and set its path in MAMEUIx settings."
     print_status "Run: ./${APPIMAGE_NAME}"
+    print_status "Redesign preview: ./${APPIMAGE_NAME} --redesign"
     print_status "If FUSE is unavailable: APPIMAGE_EXTRACT_AND_RUN=1 ./${APPIMAGE_NAME}"
 }
 

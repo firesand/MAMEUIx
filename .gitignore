@@ -60,6 +60,7 @@ node_modules/
 *.tar.gz
 *.zip
 *.AppImage
+*.AppImage.sha256
 AppDir/
 pkg/
 
@@ -72,6 +73,8 @@ mame_help.txt
 # Development directories
 diff/
 nvram/
+/snap/
+/cfg/*.cfg
 pS_CatVer_277/
 MAMEUI-inifiles/
 
@@ -91,4 +94,9 @@ test-install.sh
 *IMPLEMENTATION.md
 *GUIDE.md
 *PLAN.md
-RELEASE_*.md 
+RELEASE_*.md
+
+# Local project notes (never publish or package)
+/memory.md
+/.local-docs/
+/design_handoff_mameuix_redesign/

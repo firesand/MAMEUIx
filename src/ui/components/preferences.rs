@@ -1,5 +1,5 @@
 // src/ui/dialogs/preferences.rs
-use crate::models::{Preferences, Theme};
+use crate::models::{Preferences, Theme, UiShellMode};
 use crate::ui::components::steam_ui::SteamUi;
 use eframe::egui;
 
@@ -41,8 +41,7 @@ impl PreferencesDialog {
             .frame(SteamUi::window_frame())
             .open(open)
             .show(ctx, |ui| {
-                let body_height =
-                    (ui.available_height() - SteamUi::FOOTER_HEIGHT).max(420.0);
+                let body_height = (ui.available_height() - SteamUi::FOOTER_HEIGHT).max(420.0);
 
                 ui.allocate_ui_with_layout(
                     egui::vec2(ui.available_width(), body_height),
@@ -241,10 +240,27 @@ impl PreferencesDialog {
             });
 
             ui.checkbox(&mut prefs.show_fps, "Show FPS counter");
-            ui.checkbox(
-                &mut prefs.use_dock_layout,
-                "Use dockable panel layout (v0.1.5)",
-            );
+
+            ui.add_space(8.0);
+            ui.label(SteamUi::section_title("UI shell"));
+            ui.label(SteamUi::subtitle(
+                "Choose the interface layout. Redesign preview is experimental — switch back anytime.",
+            ));
+            for mode in [
+                UiShellMode::LegacyDock,
+                UiShellMode::LegacyClassic,
+                UiShellMode::RedesignPreview,
+            ] {
+                if ui
+                    .radio(prefs.ui_shell == mode, mode.display_name())
+                    .clicked()
+                {
+                    prefs.ui_shell = mode;
+                    prefs.use_dock_layout = mode == UiShellMode::LegacyDock;
+                }
+                ui.label(SteamUi::muted(mode.description()));
+            }
+
             ui.checkbox(
                 &mut prefs.enable_toast_notifications,
                 "Enable toast notifications",

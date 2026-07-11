@@ -19,6 +19,8 @@ enum HistoryTab {
 pub struct HistoryPanel {
     /// Cache of loaded history data
     history_cache: HashMap<String, String>,
+    /// Cache misses too; large DAT files are expensive to scan repeatedly.
+    missing_cache: std::collections::HashSet<String>,
     /// Currently selected game
     current_game: Option<String>,
     /// Cached display text for current game
@@ -37,6 +39,7 @@ impl HistoryPanel {
     pub fn new() -> Self {
         Self {
             history_cache: HashMap::new(),
+            missing_cache: std::collections::HashSet::new(),
             current_game: None,
             current_display_text: String::new(),
             is_loading: false,
@@ -244,6 +247,78 @@ impl HistoryPanel {
         });
     }
 
+    /// Show history in the redesign detail page without nesting another
+    /// scrolling text editor inside the page scroll area.
+    pub fn show_redesign_reader(&mut self, ui: &mut egui::Ui, min_body_height: f32) {
+        ui.label(egui::RichText::new("Game Information").size(18.0).strong());
+        ui.add_space(10.0);
+
+        if self.current_game.is_some() && !self.is_loading {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                for (tab, label) in [
+                    (HistoryTab::History, "History"),
+                    (HistoryTab::MameInfo, "MAME Info"),
+                    (HistoryTab::Other, "Other"),
+                ] {
+                    if ui
+                        .selectable_label(matches!(self.selected_tab, t if t == tab), label)
+                        .clicked()
+                    {
+                        self.selected_tab = tab;
+                    }
+                }
+            });
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(10.0);
+        }
+
+        ui.scope(|ui| {
+            ui.set_min_height(min_body_height.max(160.0));
+            if self.is_loading {
+                ui.centered_and_justified(|ui| {
+                    ui.label("Loading history data...");
+                });
+            } else if self.current_game.is_some() {
+                let content = match self.selected_tab {
+                    HistoryTab::History => &self.history_text,
+                    HistoryTab::MameInfo => &self.mameinfo_text,
+                    HistoryTab::Other => &self.other_text,
+                };
+
+                if content.is_empty() {
+                    match self.selected_tab {
+                        HistoryTab::History => {
+                            ui.label("No history entry loaded for this set.");
+                            ui.label("Point history.xml in Settings -> Directories to enable game history.");
+                        }
+                        HistoryTab::MameInfo => {
+                            ui.label("No MAME info loaded for this set.");
+                            ui.label("Point mameinfo.dat in Settings -> Directories to enable MAME info.");
+                        }
+                        HistoryTab::Other => {
+                            ui.label("No additional DAT information loaded for this set.");
+                            ui.label("Point command.dat, hiscore.dat, or gameinit.dat in Directories.");
+                        }
+                    }
+                } else {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(content)
+                                .monospace()
+                                .size(12.0)
+                                .color(ui.style().visuals.text_color()),
+                        )
+                        .wrap(),
+                    );
+                }
+            } else {
+                ui.label("Select a game to view its history and information.");
+            }
+        });
+    }
+
     /// Load history from history.xml file
     fn load_history_xml(&mut self, path: &PathBuf, rom_name: &str) {
         // Check cache first
@@ -427,12 +502,15 @@ impl HistoryPanel {
         if let Some(cached) = self.history_cache.get(&cache_key) {
             return Some(cached.clone());
         }
+        if self.missing_cache.contains(&cache_key) {
+            return None;
+        }
 
         if !path.exists() {
             return None;
         }
 
-        match fs::read_to_string(path) {
+        match read_text_lossy(path) {
             Ok(content) => {
                 // Try to find the game entry
                 // Format: $info=romname (without .zip)
@@ -499,10 +577,12 @@ impl HistoryPanel {
                     }
                 }
 
+                self.missing_cache.insert(cache_key);
                 None
             }
             Err(e) => {
                 eprintln!("Error reading {}: {:?}", dat_type, e);
+                self.missing_cache.insert(cache_key);
                 None
             }
         }
@@ -511,5 +591,11 @@ impl HistoryPanel {
     /// Clear the cache (useful when files are updated)
     pub fn clear_cache(&mut self) {
         self.history_cache.clear();
+        self.missing_cache.clear();
     }
+}
+
+fn read_text_lossy(path: &PathBuf) -> std::io::Result<String> {
+    let bytes = fs::read(path)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }

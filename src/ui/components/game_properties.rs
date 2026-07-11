@@ -666,6 +666,7 @@ impl GamePropertiesDialog {
                         ui.label("Common BGFX shader locations:");
                         ui.label("• ~/.mame/bgfx/chains/");
                         ui.label("• /usr/share/mame/bgfx/chains/");
+                        ui.label("• /usr/local/share/mame/bgfx/chains/ (BSD)");
                         ui.label("• ./bgfx/chains/");
                     }
                     ShaderStatus::Unknown => {
@@ -1986,6 +1987,7 @@ impl GamePropertiesDialog {
                 .map(|home| format!("{}/.mame/bgfx/chains/{}.json", home, shader_name))
                 .ok(),
             Some("/usr/share/mame/bgfx/chains/".to_string() + shader_name + ".json"),
+            Some("/usr/local/share/mame/bgfx/chains/".to_string() + shader_name + ".json"),
             Some("./bgfx/chains/".to_string() + shader_name + ".json"),
             Some(format!("./bgfx/chains/{}.json", shader_name)),
         ];

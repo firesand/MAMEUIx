@@ -12,6 +12,7 @@ const CATEGORY_ARTWORK: &str = "artwork_extra";
 const CATEGORY_SUPPORT_FILES: &str = "support_files";
 const CATEGORY_DAT_FILES: &str = "dat_files";
 const CATEGORY_INTERNAL_FOLDERS: &str = "internal_folders";
+const CATEGORY_SOFTWARE_LISTS: &str = "software_lists";
 
 // Structure to collect directory updates for smart memory
 #[derive(Default)]
@@ -38,21 +39,121 @@ impl DirectoryUpdates {
 
 /// DirectoriesDialog menangani konfigurasi berbagai file path
 /// Versi ini melacak perubahan dan memberitahu main window saat reload diperlukan
-pub struct DirectoriesDialog;
+#[derive(Default)]
+pub struct DirectoriesDialog {
+    original: Option<AppConfig>,
+    draft: Option<AppConfig>,
+    dirty: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CloseAction {
+    Commit,
+    Discard,
+}
 
 impl DirectoriesDialog {
-    /// Get last used directory for a category, or default to current directory
-    fn get_last_directory(config: &AppConfig, category: &str) -> Option<PathBuf> {
-        config.last_directories.get(category).cloned()
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    /// Save last used directory for a category
-    fn save_last_directory(config: &mut AppConfig, category: &str, path: &Path) {
-        if let Some(parent) = path.parent() {
-            config
-                .last_directories
-                .insert(category.to_string(), parent.to_path_buf());
-        }
+    /// Discard any in-progress edit session.
+    pub fn reset(&mut self) {
+        self.original = None;
+        self.draft = None;
+        self.dirty = false;
+    }
+
+    fn begin_session(&mut self, config: &AppConfig) {
+        self.original = Some(config.clone());
+        self.draft = Some(config.clone());
+        self.dirty = false;
+    }
+
+    fn executable_paths_equal(left: &[MameExecutable], right: &[MameExecutable]) -> bool {
+        left.len() == right.len()
+            && left
+                .iter()
+                .zip(right)
+                .all(|(left, right)| left.path == right.path)
+    }
+
+    fn executables_equal(left: &[MameExecutable], right: &[MameExecutable]) -> bool {
+        left.len() == right.len()
+            && left.iter().zip(right).all(|(left, right)| {
+                left.name == right.name
+                    && left.path == right.path
+                    && left.version == right.version
+                    && left.total_games == right.total_games
+                    && left.working_games == right.working_games
+            })
+    }
+
+    /// Compare only values edited by this dialog. Smart-directory memory is
+    /// persisted on OK, but does not require a game/category reload by itself.
+    fn relevant_settings_changed(original: &AppConfig, draft: &AppConfig) -> bool {
+        !Self::executable_paths_equal(&original.mame_executables, &draft.mame_executables)
+            || original.rom_paths != draft.rom_paths
+            || original.software_rom_paths != draft.software_rom_paths
+            || original.hash_path != draft.hash_path
+            || original.sw_path != draft.sw_path
+            || original.artwork_path != draft.artwork_path
+            || original.snap_path != draft.snap_path
+            || original.cabinet_path != draft.cabinet_path
+            || original.title_path != draft.title_path
+            || original.flyer_path != draft.flyer_path
+            || original.marquee_path != draft.marquee_path
+            || original.cheats_path != draft.cheats_path
+            || original.icons_path != draft.icons_path
+            || original.catver_ini_path != draft.catver_ini_path
+            || original.history_path != draft.history_path
+            || original.mameinfo_dat_path != draft.mameinfo_dat_path
+            || original.hiscore_dat_path != draft.hiscore_dat_path
+            || original.gameinit_dat_path != draft.gameinit_dat_path
+            || original.command_dat_path != draft.command_dat_path
+            || original.cfg_path != draft.cfg_path
+            || original.nvram_path != draft.nvram_path
+            || original.input_path != draft.input_path
+            || original.state_path != draft.state_path
+            || original.diff_path != draft.diff_path
+            || original.comment_path != draft.comment_path
+    }
+
+    fn owned_settings_changed(original: &AppConfig, draft: &AppConfig) -> bool {
+        Self::relevant_settings_changed(original, draft)
+            || !Self::executables_equal(&original.mame_executables, &draft.mame_executables)
+            || original.last_directories != draft.last_directories
+    }
+
+    /// Commit only settings owned by this dialog so unrelated configuration
+    /// changes made while it is open cannot be overwritten by an old snapshot.
+    fn commit_draft(config: &mut AppConfig, draft: AppConfig) {
+        config.mame_executables = draft.mame_executables;
+        config.rom_paths = draft.rom_paths;
+        config.software_rom_paths = draft.software_rom_paths;
+        config.hash_path = draft.hash_path;
+        config.sw_path = draft.sw_path;
+        config.artwork_path = draft.artwork_path;
+        config.snap_path = draft.snap_path;
+        config.cabinet_path = draft.cabinet_path;
+        config.title_path = draft.title_path;
+        config.flyer_path = draft.flyer_path;
+        config.marquee_path = draft.marquee_path;
+        config.cheats_path = draft.cheats_path;
+        config.icons_path = draft.icons_path;
+        config.catver_ini_path = draft.catver_ini_path;
+        config.history_path = draft.history_path;
+        config.mameinfo_dat_path = draft.mameinfo_dat_path;
+        config.hiscore_dat_path = draft.hiscore_dat_path;
+        config.gameinit_dat_path = draft.gameinit_dat_path;
+        config.command_dat_path = draft.command_dat_path;
+        config.cfg_path = draft.cfg_path;
+        config.nvram_path = draft.nvram_path;
+        config.input_path = draft.input_path;
+        config.state_path = draft.state_path;
+        config.diff_path = draft.diff_path;
+        config.comment_path = draft.comment_path;
+        config.last_directories = draft.last_directories;
     }
 
     // Helper function to create option groups matching HTML style
@@ -99,19 +200,19 @@ impl DirectoriesDialog {
 
     /// Menampilkan dialog konfigurasi directories utama
     /// Mengembalikan true jika ada perubahan yang memerlukan reload
-    pub fn show(ctx: &egui::Context, config: &mut AppConfig, open: &mut bool) -> bool {
-        let mut close = false;
-        let mut changes_made = false;
+    pub fn show(&mut self, ctx: &egui::Context, config: &mut AppConfig, open: &mut bool) -> bool {
+        if self.draft.is_none() || self.original.is_none() {
+            self.begin_session(config);
+        }
+
+        let mut close_action = None;
+        let mut edited_this_frame = false;
         let mut directory_updates = DirectoryUpdates::default();
+        let original = self.original.as_ref().expect("session was initialized");
+        let draft = self.draft.as_mut().expect("session was initialized");
 
         // Take snapshot of last_directories for read operations
-        let last_directories_snapshot = config.last_directories.clone();
-
-        // Simpan state awal untuk deteksi perubahan
-        let initial_mame_count = config.mame_executables.len();
-        let initial_rom_count = config.rom_paths.len();
-        let initial_sample_count = config.sample_paths.len();
-        let initial_catver_path = config.catver_ini_path.clone();
+        let last_directories_snapshot = draft.last_directories.clone();
 
         let previous_style = (*ctx.style()).clone();
         SteamUi::apply(ctx);
@@ -139,9 +240,10 @@ impl DirectoriesDialog {
 
                             let categories = [
                                 ("MAME Paths", 0),
-                                ("Support Files", 1),
-                                ("INI & DAT Files", 2),
-                                ("Internal Folders", 3),
+                                ("Software Lists", 1),
+                                ("Support Files", 2),
+                                ("INI & DAT Files", 3),
+                                ("Internal Folders", 4),
                             ];
 
                             for (label, idx) in categories {
@@ -175,10 +277,10 @@ impl DirectoriesDialog {
                                                 ui.add_space(8.0);
                                                 if Self::executable_list(
                                                     ui,
-                                                    &mut config.mame_executables,
+                                                    &mut draft.mame_executables,
                                                     "mame_exe",
                                                 ) {
-                                                    changes_made = true;
+                                                    edited_this_frame = true;
                                                 }
                                             },
                                         );
@@ -193,18 +295,94 @@ impl DirectoriesDialog {
                                                 ui.add_space(8.0);
                                                 if Self::path_list(
                                                     ui,
-                                                    &mut config.rom_paths,
+                                                    &mut draft.rom_paths,
                                                     "roms",
                                                     &last_directories_snapshot,
                                                     &mut directory_updates,
                                                 ) {
-                                                    changes_made = true;
+                                                    edited_this_frame = true;
                                                 }
                                             },
                                         );
                                     });
                                 }
                                 1 => {
+                                    SteamUi::page_header(
+                                        ui,
+                                        "Software Lists",
+                                        "Configure MAME software-list definitions and media paths",
+                                    );
+                                    SteamUi::scroll_content(ui, scroll_height, |ui| {
+                                        Self::render_option_group(
+                                            ui,
+                                            Some("Software-list Database"),
+                                            |ui| {
+                                                ui.label(SteamUi::muted(
+                                                    "Folder containing MAME hash XML files such as a2600.xml, nes.xml, and msx1_cart.xml",
+                                                ));
+                                                ui.add_space(8.0);
+                                                if Self::optional_path_field(
+                                                    ui,
+                                                    "Hash XML Directory",
+                                                    "Software-list definition files used to build the Software Lists table",
+                                                    &mut draft.hash_path,
+                                                    &last_directories_snapshot,
+                                                    CATEGORY_SOFTWARE_LISTS,
+                                                    &mut directory_updates,
+                                                ) {
+                                                    edited_this_frame = true;
+                                                }
+                                            },
+                                        );
+
+                                        ui.add_space(SteamUi::SECTION_GAP);
+
+                                        Self::render_option_group(
+                                            ui,
+                                            Some("Software-list ROMs"),
+                                            |ui| {
+                                                ui.label(SteamUi::muted(
+                                                    "Root folders for split software-list sets, usually containing subfolders named after software lists such as a2600, nes, or apple2_flop_orig",
+                                                ));
+                                                ui.add_space(8.0);
+                                                if Self::path_list(
+                                                    ui,
+                                                    &mut draft.software_rom_paths,
+                                                    "software_roms",
+                                                    &last_directories_snapshot,
+                                                    &mut directory_updates,
+                                                ) {
+                                                    edited_this_frame = true;
+                                                }
+                                            },
+                                        );
+
+                                        ui.add_space(SteamUi::SECTION_GAP);
+
+                                        Self::render_option_group(
+                                            ui,
+                                            Some("Loose Software"),
+                                            |ui| {
+                                                ui.label(SteamUi::muted(
+                                                    "Folder containing loose software media used by MAME through -swpath",
+                                                ));
+                                                ui.add_space(8.0);
+                                                if Self::optional_path_field(
+                                                    ui,
+                                                    "Software Media Directory",
+                                                    "Loose cartridge, disk, cassette, or other software media files",
+                                                    &mut draft.sw_path,
+                                                    &last_directories_snapshot,
+                                                    CATEGORY_SOFTWARE_LISTS,
+                                                    &mut directory_updates,
+                                                ) {
+                                                    edited_this_frame = true;
+                                                }
+                                            },
+                                        );
+                                    });
+                                }
+                                2 => {
                                     SteamUi::page_header(
                                         ui,
                                         "Support Files",
@@ -215,100 +393,100 @@ impl DirectoriesDialog {
                                             ui,
                                             "Artwork",
                                             "Game artwork files",
-                                            &mut config.artwork_path,
+                                            &mut draft.artwork_path,
                                             &last_directories_snapshot,
                                             CATEGORY_ARTWORK,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Snap",
                                             "Game screenshots",
-                                            &mut config.snap_path,
+                                            &mut draft.snap_path,
                                             &last_directories_snapshot,
                                             CATEGORY_ARTWORK,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Cabinet",
                                             "Cabinet artwork",
-                                            &mut config.cabinet_path,
+                                            &mut draft.cabinet_path,
                                             &last_directories_snapshot,
                                             CATEGORY_ARTWORK,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Title",
                                             "Title screens",
-                                            &mut config.title_path,
+                                            &mut draft.title_path,
                                             &last_directories_snapshot,
                                             CATEGORY_ARTWORK,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Flyer",
                                             "Promotional flyers",
-                                            &mut config.flyer_path,
+                                            &mut draft.flyer_path,
                                             &last_directories_snapshot,
                                             CATEGORY_ARTWORK,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Marquees",
                                             "Marquee artwork",
-                                            &mut config.marquee_path,
+                                            &mut draft.marquee_path,
                                             &last_directories_snapshot,
                                             CATEGORY_ARTWORK,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Cheats",
                                             "Cheat files",
-                                            &mut config.cheats_path,
+                                            &mut draft.cheats_path,
                                             &last_directories_snapshot,
                                             CATEGORY_SUPPORT_FILES,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Icons",
                                             "Game icon files",
-                                            &mut config.icons_path,
+                                            &mut draft.icons_path,
                                             &last_directories_snapshot,
                                             CATEGORY_ARTWORK,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                     });
                                 }
-                                2 => {
+                                3 => {
                                     SteamUi::page_header(
                                         ui,
                                         "INI & DAT Files",
@@ -327,13 +505,13 @@ impl DirectoriesDialog {
                                                 ui,
                                                 "Catver INI",
                                                 "Game category information (catver.ini)",
-                                                &mut config.catver_ini_path,
+                                                &mut draft.catver_ini_path,
                                                 Some(&["ini"]),
                                                 &last_directories_snapshot,
                                                 CATEGORY_DAT_FILES,
                                                 &mut directory_updates,
                                             ) {
-                                                changes_made = true;
+                                                edited_this_frame = true;
                                             }
                                         });
                                         ui.add_space(20.0);
@@ -343,69 +521,69 @@ impl DirectoriesDialog {
                                             ui,
                                             "History",
                                             "Game history information",
-                                            &mut config.history_path,
+                                            &mut draft.history_path,
                                             Some(&["xml"]),
                                             &last_directories_snapshot,
                                             CATEGORY_DAT_FILES,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_file_field(
                                             ui,
                                             "MAME Info DAT",
                                             "Detailed game information",
-                                            &mut config.mameinfo_dat_path,
+                                            &mut draft.mameinfo_dat_path,
                                             Some(&["dat"]),
                                             &last_directories_snapshot,
                                             CATEGORY_DAT_FILES,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_file_field(
                                             ui,
                                             "High Score DAT",
                                             "High score information",
-                                            &mut config.hiscore_dat_path,
+                                            &mut draft.hiscore_dat_path,
                                             Some(&["dat"]),
                                             &last_directories_snapshot,
                                             CATEGORY_DAT_FILES,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_file_field(
                                             ui,
                                             "Game Init DAT",
                                             "Game initialization data",
-                                            &mut config.gameinit_dat_path,
+                                            &mut draft.gameinit_dat_path,
                                             Some(&["dat"]),
                                             &last_directories_snapshot,
                                             CATEGORY_DAT_FILES,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_file_field(
                                             ui,
                                             "Command DAT",
                                             "Game command information",
-                                            &mut config.command_dat_path,
+                                            &mut draft.command_dat_path,
                                             Some(&["dat"]),
                                             &last_directories_snapshot,
                                             CATEGORY_DAT_FILES,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                     });
                                 }
-                                3 => {
+                                4 => {
                                     SteamUi::page_header(
                                         ui,
                                         "Internal Folders",
@@ -421,72 +599,72 @@ impl DirectoriesDialog {
                                             ui,
                                             "Configuration Files (cfg)",
                                             "MAME configuration files directory",
-                                            &mut config.cfg_path,
+                                            &mut draft.cfg_path,
                                             &last_directories_snapshot,
                                             CATEGORY_INTERNAL_FOLDERS,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "NVRAM",
                                             "Non-volatile RAM directory",
-                                            &mut config.nvram_path,
+                                            &mut draft.nvram_path,
                                             &last_directories_snapshot,
                                             CATEGORY_INTERNAL_FOLDERS,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Input Configuration (input)",
                                             "Input configuration files directory",
-                                            &mut config.input_path,
+                                            &mut draft.input_path,
                                             &last_directories_snapshot,
                                             CATEGORY_INTERNAL_FOLDERS,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Save States (state)",
                                             "Save state files directory",
-                                            &mut config.state_path,
+                                            &mut draft.state_path,
                                             &last_directories_snapshot,
                                             CATEGORY_INTERNAL_FOLDERS,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Hard Disk Diffs (diff)",
                                             "Hard disk diff files directory",
-                                            &mut config.diff_path,
+                                            &mut draft.diff_path,
                                             &last_directories_snapshot,
                                             CATEGORY_INTERNAL_FOLDERS,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                         ui.add_space(10.0);
                                         if Self::optional_path_field(
                                             ui,
                                             "Comment Files (comment)",
                                             "Comment files directory",
-                                            &mut config.comment_path,
+                                            &mut draft.comment_path,
                                             &last_directories_snapshot,
                                             CATEGORY_INTERNAL_FOLDERS,
                                             &mut directory_updates,
                                         ) {
-                                            changes_made = true;
+                                            edited_this_frame = true;
                                         }
                                     });
                                 }
@@ -504,42 +682,61 @@ impl DirectoriesDialog {
                 // Dialog buttons at bottom
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("OK").clicked() {
-                        close = true;
-                        // Cek jika jumlah berubah atau catver.ini path berubah
-                        if config.mame_executables.len() != initial_mame_count ||
-                            config.rom_paths.len() != initial_rom_count ||
-                            config.sample_paths.len() != initial_sample_count ||
-                            config.catver_ini_path != initial_catver_path {
-                                changes_made = true;
-                        }
+                        close_action = Some(CloseAction::Commit);
                     }
 
                     if ui.button("Cancel").clicked() {
-                        close = true;
-                        // Jangan simpan perubahan saat cancel
-                        changes_made = false;
+                        close_action = Some(CloseAction::Discard);
                     }
                 });
 
                 // Tampilkan catatan jika ada perubahan
-                if changes_made {
+                if Self::relevant_settings_changed(original, draft) {
                     ui.separator();
                     ui.colored_label(SteamUi::WARNING,
                                      "Changes detected - games will be reloaded when you click OK");
+                } else if Self::owned_settings_changed(original, draft) || edited_this_frame {
+                    ui.separator();
+                    ui.colored_label(
+                        SteamUi::WARNING,
+                        "Changes detected - settings will be saved when you click OK",
+                    );
                 }
             });
 
         ctx.set_style(previous_style);
 
-        if close {
+        directory_updates.apply_to_config(draft);
+        let reload_required = Self::relevant_settings_changed(original, draft);
+        let dirty = Self::owned_settings_changed(original, draft);
+        self.dirty = dirty;
+
+        if close_action.is_some() {
             *open = false;
         }
 
-        // Apply directory updates to config for smart memory
-        directory_updates.apply_to_config(config);
-
-        // Return apakah ada perubahan DAN user klik OK
-        close && changes_made
+        match close_action {
+            Some(CloseAction::Commit) => {
+                let had_changes = self.dirty;
+                let draft = self.draft.take().expect("session was initialized");
+                if had_changes {
+                    Self::commit_draft(config, draft);
+                }
+                self.original = None;
+                self.dirty = false;
+                reload_required
+            }
+            Some(CloseAction::Discard) => {
+                self.reset();
+                false
+            }
+            None if !*open => {
+                // Closing through the window title-bar is equivalent to Cancel.
+                self.reset();
+                false
+            }
+            None => false,
+        }
     }
 
     /// Handle MAME executables - return true jika dimodifikasi
@@ -609,8 +806,15 @@ impl DirectoriesDialog {
                                     } else {
                                         file_dialog
                                     }
-                                } else if cfg!(target_os = "linux") {
-                                    file_dialog.set_directory(MameFinderDialog::linux_browse_directory())
+                                } else if cfg!(any(
+                                    target_os = "linux",
+                                    target_os = "freebsd",
+                                    target_os = "dragonfly",
+                                    target_os = "netbsd",
+                                    target_os = "openbsd"
+                                )) {
+                                    file_dialog
+                                        .set_directory(MameFinderDialog::unix_browse_directory())
                                 } else {
                                     file_dialog
                                 };
@@ -777,6 +981,7 @@ impl DirectoriesDialog {
                             let category = match id {
                                 "roms" => CATEGORY_ROM,
                                 "samples" => CATEGORY_SAMPLE,
+                                "software_roms" => CATEGORY_SOFTWARE_LISTS,
                                 _ => CATEGORY_ROM, // Default fallback
                             };
 
@@ -785,6 +990,7 @@ impl DirectoriesDialog {
                                 match id {
                                     "roms" => "ROM",
                                     "samples" => "Sample",
+                                    "software_roms" => "Software-list ROM",
                                     _ => "Directory",
                                 }
                             ));
@@ -824,6 +1030,7 @@ impl DirectoriesDialog {
                 match id {
                     "roms" => "ROM Directory",
                     "samples" => "Sample Directory",
+                    "software_roms" => "Software-list ROM Directory",
                     _ => "Directory",
                 }
             ))
@@ -1026,5 +1233,110 @@ impl DirectoriesDialog {
         });
 
         modified
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn executable(path: &str) -> MameExecutable {
+        MameExecutable {
+            name: "MAME".to_string(),
+            path: path.to_string(),
+            version: "0.280".to_string(),
+            total_games: 1,
+            working_games: 1,
+        }
+    }
+
+    #[test]
+    fn relevant_change_detection_checks_values_not_only_list_lengths() {
+        let mut original = AppConfig::default();
+        original.rom_paths.push(PathBuf::from("/roms/old"));
+        original.mame_executables.push(executable("/usr/bin/mame"));
+
+        let mut changed_path = original.clone();
+        changed_path.rom_paths[0] = PathBuf::from("/roms/new");
+        assert!(DirectoriesDialog::relevant_settings_changed(
+            &original,
+            &changed_path
+        ));
+
+        let mut changed_executable = original.clone();
+        changed_executable.mame_executables[0].path = "/usr/local/bin/mame".to_string();
+        assert!(DirectoriesDialog::relevant_settings_changed(
+            &original,
+            &changed_executable
+        ));
+
+        let mut display_metadata_only = original.clone();
+        display_metadata_only.mame_executables[0].name = "Arcade MAME".to_string();
+        display_metadata_only.mame_executables[0].version = "0.281".to_string();
+        display_metadata_only.mame_executables[0].total_games = 2;
+        assert!(!DirectoriesDialog::relevant_settings_changed(
+            &original,
+            &display_metadata_only
+        ));
+        assert!(DirectoriesDialog::owned_settings_changed(
+            &original,
+            &display_metadata_only
+        ));
+    }
+
+    #[test]
+    fn smart_directory_memory_alone_does_not_request_reload() {
+        let original = AppConfig::default();
+        let mut draft = original.clone();
+        draft
+            .last_directories
+            .insert(CATEGORY_ROM.to_string(), PathBuf::from("/home/user/roms"));
+
+        assert!(!DirectoriesDialog::relevant_settings_changed(
+            &original, &draft
+        ));
+        assert!(DirectoriesDialog::owned_settings_changed(&original, &draft));
+    }
+
+    #[test]
+    fn commit_updates_owned_paths_without_overwriting_unrelated_config() {
+        let original = AppConfig::default();
+        let mut draft = original.clone();
+        draft.rom_paths.push(PathBuf::from("/games/roms"));
+        draft
+            .last_directories
+            .insert(CATEGORY_ROM.to_string(), PathBuf::from("/games"));
+
+        let mut live = original;
+        live.selected_mame_index = 7;
+        DirectoriesDialog::commit_draft(&mut live, draft);
+
+        assert_eq!(live.rom_paths, vec![PathBuf::from("/games/roms")]);
+        assert_eq!(
+            live.last_directories.get(CATEGORY_ROM),
+            Some(&PathBuf::from("/games"))
+        );
+        assert_eq!(live.selected_mame_index, 7);
+    }
+
+    #[test]
+    fn reset_discards_the_persistent_draft() {
+        let config = AppConfig::default();
+        let mut dialog = DirectoriesDialog::new();
+        dialog.begin_session(&config);
+        dialog
+            .draft
+            .as_mut()
+            .expect("draft should exist")
+            .rom_paths
+            .push(PathBuf::from("/discarded"));
+        dialog.dirty = true;
+
+        dialog.reset();
+
+        assert!(dialog.original.is_none());
+        assert!(dialog.draft.is_none());
+        assert!(!dialog.dirty);
+        assert!(config.rom_paths.is_empty());
     }
 }

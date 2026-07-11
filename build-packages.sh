@@ -66,9 +66,11 @@ create_source_tarball() {
     tmp_dir=$(mktemp -d)
     mkdir -p "$tmp_dir/$source_root"
     tar --exclude='.git' --exclude='.cargo' --exclude='target' --exclude='pkg' \
-        --exclude='cfg' --exclude='nvram' --exclude='diff' \
+        --exclude='cfg' --exclude='nvram' --exclude='diff' --exclude='snap' \
         --exclude='pS_CatVer_277' --exclude='MAMEUI-inifiles' \
-        --exclude='memory.md' --exclude='*.log' --exclude='*.tmp' --exclude='*.temp' \
+        --exclude='memory.md' --exclude='.local-docs' \
+        --exclude='design_handoff_mameuix_redesign' \
+        --exclude='*.log' --exclude='*.tmp' --exclude='*.temp' \
         --exclude='*.deb' --exclude='*.rpm' --exclude='*.pkg.tar.zst' \
         --exclude='*.pkg.tar.zst.sig' --exclude='*.AppImage' --exclude='AppDir' \
         --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \

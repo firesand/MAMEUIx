@@ -9,3 +9,9 @@ Terminal=false
 Categories=Game;Emulator;
 Keywords=mame;arcade;emulator;game;
 StartupNotify=true
+Actions=RedesignPreview;
+
+[Desktop Action RedesignPreview]
+Name=Launch Redesign Preview
+Exec=mameuix --redesign
+Icon=mameuix

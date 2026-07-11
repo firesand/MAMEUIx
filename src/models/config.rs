@@ -14,6 +14,36 @@ pub enum ViewMode {
     List, // Modern list view with cards
 }
 
+/// Which UI shell to render. Legacy modes preserve the existing interface;
+/// `RedesignPreview` enables the experimental Steam-inspired shell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum UiShellMode {
+    #[default]
+    LegacyDock,
+    LegacyClassic,
+    RedesignPreview,
+}
+
+impl UiShellMode {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::LegacyDock => "Dock panels (default)",
+            Self::LegacyClassic => "Classic menu bar",
+            Self::RedesignPreview => "Redesign preview (experimental)",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::LegacyDock => "Resizable dockable panels — current default layout.",
+            Self::LegacyClassic => "Menu bar with sidebar, game list, and artwork panels.",
+            Self::RedesignPreview => {
+                "Steam-inspired full-page shell. Toggle back anytime if something breaks."
+            }
+        }
+    }
+}
+
 // Window size and position settings for dialogs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowSettings {
@@ -601,6 +631,8 @@ struct AppConfigToml {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub extra_rom_dirs: Vec<PathBuf>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub software_rom_paths: Vec<PathBuf>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub extra_asset_dirs: Vec<PathBuf>,
 
     // MAME Support Files paths - only serialize if Some
@@ -616,6 +648,8 @@ struct AppConfigToml {
     pub flyer_path: Option<PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub marquee_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pcb_path: Option<PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cheats_path: Option<PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -731,11 +765,12 @@ pub struct AppConfig {
     // ROM directory configuration
     // Note: We have both rom_dirs and rom_paths for compatibility
     // Eventually these should be consolidated
-    pub rom_dirs: Vec<PathBuf>,         // Primary ROM directories
-    pub rom_paths: Vec<PathBuf>,        // Additional ROM paths (for UI compatibility)
-    pub sample_paths: Vec<PathBuf>,     // Sound sample directories
-    pub extra_rom_dirs: Vec<PathBuf>,   // Extra ROM search paths
-    pub extra_asset_dirs: Vec<PathBuf>, // Artwork, icons, etc.
+    pub rom_dirs: Vec<PathBuf>,           // Primary ROM directories
+    pub rom_paths: Vec<PathBuf>,          // Additional ROM paths (for UI compatibility)
+    pub sample_paths: Vec<PathBuf>,       // Sound sample directories
+    pub extra_rom_dirs: Vec<PathBuf>,     // Extra ROM search paths
+    pub software_rom_paths: Vec<PathBuf>, // Software-list ROM/disk image roots
+    pub extra_asset_dirs: Vec<PathBuf>,   // Artwork, icons, etc.
 
     // MAME Support Files paths
     pub artwork_path: Option<PathBuf>, // Artwork directory
@@ -744,6 +779,7 @@ pub struct AppConfig {
     pub title_path: Option<PathBuf>,   // Title screens directory
     pub flyer_path: Option<PathBuf>,   // Promotional flyers directory
     pub marquee_path: Option<PathBuf>, // Marquee artwork directory
+    pub pcb_path: Option<PathBuf>,     // PCB artwork directory
     pub cheats_path: Option<PathBuf>,  // Cheat files directory
     pub icons_path: Option<PathBuf>,   // Icons directory
 
@@ -827,6 +863,7 @@ impl AppConfig {
             rom_paths: self.rom_paths.clone(),
             sample_paths: self.sample_paths.clone(),
             extra_rom_dirs: self.extra_rom_dirs.clone(),
+            software_rom_paths: self.software_rom_paths.clone(),
             extra_asset_dirs: self.extra_asset_dirs.clone(),
             artwork_path: self.artwork_path.clone(),
             snap_path: self.snap_path.clone(),
@@ -834,6 +871,7 @@ impl AppConfig {
             title_path: self.title_path.clone(),
             flyer_path: self.flyer_path.clone(),
             marquee_path: self.marquee_path.clone(),
+            pcb_path: self.pcb_path.clone(),
             cheats_path: self.cheats_path.clone(),
             icons_path: self.icons_path.clone(),
             ctrlr_path: self.ctrlr_path.clone(),
@@ -894,6 +932,7 @@ impl AppConfig {
             rom_paths: toml.rom_paths,
             sample_paths: toml.sample_paths,
             extra_rom_dirs: toml.extra_rom_dirs,
+            software_rom_paths: toml.software_rom_paths,
             extra_asset_dirs: toml.extra_asset_dirs,
             artwork_path: toml.artwork_path,
             snap_path: toml.snap_path,
@@ -901,6 +940,7 @@ impl AppConfig {
             title_path: toml.title_path,
             flyer_path: toml.flyer_path,
             marquee_path: toml.marquee_path,
+            pcb_path: toml.pcb_path,
             cheats_path: toml.cheats_path,
             icons_path: toml.icons_path,
             ctrlr_path: toml.ctrlr_path,
@@ -983,6 +1023,7 @@ impl Default for AppConfig {
             rom_paths: vec![],    // Important: This was missing in original
             sample_paths: vec![], // Important: This was missing in original
             extra_rom_dirs: vec![],
+            software_rom_paths: vec![],
             extra_asset_dirs: vec![],
 
             // MAME Support Files paths
@@ -992,6 +1033,7 @@ impl Default for AppConfig {
             title_path: None,
             flyer_path: None,
             marquee_path: None,
+            pcb_path: None,
             cheats_path: None,
             icons_path: None,
 

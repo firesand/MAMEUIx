@@ -7,6 +7,7 @@ use egui_dock::{DockState, NodeIndex, Style, TabViewer};
 pub enum DockTab {
     Sidebar,
     GameList,
+    SoftwareLists,
     Artwork,
     History,
 }
@@ -16,6 +17,7 @@ impl DockTab {
         match self {
             DockTab::Sidebar => "Filters",
             DockTab::GameList => "Games",
+            DockTab::SoftwareLists => "Software Lists",
             DockTab::Artwork => "Artwork",
             DockTab::History => "History",
         }
@@ -23,7 +25,7 @@ impl DockTab {
 }
 
 pub fn create_default_layout() -> DockState<DockTab> {
-    let mut dock_state = DockState::new(vec![DockTab::GameList]);
+    let mut dock_state = DockState::new(vec![DockTab::GameList, DockTab::SoftwareLists]);
     let surface = dock_state.main_surface_mut();
     surface.split_left(NodeIndex::root(), 0.22, vec![DockTab::Sidebar]);
     surface.split_right(
@@ -50,6 +52,7 @@ impl TabViewer for MameTabViewer<'_> {
         match tab {
             DockTab::Sidebar => self.app.render_sidebar_panel(ui),
             DockTab::GameList => self.app.render_game_list_panel(ui, self.ctx),
+            DockTab::SoftwareLists => self.app.render_software_list_panel(ui),
             DockTab::Artwork => self.app.render_artwork_panel(ui),
             DockTab::History => self.app.render_history_panel(ui),
         }

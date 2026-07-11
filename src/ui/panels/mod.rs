@@ -11,6 +11,7 @@ pub mod icon_manager;
 pub mod icon_performance_monitor;
 pub mod performance_manager;
 pub mod sidebar;
+pub mod software_list_panel;
 
 pub use artwork_panel::ArtworkPanel;
 pub use game_index_manager::GameIndexManager;
@@ -20,3 +21,4 @@ pub use history_panel::HistoryPanel;
 pub use icon_manager::IconManager;
 pub use performance_manager::PerformanceManager;
 pub use sidebar::Sidebar;
+pub use software_list_panel::SoftwareListPanel;

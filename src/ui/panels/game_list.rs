@@ -12,6 +12,20 @@ use egui_extras::Column;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
+const TABLE_HEADER_HEIGHT: f32 = 36.0;
+const STATS_BAR_HEIGHT: f32 = 44.0;
+
+/// Solid, always-visible scrollbar — Table mode needs reserved width; floating bars
+/// are drawn over the columns and end up hidden/clipped with wide tables.
+fn table_scroll_style() -> egui::style::ScrollStyle {
+    let mut style = egui::style::ScrollStyle::solid();
+    style.foreground_color = true;
+    style.bar_width = 12.0;
+    style.handle_min_length = 32.0;
+    style.bar_inner_margin = 4.0;
+    style
+}
+
 /// GameList dengan TRUE virtual scrolling
 /// Tidak seperti versi lama yang masih process semua games,
 /// versi ini HANYA process games yang terlihat di viewport
@@ -201,8 +215,8 @@ impl GameList {
         // Show stats untuk large collections
         self.show_stats(ui, games.len());
 
-        // Table height: stats bar uses ~40px
-        let table_height = (available_height - 44.0).max(100.0);
+        let table_height = (available_height - STATS_BAR_HEIGHT).max(100.0);
+        let body_scroll_height = (table_height - TABLE_HEADER_HEIGHT).max(80.0);
 
         // Allocate the full available height for the table container
         let (rect, _response) = ui.allocate_exact_size(
@@ -210,28 +224,32 @@ impl GameList {
             egui::Sense::hover(),
         );
 
-        // Single scroll layer via TableBuilder::vscroll (no outer ScrollArea)
         let (double_clicked, favorite_toggled, properties_requested) = ui
-            .scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                self.render_virtual_table(
-                    ui,
-                    games,
-                    selected,
-                    expanded_parents,
-                    favorites,
-                    icons,
-                    show_icons,
-                    icon_size,
-                    game_index,
-                    table_height,
-                    column_widths,
-                    visible_columns,
-                    default_icon,
-                    game_stats,
-                    has_catver,
-                    theme_colors,
-                )
-            })
+            .scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(rect)
+                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                |ui| {
+                    self.render_virtual_table(
+                        ui,
+                        games,
+                        selected,
+                        expanded_parents,
+                        favorites,
+                        icons,
+                        show_icons,
+                        icon_size,
+                        game_index,
+                        body_scroll_height,
+                        column_widths,
+                        visible_columns,
+                        default_icon,
+                        game_stats,
+                        has_catver,
+                        theme_colors,
+                    )
+                },
+            )
             .inner;
 
         (double_clicked, favorite_toggled, properties_requested)
@@ -250,7 +268,7 @@ impl GameList {
         show_icons: bool,
         icon_size: u32,
         game_index: Option<&GameIndex>,
-        table_height: f32,
+        body_scroll_height: f32,
         column_widths: &mut ColumnWidths,
         visible_columns: &VisibleColumns,
         default_icon: Option<&egui::TextureHandle>,
@@ -272,13 +290,20 @@ impl GameList {
         // Track hovered row for visual feedback
         let _hovered_row: Option<usize> = None;
 
-        // Create custom table builder with enhanced styling
+        let previous_scroll_style = ui.spacing().scroll;
+        ui.spacing_mut().scroll = table_scroll_style();
+
+        // Match List mode: reserve scrollbar width and keep the thumb visible/draggable.
         let mut table = egui_extras::TableBuilder::new(ui)
+            .id_salt("game_list_table")
             .striped(false)
             .resizable(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .min_scrolled_height(0.0)
-            .max_scroll_height(table_height)
+            .max_scroll_height(body_scroll_height)
+            .auto_shrink([false, false])
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+            .drag_to_scroll(true)
             .vscroll(true);
 
         if let Some(target_row) = self.scroll_to_row.take() {
@@ -378,7 +403,7 @@ impl GameList {
 
         // Render the table with enhanced header
         let _response = table
-            .header(36.0, |mut header| {
+            .header(TABLE_HEADER_HEIGHT, |mut header| {
                 // Custom header rendering with gradient background
                 let render_header = |ui: &mut egui::Ui, text: &str| {
                     let rect = ui.available_rect_before_wrap();
@@ -495,6 +520,8 @@ impl GameList {
                     }
                 });
             });
+
+        ui.spacing_mut().scroll = previous_scroll_style;
 
         (double_clicked, favorite_toggled, properties_requested)
     }

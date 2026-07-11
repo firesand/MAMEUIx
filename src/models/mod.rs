@@ -320,6 +320,17 @@ pub struct Preferences {
     pub use_dock_layout: bool,
     #[serde(default = "default_true")]
     pub enable_toast_notifications: bool,
+
+    /// Experimental Steam-inspired shell. When set to RedesignPreview, legacy layout is skipped.
+    #[serde(default)]
+    pub ui_shell: UiShellMode,
+}
+
+impl Preferences {
+    /// Ensure ui_shell is always written to config.toml (not omitted as default).
+    pub fn sync_legacy_layout_flag(&mut self) {
+        self.use_dock_layout = self.ui_shell == UiShellMode::LegacyDock;
+    }
 }
 
 fn default_true() -> bool {
@@ -346,6 +357,7 @@ impl Default for Preferences {
             performance: PerformanceSettings::default(),
             use_dock_layout: true,
             enable_toast_notifications: true,
+            ui_shell: UiShellMode::default(),
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::models::{AppConfig, Game, RomStatus, VerificationStatus};
+use crate::ui::redesign::fonts;
 use eframe::egui;
 use std::collections::HashMap;
 use std::fs;
@@ -341,7 +342,7 @@ impl RomVerifyDialog {
         ui.horizontal(|ui| {
             ui.heading("🔍 ROM Verification - CLRMamePro Lite");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("✕").clicked() {
+                if ui.button("×").clicked() {
                     self.window_open = false;
                 }
             });
@@ -363,7 +364,7 @@ impl RomVerifyDialog {
                         self.start_verification(config, games, None);
                     }
 
-                    if ui.button("✓ Verify Available Only").clicked() {
+                    if ui.button("Verify Available Only").clicked() {
                         let available_games: Vec<_> = games
                             .iter()
                             .filter(|g| matches!(g.status, RomStatus::Available))
@@ -719,6 +720,10 @@ impl RomVerifyDialog {
             self.should_stop = false;
             self.is_paused = false;
             self.verification_results.clear();
+            // A previous worker may still finish an in-flight MAME process after
+            // Restart. Give the new run its own result store so stale writes stay
+            // isolated from the current statistics.
+            self.verification_manager = Arc::new(VerificationManager::new());
             self.stats = VerificationStats::default();
             self.current_progress = 0.0;
             self.total_games = if specific_game.is_some() {
@@ -769,6 +774,12 @@ impl RomVerifyDialog {
                                     }
                                 }
                             }
+                        }
+
+                        // Stop may have been requested while the worker was
+                        // blocked waiting for Resume.
+                        if let Ok(true) = stop_rx.try_recv() {
+                            break;
                         }
 
                         let progress = (idx + 1) as f32 / games_to_verify.len() as f32;
@@ -1074,5 +1085,398 @@ impl RomVerifyDialog {
 
         content.push_str("</body></html>");
         content
+    }
+
+    // --- Public API for the redesign shell (inline page, no window) ---
+
+    pub fn is_verifying(&self) -> bool {
+        self.is_verifying
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.is_paused
+    }
+
+    pub fn start_verification_all(&mut self, config: &AppConfig, games: &[Game]) {
+        self.show_warning = false;
+        self.start_verification(config, games, None);
+    }
+
+    pub fn stop_verification(&mut self) {
+        self.should_stop = true;
+        if let Some(tx) = &self.stop_sender {
+            let _ = tx.send(true);
+        }
+        if self.is_paused
+            && let Some(tx) = &self.pause_sender
+        {
+            let _ = tx.send(false);
+        }
+        self.is_verifying = false;
+        self.is_paused = false;
+    }
+
+    pub fn toggle_pause(&mut self) {
+        self.is_paused = !self.is_paused;
+        if let Some(tx) = &self.pause_sender {
+            let _ = tx.send(self.is_paused);
+        }
+    }
+
+    pub fn show_redesign_panel(&mut self, ui: &mut egui::Ui) {
+        self.process_pending_messages();
+        use crate::ui::redesign::tokens::RedesignTokens;
+
+        let status_text = if self.is_verifying {
+            if self.is_paused {
+                "Paused".to_string()
+            } else {
+                format!("Verifying {} …", self.current_game)
+            }
+        } else if self.verification_results.is_empty() {
+            "Idle — press Start to verify all sets".to_string()
+        } else {
+            "Complete".to_string()
+        };
+
+        let eta_text = format!(
+            "{} / {} · ETA {}",
+            self.verified_games,
+            self.total_games,
+            self.estimated_time.as_deref().unwrap_or("—")
+        );
+        if ui.available_width() < 480.0 {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(&status_text)
+                        .size(13.0)
+                        .color(RedesignTokens::TEXT_PRIMARY),
+                )
+                .truncate(),
+            );
+            ui.label(
+                egui::RichText::new(&eta_text)
+                    .size(12.0)
+                    .color(RedesignTokens::TEXT_MUTED)
+                    .family(egui::FontFamily::Monospace),
+            );
+        } else {
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(&status_text)
+                            .size(13.0)
+                            .color(RedesignTokens::TEXT_PRIMARY),
+                    )
+                    .truncate(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(&eta_text)
+                            .size(12.0)
+                            .color(RedesignTokens::TEXT_MUTED)
+                            .family(egui::FontFamily::Monospace),
+                    );
+                });
+            });
+        }
+        ui.add_space(8.0);
+        ui.add(
+            egui::ProgressBar::new(self.current_progress)
+                .fill(RedesignTokens::ACCENT)
+                .animate(self.is_verifying),
+        );
+
+        ui.add_space(12.0);
+        let stat_column_count = if ui.available_width() < 480.0 { 2 } else { 4 };
+        ui.columns(stat_column_count, |cols| {
+            let stats = [
+                (self.stats.passed, "PASSED", RedesignTokens::STATUS_OK),
+                (self.stats.warnings, "WARNINGS", RedesignTokens::STATUS_WARN),
+                (self.stats.failed, "MISSING", RedesignTokens::STATUS_MISSING),
+                (
+                    self.total_games.saturating_sub(self.verified_games),
+                    "PENDING",
+                    RedesignTokens::STATUS_NEUTRAL,
+                ),
+            ];
+            for (i, (n, label, color)) in stats.into_iter().enumerate() {
+                let col = i % stat_column_count;
+                if i >= stat_column_count {
+                    cols[col].add_space(10.0);
+                }
+                cols[col].vertical(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!("{n}"))
+                            .font(fonts::bold(22.0))
+                            .color(color),
+                    );
+                    ui.label(
+                        egui::RichText::new(label)
+                            .font(fonts::semibold(11.0))
+                            .color(RedesignTokens::TEXT_FAINT),
+                    );
+                });
+            }
+        });
+
+        ui.add_space(8.0);
+        if ui.available_width() < 520.0 {
+            ui.checkbox(&mut self.show_only_issues, "Show only issues");
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("Export TXT").clicked() {
+                    self.export_format = ExportFormat::Text;
+                    self.export_results();
+                }
+                if ui.button("Export CSV").clicked() {
+                    self.export_format = ExportFormat::CSV;
+                    self.export_results();
+                }
+                if ui.button("Export HTML").clicked() {
+                    self.export_format = ExportFormat::HTML;
+                    self.export_results();
+                }
+            });
+        } else {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.show_only_issues, "Show only issues");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Export HTML").clicked() {
+                        self.export_format = ExportFormat::HTML;
+                        self.export_results();
+                    }
+                    if ui.button("Export CSV").clicked() {
+                        self.export_format = ExportFormat::CSV;
+                        self.export_results();
+                    }
+                    if ui.button("Export TXT").clicked() {
+                        self.export_format = ExportFormat::Text;
+                        self.export_results();
+                    }
+                });
+            });
+        }
+    }
+
+    pub fn show_redesign_results(&mut self, ui: &mut egui::Ui) {
+        self.process_pending_messages();
+        use crate::ui::redesign::tokens::RedesignTokens;
+        use egui_extras::{Column, TableBuilder};
+
+        let results: Vec<_> = self
+            .verification_results
+            .iter()
+            .rev()
+            .filter(|result| !self.show_only_issues || result.status != VerifyStatus::Passed)
+            .collect();
+
+        if results.is_empty() {
+            ui.label(
+                egui::RichText::new(if self.show_only_issues {
+                    "No verification issues to show."
+                } else {
+                    "No verification results yet."
+                })
+                .size(13.0)
+                .color(RedesignTokens::TEXT_FAINT),
+            );
+            return;
+        }
+
+        let presentation = |result: &VerificationResult| {
+            let (color, label) = match result.status {
+                VerifyStatus::Passed => (RedesignTokens::STATUS_OK, "Passed"),
+                VerifyStatus::Warning => (RedesignTokens::STATUS_WARN, "CHD missing"),
+                VerifyStatus::Failed => (RedesignTokens::STATUS_MISSING, "Missing ROM"),
+                VerifyStatus::NotFound => (RedesignTokens::STATUS_NEUTRAL, "Not found"),
+            };
+            let note = match result.status {
+                VerifyStatus::Passed => "All CRCs match datfile".to_string(),
+                VerifyStatus::Warning => result
+                    .chd_status
+                    .clone()
+                    .unwrap_or_else(|| "CHD requires attention".to_string()),
+                VerifyStatus::Failed => format!(
+                    "{} missing · {} incorrect",
+                    result.missing_files.len(),
+                    result.incorrect_files.len()
+                ),
+                VerifyStatus::NotFound => "ROM set was not found".to_string(),
+            };
+            (color, label, note)
+        };
+
+        let available_height = ui.available_height();
+        let body_height = if available_height.is_finite() {
+            available_height.max(180.0)
+        } else {
+            // This renderer can live inside the page-level fallback scroll
+            // area on short windows. Avoid propagating an infinite height
+            // into the nested virtual table in that configuration.
+            320.0
+        };
+
+        if ui.available_width() < 620.0 {
+            TableBuilder::new(ui)
+                .id_salt("redesign_verification_results_compact")
+                .striped(false)
+                .cell_layout(egui::Layout::top_down(egui::Align::LEFT))
+                .column(Column::remainder().clip(true))
+                .max_scroll_height(body_height)
+                .auto_shrink([false, false])
+                .body(|body| {
+                    body.rows(70.0, results.len(), |mut row| {
+                        let Some(result) = results.get(row.index()) else {
+                            return;
+                        };
+                        let (color, label, note) = presentation(result);
+                        row.col(|ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&result.description)
+                                        .font(fonts::semibold(13.0))
+                                        .color(RedesignTokens::TEXT_PRIMARY),
+                                )
+                                .truncate(),
+                            );
+                            ui.horizontal(|ui| {
+                                let set_width = (ui.available_width() * 0.55).max(80.0);
+                                ui.add_sized(
+                                    [set_width, 18.0],
+                                    egui::Label::new(
+                                        egui::RichText::new(format!("{}.zip", result.game_name))
+                                            .monospace()
+                                            .size(12.0)
+                                            .color(RedesignTokens::TEXT_MUTED),
+                                    )
+                                    .truncate(),
+                                );
+                                let (dot_rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(8.0, 8.0),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter().circle_filled(dot_rect.center(), 4.0, color);
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(label)
+                                            .font(fonts::semibold(12.0))
+                                            .color(color),
+                                    )
+                                    .truncate(),
+                                );
+                            });
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(note)
+                                        .size(12.0)
+                                        .color(RedesignTokens::TEXT_MUTED),
+                                )
+                                .truncate(),
+                            );
+                        });
+                    });
+                });
+        } else {
+            TableBuilder::new(ui)
+                .id_salt("redesign_verification_results")
+                .striped(false)
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .column(Column::remainder().at_least(200.0).clip(true))
+                .column(Column::initial(120.0).at_least(90.0).clip(true))
+                .column(Column::initial(140.0).at_least(110.0).clip(true))
+                .column(Column::remainder().at_least(150.0).clip(true))
+                .max_scroll_height(body_height)
+                .auto_shrink([false, false])
+                .body(|body| {
+                    body.rows(38.0, results.len(), |mut row| {
+                        let Some(result) = results.get(row.index()) else {
+                            return;
+                        };
+                        let (color, label, note) = presentation(result);
+                        row.col(|ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&result.description)
+                                        .font(fonts::semibold(13.0))
+                                        .color(RedesignTokens::TEXT_PRIMARY),
+                                )
+                                .truncate(),
+                            );
+                        });
+                        row.col(|ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(format!("{}.zip", result.game_name))
+                                        .monospace()
+                                        .size(12.0)
+                                        .color(RedesignTokens::TEXT_MUTED),
+                                )
+                                .truncate(),
+                            );
+                        });
+                        row.col(|ui| {
+                            ui.horizontal(|ui| {
+                                let (dot_rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(8.0, 8.0),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter().circle_filled(dot_rect.center(), 4.0, color);
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(label)
+                                            .font(fonts::semibold(12.0))
+                                            .color(color),
+                                    )
+                                    .truncate(),
+                                );
+                            });
+                        });
+                        row.col(|ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(note)
+                                        .size(12.0)
+                                        .color(RedesignTokens::TEXT_MUTED),
+                                )
+                                .truncate(),
+                            );
+                        });
+                    });
+                });
+        }
+    }
+
+    fn process_pending_messages(&mut self) {
+        if let Some(rx) = &self.receiver {
+            let mut messages = Vec::new();
+            while let Ok(msg) = rx.try_recv() {
+                messages.push(msg);
+            }
+            for msg in messages {
+                match msg {
+                    VerifyMessage::Progress(progress, game) => {
+                        self.current_progress = progress;
+                        self.current_game = game;
+                        self.verified_games += 1;
+                    }
+                    VerifyMessage::Result(result) => {
+                        self.verification_manager
+                            .update_result(result.game_name.clone(), result.clone());
+                        self.verification_results.push(result);
+                        self.update_stats();
+                    }
+                    VerifyMessage::Complete => {
+                        self.is_verifying = false;
+                        self.receiver = None;
+                    }
+                    VerifyMessage::Error(err) => {
+                        eprintln!("Verification error: {err}");
+                        self.is_verifying = false;
+                        self.receiver = None;
+                    }
+                }
+            }
+        }
     }
 }

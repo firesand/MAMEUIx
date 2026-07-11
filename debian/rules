@@ -24,3 +24,13 @@ override_dh_auto_install:
 	
 	# Install man page
 	install -D -m 644 debian/mameuix.1 debian/mameuix/usr/share/man/man1/mameuix.1
+
+	# Install the license for the embedded Public Sans font files
+	install -D -m 644 assets/fonts/public_sans/OFL.txt debian/mameuix/usr/share/doc/mameuix/PublicSans-OFL.txt
+
+	# Install public project documentation
+	install -D -m 644 README.md debian/mameuix/usr/share/doc/mameuix/README.md
+	install -D -m 644 CHANGELOG.md debian/mameuix/usr/share/doc/mameuix/CHANGELOG.md
+	install -D -m 644 docs/INSTALL.md debian/mameuix/usr/share/doc/mameuix/INSTALL.md
+	install -D -m 644 docs/MAME_FOLDER_STRUCTURE.md debian/mameuix/usr/share/doc/mameuix/MAME_FOLDER_STRUCTURE.md
+	install -D -m 644 docs/BGFX_GLSL_INTEGRATION.md debian/mameuix/usr/share/doc/mameuix/BGFX_GLSL_INTEGRATION.md

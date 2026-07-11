@@ -27,10 +27,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            build-essential pkg-config cmake \
+            libx11-dev libx11-xcb-dev libxcb1-dev \
             libxcb-render0-dev \
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
             libxkbcommon-dev \
+            libwayland-dev \
             libssl-dev \
             libasound2-dev
 
@@ -39,6 +43,9 @@ jobs:
 
       - name: cargo check
         run: cargo check --locked
+
+      - name: cargo test
+        run: cargo test --bin mameuix --locked
 
       - name: cargo clippy
         run: cargo clippy --locked -- -D warnings
@@ -58,10 +65,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            build-essential pkg-config cmake \
+            libx11-dev libx11-xcb-dev libxcb1-dev \
             libxcb-render0-dev \
             libxcb-shape0-dev \
             libxcb-xfixes0-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
             libxkbcommon-dev \
+            libwayland-dev \
             libssl-dev \
             libasound2-dev
 

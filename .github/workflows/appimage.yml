@@ -3,19 +3,21 @@ name: AppImage
 on:
   workflow_dispatch:
     inputs:
-      upload_tag:
-        description: "Optional release tag to upload (e.g. v0.1.5). Leave empty for artifact only."
-        required: false
-        default: ""
-  release:
-    types: [published]
+      build_tag:
+        description: "Tag to build exactly (for example v0.1.6)."
+        required: true
+        type: string
+      upload_to_release:
+        description: "Upload to an existing release after building. Leave off for pre-release verification."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 env:
   APPIMAGE_EXTRACT_AND_RUN: 1
-  SKIP_GLIBC_CHECK: 1
 
 jobs:
   build-appimage:
@@ -23,6 +25,17 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.build_tag }}
+
+      - name: Verify tag and Cargo version
+        env:
+          BUILD_TAG: ${{ inputs.build_tag }}
+        run: |
+          git show-ref --verify --quiet "refs/tags/${BUILD_TAG}"
+          test "$(git rev-list -n 1 "${BUILD_TAG}")" = "$(git rev-parse HEAD)"
+          VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          test "v${VERSION}" = "${BUILD_TAG}"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -37,37 +50,42 @@ jobs:
             libx11-dev libx11-xcb-dev libxcb1-dev libxcb-render0-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libxrandr-dev \
             libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev \
-            libwayland-dev libssl-dev
+            libwayland-dev libssl-dev libasound2-dev
 
       - name: Build AppImage
         run: |
           chmod +x build-appimage.sh
           ./build-appimage.sh
 
+      - name: Generate SHA256 checksum
+        run: |
+          APPIMAGE=$(find . -maxdepth 1 -name 'MAMEUIx-*.AppImage' -print -quit)
+          test -n "${APPIMAGE}"
+          sha256sum "${APPIMAGE}" > "${APPIMAGE}.sha256"
+
       - name: Verify glibc requirement
         run: |
           getconf GNU_LIBC_VERSION
-          BIN=target/release/mameuix
-          echo "Required GLIBC symbols (highest):"
-          objdump -T "$BIN" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -5
+          BIN="${CARGO_TARGET_DIR:-target}/release/mameuix"
+          REQUIRED=$(objdump -T "$BIN" | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)*' | sed 's/^GLIBC_//' | sort -Vu)
+          MAX_REQUIRED=$(printf '%s\n' "$REQUIRED" | tail -1)
+          printf 'Required GLIBC versions (highest):\n%s\n' "$(printf '%s\n' "$REQUIRED" | tail -5)"
+          test -n "$MAX_REQUIRED"
+          test "$(printf '%s\n%s\n' "$MAX_REQUIRED" '2.35' | sort -V | tail -1)" = '2.35'
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mameuix-appimage-x86_64
-          path: MAMEUIx-*.AppImage
+          name: mameuix-appimage-${{ inputs.build_tag }}-x86_64
+          path: |
+            MAMEUIx-*.AppImage
+            MAMEUIx-*.AppImage.sha256
           if-no-files-found: error
 
-      - name: Upload to GitHub Release (release event)
-        if: github.event_name == 'release'
+      - name: Upload to existing GitHub Release
+        if: inputs.upload_to_release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" MAMEUIx-*.AppImage --clobber
-
-      - name: Upload to GitHub Release (manual tag)
-        if: github.event_name == 'workflow_dispatch' && inputs.upload_tag != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "${{ inputs.upload_tag }}" MAMEUIx-*.AppImage --clobber
+          gh release upload "${{ inputs.build_tag }}" \
+            MAMEUIx-*.AppImage MAMEUIx-*.AppImage.sha256 --clobber

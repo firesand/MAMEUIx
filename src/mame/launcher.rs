@@ -8,14 +8,16 @@ pub fn launch_game(
     if let Some(mame) = config.mame_executables.get(config.selected_mame_index) {
         let mut cmd = Command::new(&mame.path);
 
-        // Add ROM paths
-        if !config.rom_paths.is_empty() {
-            let rom_paths = config
-                .rom_paths
-                .iter()
-                .map(|p| p.to_string_lossy())
-                .collect::<Vec<_>>()
-                .join(";");
+        // Add ROM paths. Software-list ROM sets are found through rompath too.
+        let rom_paths = config
+            .rom_paths
+            .iter()
+            .chain(config.extra_rom_dirs.iter())
+            .chain(config.software_rom_paths.iter())
+            .map(|p| p.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(";");
+        if !rom_paths.is_empty() {
             cmd.arg("-rompath").arg(&rom_paths);
         }
 

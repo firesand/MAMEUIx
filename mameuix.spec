@@ -1,15 +1,16 @@
 Name:           mameuix
-Version:        0.1.5
+Version:        0.1.6
 Release:        1%{?dist}
 Summary:        Modern GUI frontend for MAME arcade emulator
 
-License:        MIT
+License:        MIT AND OFL-1.1
 URL:            https://github.com/firesand/MAMEUIx
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      x86_64
 
 BuildRequires:  rust >= 1.85
 BuildRequires:  cargo >= 1.85
+BuildRequires:  gcc-c++
 BuildRequires:  pkgconfig
 BuildRequires:  libxcb-devel
 BuildRequires:  libxkbcommon-devel
@@ -70,8 +71,9 @@ install -D -m 644 assets/icons/scalable/mameuix.svg %{buildroot}%{_datadir}/icon
 install -D -m 644 debian/mameuix.1 %{buildroot}%{_mandir}/man1/mameuix.1
 
 %files
-%license LICENSE
-%doc README.md
+%license LICENSE assets/fonts/public_sans/OFL.txt
+%doc README.md CHANGELOG.md
+%doc docs/INSTALL.md docs/MAME_FOLDER_STRUCTURE.md docs/BGFX_GLSL_INTEGRATION.md
 %{_bindir}/mameuix
 %{_datadir}/applications/mameuix.desktop
 %{_datadir}/icons/hicolor/16x16/apps/mameuix.png
@@ -84,6 +86,10 @@ install -D -m 644 debian/mameuix.1 %{buildroot}%{_mandir}/man1/mameuix.1
 %{_mandir}/man1/mameuix.1
 
 %changelog
+* Sat Jul 11 2026 edo hikmahtiar <edohikmahtiar@me.com> - 0.1.6-1
+- Add the opt-in redesigned UI and Software Lists preview
+- Refresh documentation, AppImage release metadata, and FreeBSD readiness
+
 * Sun Jul 05 2026 edo hikmahtiar <edohikmahtiar@me.com> - 0.1.5-1
 - Stability, UI consistency, parser, and packaging metadata updates
 

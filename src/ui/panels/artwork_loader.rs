@@ -1,6 +1,6 @@
 // src/ui/artwork_loader.rs
 use eframe::egui;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -8,12 +8,14 @@ use std::path::Path;
 pub struct ArtworkLoader {
     // Cache loaded textures to avoid reloading
     texture_cache: HashMap<String, egui::TextureHandle>,
+    miss_cache: HashSet<String>,
 }
 
 impl ArtworkLoader {
     pub fn new() -> Self {
         Self {
             texture_cache: HashMap::new(),
+            miss_cache: HashSet::new(),
         }
     }
 
@@ -32,6 +34,9 @@ impl ArtworkLoader {
         if let Some(texture) = self.texture_cache.get(&cache_key) {
             return Some(texture.clone());
         }
+        if self.miss_cache.contains(&cache_key) {
+            return None;
+        }
 
         // Determine which directory to search based on artwork type
         let search_dir = match artwork_type {
@@ -40,10 +45,12 @@ impl ArtworkLoader {
             ArtworkType::Marquee => config.marquee_path.as_ref()?,
             ArtworkType::Title => config.title_path.as_ref()?,
             ArtworkType::Flyer => config.flyer_path.as_ref()?,
+            ArtworkType::Pcb => config.pcb_path.as_ref()?,
         };
 
         // Check if the directory exists
         if !search_dir.exists() {
+            self.miss_cache.insert(cache_key);
             return None;
         }
 
@@ -54,6 +61,7 @@ impl ArtworkLoader {
             return Some(texture);
         }
 
+        self.miss_cache.insert(cache_key);
         None
     }
 
@@ -200,12 +208,14 @@ impl ArtworkLoader {
     /// Clear cache to free memory
     pub fn clear_cache(&mut self) {
         self.texture_cache.clear();
+        self.miss_cache.clear();
     }
 
     /// Remove specific item from cache
     pub fn remove_from_cache(&mut self, game_name: &str, artwork_type: ArtworkType) {
         let cache_key = format!("{}-{:?}", game_name, artwork_type);
         self.texture_cache.remove(&cache_key);
+        self.miss_cache.remove(&cache_key);
     }
 }
 
@@ -216,4 +226,5 @@ pub enum ArtworkType {
     Marquee,
     Title,
     Flyer,
+    Pcb,
 }

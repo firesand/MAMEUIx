@@ -1,11 +1,11 @@
 # Maintainer: edo hikmahtiar <edohikmahtiar@me.com>
 pkgname=mameuix
-pkgver=0.1.5
+pkgver=0.1.6
 pkgrel=1
 pkgdesc="Modern GUI frontend for MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification"
 arch=('x86_64')
 url="https://github.com/firesand/MAMEUIx"
-license=('MIT')
+license=('MIT' 'OFL-1.1')
 depends=('mame>=0.200' 'glibc' 'gcc-libs' 'libx11' 'libxcb' 'libxrandr' 'libxinerama' 'libxcursor' 'libxi')
 makedepends=('rust>=1.85' 'pkgconf' 'zstd' 'cmake' 'ninja')
 optdepends=('mame-roms: Game ROMs for MAME')
@@ -48,24 +48,13 @@ build() {
         exit 1
     fi
     
-    # Test the binary works
-    if ! ./target/release/mameuix --help >/dev/null 2>&1; then
-        echo "Warning: Binary test failed, but continuing..."
-    fi
 }
 
 check() {
     cd "$srcdir/$pkgname-$pkgver"
     export CARGO_HOME="$srcdir/cargo"
     
-    # Run tests if available (don't fail if tests don't exist)
-    cargo test --release --locked --frozen || true
-    
-    # Run basic functionality test
-    if [ -f "target/release/mameuix" ]; then
-        echo "Testing binary functionality..."
-        timeout 10s ./target/release/mameuix --help >/dev/null 2>&1 || true
-    fi
+    cargo test --release --locked --frozen
 }
 
 package() {
@@ -107,13 +96,12 @@ package() {
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
     install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
     install -Dm644 LICENSE "$pkgdir/usr/share/doc/$pkgname/LICENSE"
+    install -Dm644 assets/fonts/public_sans/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/PublicSans-OFL.txt"
     
-    # Install additional documentation files
-    for doc in ICON_LOADING_PERFORMANCE.md ADVANCED_MAME_SETTINGS_POC.md BGFX_GLSL_INTEGRATION.md; do
-        if [ -f "$doc" ]; then
-            install -Dm644 "$doc" "$pkgdir/usr/share/doc/$pkgname/$doc"
-        fi
-    done
+    # Install public guides (internal project notes are intentionally excluded)
+    install -Dm644 docs/INSTALL.md "$pkgdir/usr/share/doc/$pkgname/INSTALL.md"
+    install -Dm644 docs/MAME_FOLDER_STRUCTURE.md "$pkgdir/usr/share/doc/$pkgname/MAME_FOLDER_STRUCTURE.md"
+    install -Dm644 docs/BGFX_GLSL_INTEGRATION.md "$pkgdir/usr/share/doc/$pkgname/BGFX_GLSL_INTEGRATION.md"
     
     # Install examples (if they exist)
     if [ -d "examples" ]; then

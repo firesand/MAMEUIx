@@ -13,12 +13,16 @@ pub struct FoundMame {
 }
 
 impl MameFinderDialog {
-    /// Preferred starting directory for the Linux file picker.
-    pub fn linux_browse_directory() -> &'static str {
+    /// Preferred starting directory for Unix-like desktop file pickers.
+    pub fn unix_browse_directory() -> &'static str {
         if Path::new("/usr/games/mame").exists() {
             "/usr/games"
+        } else if Path::new("/usr/local/bin/mame").exists() {
+            "/usr/local/bin"
         } else if Path::new("/usr/bin/mame").exists() {
             "/usr/bin"
+        } else if Path::new("/usr/local/bin").is_dir() {
+            "/usr/local/bin"
         } else {
             "/usr"
         }
@@ -154,11 +158,7 @@ impl MameFinderDialog {
         }
 
         let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if path.is_empty() {
-            None
-        } else {
-            Some(path)
-        }
+        if path.is_empty() { None } else { Some(path) }
     }
 
     /// Validate a MAME executable and get its version
@@ -377,12 +377,19 @@ impl MameFinderDialog {
                     if ui.button("Browse...").clicked() {
                         let mut dialog = rfd::FileDialog::new().set_title("Select MAME Executable");
 
-                        if cfg!(target_os = "linux") {
-                            dialog = dialog.set_directory(Self::linux_browse_directory());
+                        if cfg!(any(
+                            target_os = "linux",
+                            target_os = "freebsd",
+                            target_os = "dragonfly",
+                            target_os = "netbsd",
+                            target_os = "openbsd"
+                        )) {
+                            dialog = dialog.set_directory(Self::unix_browse_directory());
                         }
 
                         if let Some(path) = dialog.pick_file() {
-                            path_buffer = Self::resolve_executable_path(&path.display().to_string());
+                            path_buffer =
+                                Self::resolve_executable_path(&path.display().to_string());
                         }
                     }
                 });
@@ -407,7 +414,7 @@ impl MameFinderDialog {
                 ui.label("Common MAME locations:");
                 ui.label("• /usr/games/mame  (Debian/Ubuntu)");
                 ui.label("• /usr/bin/mame");
-                ui.label("• /usr/local/bin/mame");
+                ui.label("• /usr/local/bin/mame  (BSD/source installs)");
                 ui.label("• /snap/bin/mame");
 
                 ui.add_space(10.0);

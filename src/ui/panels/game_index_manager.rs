@@ -103,14 +103,16 @@ impl GameIndexManager {
             hardware_filter,
         );
 
-        // Apply search filter only if there's text
+        // Apply search filter only if there's text. Cache entries are scoped to
+        // the complete filter state: a query cached for one manufacturer or
+        // decade must never replace the result for another selection.
         if !filter_settings.search_text.is_empty() {
-            // Check cache first for instant results!
-            let search_key = filter_settings.search_text.clone();
+            let search_key = Self::filtered_search_cache_key(filter_settings);
 
             if let Some(ref index) = self.game_index {
                 if let Some(cached) = index.get_cached_search(&search_key) {
-                    // Cache hit! No need to search
+                    // This entry already represents this exact filter/search
+                    // combination, so it is safe to use as the final result.
                     self.filtered_games_cache = cached.to_vec();
                 } else {
                     // Cache miss - search and cache the result
@@ -148,6 +150,32 @@ impl GameIndexManager {
                 self.filtered_games_cache.len()
             );
         }
+    }
+
+    fn filtered_search_cache_key(filters: &FilterSettings) -> String {
+        let mut manufacturers: Vec<_> = filters.selected_manufacturers.iter().collect();
+        manufacturers.sort_unstable();
+
+        // Prefix keeps these final-result entries separate from the legacy list
+        // widgets, which still cache plain text queries in the same GameIndex.
+        format!(
+            "__manager_v2__|q={:?}|mode={:?}|availability={}:{}|status={}:{}|other={}:{}:{}|mfr={:?}|year={:?}:{:?}|hardware={:?}:{:?}:{:?}",
+            filters.search_text,
+            filters.search_mode,
+            filters.availability_filters.show_available,
+            filters.availability_filters.show_unavailable,
+            filters.status_filters.show_working,
+            filters.status_filters.show_not_working,
+            filters.other_filters.show_favorites,
+            filters.other_filters.show_parents_only,
+            filters.other_filters.show_chd_games,
+            manufacturers,
+            filters.year_from,
+            filters.year_to,
+            filters.cpu_filter,
+            filters.device_filter,
+            filters.sound_filter,
+        )
     }
 
     /// Apply the new categorized multi-selection filters
@@ -224,6 +252,7 @@ impl GameIndexManager {
                     && others_match
                     && hardware_match
                     && filters.manufacturer_matches(&game.manufacturer)
+                    && filters.year_matches(&game.year)
             } else {
                 false
             }
@@ -258,40 +287,45 @@ impl GameIndexManager {
         search_mode: &SearchMode,
         hardware_filter: Option<&HardwareFilter>,
     ) {
-        // Use enhanced search for special modes
-        match search_mode {
-            SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
-                if let Some(ref mut search_engine) = self.enhanced_search {
-                    match search_engine.enhanced_search(games, search_text, search_mode) {
-                        Ok(results) => {
-                            // Filter current cache to only include enhanced search results
-                            let result_set: HashSet<usize> = results.into_iter().collect();
-                            self.filtered_games_cache
-                                .retain(|&idx| result_set.contains(&idx));
-                            return;
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "Enhanced search failed: {}, falling back to basic search",
-                                e
-                            );
-                            // Fall through to basic search
+        // Ranked enhanced search has a result cap. Once another predicate has
+        // narrowed the candidates (for example manufacturer or decade), search
+        // those candidates directly so globally-ranked games cannot crowd out a
+        // valid result from the selected facet.
+        if self.filtered_games_cache.len() == games.len() {
+            match search_mode {
+                SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
+                    if let Some(ref mut search_engine) = self.enhanced_search {
+                        match search_engine.enhanced_search(games, search_text, search_mode) {
+                            Ok(results) => {
+                                // Filter current cache to only include enhanced search results
+                                let result_set: HashSet<usize> = results.into_iter().collect();
+                                self.filtered_games_cache
+                                    .retain(|&idx| result_set.contains(&idx));
+                                return;
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "Enhanced search failed: {}, falling back to basic search",
+                                    e
+                                );
+                                // Fall through to basic search
+                            }
                         }
                     }
                 }
-            }
-            _ => {
-                // For regular search modes, try enhanced search first as it's often better
-                if let Some(ref mut search_engine) = self.enhanced_search {
-                    match search_engine.enhanced_search(games, search_text, search_mode) {
-                        Ok(results) => {
-                            let result_set: HashSet<usize> = results.into_iter().collect();
-                            self.filtered_games_cache
-                                .retain(|&idx| result_set.contains(&idx));
-                            return;
-                        }
-                        Err(_) => {
-                            // Fall through to basic search if enhanced search fails
+                _ => {
+                    // For regular search modes, try enhanced search first as it's often better
+                    if let Some(ref mut search_engine) = self.enhanced_search {
+                        match search_engine.enhanced_search(games, search_text, search_mode) {
+                            Ok(results) => {
+                                let result_set: HashSet<usize> = results.into_iter().collect();
+                                self.filtered_games_cache
+                                    .retain(|&idx| result_set.contains(&idx));
+                                return;
+                            }
+                            Err(_) => {
+                                // Fall through to basic search if enhanced search fails
+                            }
                         }
                     }
                 }
@@ -469,6 +503,7 @@ impl GameIndexManager {
     pub fn update_favorites(&mut self, games: &[Game], favorites: &HashSet<String>) {
         if let Some(index) = &mut self.game_index {
             index.update_favorites(games, favorites);
+            index.clear_cache();
         }
         self.filter_cache_dirty = true;
     }
@@ -478,6 +513,10 @@ impl GameIndexManager {
         if let Some(ref mut search_engine) = self.enhanced_search {
             search_engine.update_config(config);
         }
+        if let Some(index) = &mut self.game_index {
+            index.clear_cache();
+        }
+        self.filter_cache_dirty = true;
     }
 
     /// Get enhanced search statistics
@@ -555,4 +594,141 @@ pub struct GameIndexStats {
     pub search_cache_size: usize,
     pub max_cache_size: usize,
     pub last_update: Instant,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game(name: &str, title: &str, manufacturer: &str, year: &str) -> Game {
+        Game {
+            name: name.to_string(),
+            description: title.to_string(),
+            manufacturer: manufacturer.to_string(),
+            year: year.to_string(),
+            driver: "test".to_string(),
+            driver_status: "good".to_string(),
+            status: RomStatus::Available,
+            parent: None,
+            category: "Test".to_string(),
+            play_count: 0,
+            is_clone: false,
+            is_device: false,
+            is_bios: false,
+            controls: String::new(),
+            requires_chd: false,
+            chd_name: None,
+            verification_status: None,
+        }
+    }
+
+    fn manager_with_index(games: &[Game]) -> GameIndexManager {
+        let mut manager = GameIndexManager::new();
+        manager.enhanced_search = None;
+        manager.game_index = Some(GameIndex::build(games.to_vec(), HashSet::new()));
+        manager
+    }
+
+    fn update(manager: &mut GameIndexManager, games: &[Game], filters: &FilterSettings) {
+        manager.update_filtered_games_cache(
+            games,
+            FilterCategory::All,
+            filters,
+            &HashSet::new(),
+            None,
+        );
+    }
+
+    #[test]
+    fn manufacturer_and_year_filters_are_anded() {
+        let games = vec![
+            game("capcom89", "Capcom 1989", "Capcom", "1989"),
+            game("capcom91", "Capcom 1991", "Capcom", "1991"),
+            game("sega89", "Sega 1989", "Sega", "1989"),
+            game("unknown", "Unknown year", "Capcom", "????"),
+        ];
+        let mut manager = manager_with_index(&games);
+        let mut filters = FilterSettings {
+            year_from: "1980".to_string(),
+            year_to: "1989".to_string(),
+            ..FilterSettings::default()
+        };
+        filters.selected_manufacturers.insert("Capcom".to_string());
+
+        update(&mut manager, &games, &filters);
+
+        assert_eq!(manager.get_filtered_games(), &[0]);
+    }
+
+    #[test]
+    fn cached_search_is_scoped_to_manufacturer_and_year_filters() {
+        let games = vec![
+            game("sf", "Street Fighter", "Capcom", "1987"),
+            game("streetsm", "Street Smart", "SNK", "1989"),
+            game("sf2", "Street Fighter II", "Capcom", "1991"),
+        ];
+        let mut manager = manager_with_index(&games);
+        let mut filters = FilterSettings {
+            search_text: "Street".to_string(),
+            ..FilterSettings::default()
+        };
+
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[0, 1, 2]);
+
+        filters.selected_manufacturers.insert("Capcom".to_string());
+        filters.year_from = "1980".to_string();
+        filters.year_to = "1989".to_string();
+        manager.mark_cache_dirty();
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[0]);
+
+        filters.year_from = "1990".to_string();
+        filters.year_to = "1999".to_string();
+        manager.mark_cache_dirty();
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[2]);
+
+        // Same manufacturer and query, earlier decade: this must hit the
+        // decade-specific entry rather than reuse the 1990s result.
+        filters.year_from = "1980".to_string();
+        filters.year_to = "1989".to_string();
+        manager.mark_cache_dirty();
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[0]);
+
+        filters.selected_manufacturers.clear();
+        filters.selected_manufacturers.insert("SNK".to_string());
+        manager.mark_cache_dirty();
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[1]);
+
+        // Return to an earlier combination to exercise a cache hit.
+        filters.selected_manufacturers.clear();
+        filters.selected_manufacturers.insert("Capcom".to_string());
+        manager.mark_cache_dirty();
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[0]);
+    }
+
+    #[test]
+    fn narrowed_manufacturer_search_is_not_lost_to_global_rank_limit() {
+        let mut games: Vec<_> = (0..120)
+            .map(|index| game(&format!("other{index}"), "Street", "Other", "1987"))
+            .collect();
+        let target_index = games.len();
+        games.push(game("target", "zzzz Street zzzz", "Capcom", "1987"));
+
+        let mut manager = GameIndexManager::new();
+        manager.game_index = Some(GameIndex::build(games.clone(), HashSet::new()));
+        let mut filters = FilterSettings {
+            search_text: "Street".to_string(),
+            ..FilterSettings::default()
+        };
+        filters.selected_manufacturers.insert("Capcom".to_string());
+
+        update(&mut manager, &games, &filters);
+
+        assert_eq!(manager.get_filtered_games(), &[target_index]);
+    }
 }
