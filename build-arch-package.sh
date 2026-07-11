@@ -61,9 +61,6 @@ print_status "Installing build dependencies..."
 sudo pacman -S --needed --noconfirm \
     rust \
     pkgconf \
-    zstd \
-    cmake \
-    ninja \
     base-devel
 
 # Verify Rust installation
@@ -79,7 +76,7 @@ BUILD_TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$BUILD_TMP_DIR"' EXIT
 
 print_status "Creating source tarball..."
-SOURCE_ROOT="mameuix-$VERSION"
+SOURCE_ROOT="MAMEUIx-$VERSION"
 SOURCE_ARCHIVE="mameuix-$VERSION.tar.gz"
 mkdir -p "$BUILD_TMP_DIR/source/$SOURCE_ROOT"
 tar --exclude='.git' --exclude='.cargo' --exclude='target' --exclude='pkg' \
@@ -89,15 +86,19 @@ tar --exclude='.git' --exclude='.cargo' --exclude='target' --exclude='pkg' \
     --exclude='design_handoff_mameuix_redesign' \
     --exclude='*.log' --exclude='*.tmp' --exclude='*.temp' \
     --exclude='*.deb' --exclude='*.rpm' --exclude='*.pkg.tar.zst' \
-    --exclude='*.pkg.tar.zst.sig' \
+    --exclude='*.pkg.tar.zst.sig' --exclude='*.AppImage' --exclude='AppDir' \
     --exclude='*.tar.gz' --exclude='*.tar.xz' --exclude='*.buildinfo' \
     --exclude='*.changes' --exclude='*.dsc' \
     -cf - . | tar -C "$BUILD_TMP_DIR/source/$SOURCE_ROOT" -xf -
 tar -C "$BUILD_TMP_DIR/source" -czf "$SOURCE_ARCHIVE" "$SOURCE_ROOT"
+SOURCE_SHA256=$(sha256sum "$SOURCE_ARCHIVE" | cut -d' ' -f1)
 
 ARCH_BUILD_DIR="$BUILD_TMP_DIR/arch"
 mkdir -p "$ARCH_BUILD_DIR"
-cp PKGBUILD .SRCINFO "$SOURCE_ARCHIVE" "$ARCH_BUILD_DIR/"
+# Keep the tracked PKGBUILD identical to AUR while packaging the current working tree.
+# makepkg finds the local archive first; only its temporary checksum needs changing.
+cp PKGBUILD "$SOURCE_ARCHIVE" "$ARCH_BUILD_DIR/"
+sed -i "s/^sha256sums=.*/sha256sums=('$SOURCE_SHA256')/" "$ARCH_BUILD_DIR/PKGBUILD"
 
 # Build the package
 print_status "Building MAMEUIX package..."

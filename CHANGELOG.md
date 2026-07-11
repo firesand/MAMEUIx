@@ -4,6 +4,10 @@ Notable changes are recorded here. Dates for tagged releases follow the Git tag 
 
 ## [Unreleased]
 
+### Changed
+
+- Synchronized the repository's Arch packaging with the tested AUR `0.1.6-1` recipe and documented standard AUR installation; Debian and RPM recipes remain pending clean-distribution validation.
+
 ## [0.1.6] - 2026-07-11
 
 ### Added

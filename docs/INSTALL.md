@@ -33,6 +33,23 @@ APPIMAGE_EXTRACT_AND_RUN=1 ./MAMEUIx-*.AppImage
 
 Official AppImages are built on Ubuntu 22.04 to remain compatible with glibc 2.35 and newer.
 
+## Install from the Arch User Repository
+
+The published [AUR package](https://aur.archlinux.org/packages/mameuix) builds MAMEUIx from source and installs MAME as a dependency. The standard AUR workflow is preferred because it lets you inspect the packaging files before building:
+
+```bash
+git clone https://aur.archlinux.org/mameuix.git
+cd mameuix
+makepkg -si
+```
+
+If you already use an AUR helper:
+
+```bash
+yay -S mameuix
+# or: paru -S mameuix
+```
+
 ## Build from source on Linux
 
 Requirements:
@@ -64,10 +81,13 @@ sudo dnf install gcc gcc-c++ curl pkgconf-pkg-config cmake git mame \
 ### Arch Linux and related distributions
 
 ```bash
-sudo pacman -S --needed base-devel curl rust pkgconf cmake ninja mame \
-    libx11 libxcb libxrandr libxinerama libxcursor libxi \
-    libxkbcommon wayland
+sudo pacman -S --needed base-devel git rust pkgconf mame \
+    hicolor-icon-theme libglvnd libx11 libxcursor libxi \
+    libxkbcommon libxkbcommon-x11 libxcb libxrender wayland xz
 ```
+
+Install `xdg-desktop-portal` and the backend appropriate for your desktop if
+native file dialogs are unavailable under Wayland.
 
 ### Compile and run
 
@@ -82,7 +102,7 @@ The `install*.sh` files are Linux-only convenience scripts. The AppImage, native
 
 ## Build native Linux packages
 
-Run package builders from the repository root.
+Run package builders from the repository root. The Arch package has passed a clean Arch Linux build with Rust 1.97 and `namcap` validation. The Debian and RPM recipes are available for testing but have not yet passed equivalent clean-distribution builds.
 
 ### Debian package
 
@@ -102,7 +122,7 @@ sudo dnf install ./mameuix-*.rpm
 
 ### Arch package
 
-The Arch builder creates an isolated source tree so it does not conflict with the repository's own `src/` directory.
+For normal installation, prefer the published AUR workflow above. The repository-local Arch builder creates an isolated source tree so it does not conflict with the repository's own `src/` directory.
 
 ```bash
 ./build-arch-package.sh
