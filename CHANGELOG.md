@@ -4,6 +4,8 @@ Notable changes are recorded here. Dates for tagged releases follow the Git tag 
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-17
+
 ### Fixed
 
 - Prevented the Classic shell from rendering duplicate legacy toolbars, which made the File, Game, Options, Tools, and Help menus unresponsive; existing Classic preferences now work without deleting user configuration.
@@ -100,7 +102,8 @@ Notable changes are recorded here. Dates for tagged releases follow the Git tag 
 
 - Initial MAME executable integration, game list, filtering, ROM detection, CHD support, artwork, and egui interface.
 
-[Unreleased]: https://github.com/firesand/MAMEUIx/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/firesand/MAMEUIx/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/firesand/MAMEUIx/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/firesand/MAMEUIx/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/firesand/MAMEUIx/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/firesand/MAMEUIx/compare/v0.1.3...v0.1.4
