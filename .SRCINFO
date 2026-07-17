@@ -1,6 +1,6 @@
 pkgbase = mameuix
 	pkgdesc = Modern GUI frontend for MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification
-	pkgver = 0.1.6
+	pkgver = 0.1.7
 	pkgrel = 1
 	url = https://github.com/firesand/MAMEUIx
 	arch = x86_64
@@ -23,7 +23,7 @@ pkgbase = mameuix
 	optdepends = mame-roms: Game ROMs for MAME
 	provides = mameuix
 	conflicts = mameuix-git
-	source = mameuix-0.1.6.tar.gz
+	source = mameuix-0.1.7.tar.gz
 	sha256sums = SKIP
 	validpgpkeys = 
 

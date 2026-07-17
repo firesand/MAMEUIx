@@ -1,6 +1,6 @@
 # Maintainer: edo hikmahtiar <edohikmahtiar@me.com>
 pkgname=mameuix
-pkgver=0.1.6
+pkgver=0.1.7
 pkgrel=1
 pkgdesc="Modern GUI frontend for MAME arcade emulator with CLRMamePro Lite Mode and enhanced ROM verification"
 arch=('x86_64')
