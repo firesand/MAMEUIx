@@ -4,6 +4,10 @@ Notable changes are recorded here. Dates for tagged releases follow the Git tag 
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevented the Classic shell from rendering duplicate legacy toolbars, which made the File, Game, Options, Tools, and Help menus unresponsive; existing Classic preferences now work without deleting user configuration.
+
 ## [0.1.6] - 2026-07-11
 
 ### Added

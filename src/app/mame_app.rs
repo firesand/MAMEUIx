@@ -23,6 +23,22 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[derive(Debug, Default)]
+struct PerPassRenderGuard {
+    last_rendered_pass: Option<u64>,
+}
+
+impl PerPassRenderGuard {
+    fn claim(&mut self, pass: u64) -> bool {
+        if self.last_rendered_pass == Some(pass) {
+            return false;
+        }
+
+        self.last_rendered_pass = Some(pass);
+        true
+    }
+}
+
 pub struct MameApp {
     // Core data
     pub config: AppConfig,
@@ -69,6 +85,9 @@ pub struct MameApp {
 
     // Theme management
     pub theme_applied: bool,
+
+    // Protect globally identified legacy chrome from accidental duplicate rendering.
+    toolbar_render_guard: PerPassRenderGuard,
 
     pub dock_tree: DockState<DockTab>,
     pub hardware_filter: Option<HardwareFilter>,
@@ -148,6 +167,7 @@ impl MameApp {
 
             // Theme management
             theme_applied: false,
+            toolbar_render_guard: PerPassRenderGuard::default(),
 
             dock_tree: create_default_layout(),
             hardware_filter: HardwareFilter::load_from_config(&config),
@@ -870,11 +890,11 @@ impl eframe::App for MameApp {
             shell.show(ctx, self);
             self.redesign_shell = shell;
         } else {
-            // Legacy layout
+            // Legacy chrome is owned here; content renderers must not recreate it.
             self.show_toolbar(ctx);
 
             match self.config.preferences.ui_shell {
-                UiShellMode::LegacyClassic => self.show_classic_layout(ctx),
+                UiShellMode::LegacyClassic => self.show_classic_content(ctx),
                 UiShellMode::LegacyDock | UiShellMode::RedesignPreview => {
                     self.show_dock_layout(ctx);
                 }
@@ -939,10 +959,7 @@ impl MameApp {
         }
     }
 
-    pub fn show_classic_layout(&mut self, ctx: &egui::Context) {
-        // Top toolbar with better spacing
-        self.show_toolbar(ctx);
-
+    fn show_classic_content(&mut self, ctx: &egui::Context) {
         // Left sidebar with improved styling - ENHANCED: More flexible resizing
         egui::SidePanel::left("sidebar")
             .resizable(true)
@@ -1525,6 +1542,13 @@ impl MameApp {
     }
 
     fn show_toolbar(&mut self, ctx: &egui::Context) {
+        // Top-level egui panels and their child widgets use global IDs. Rendering this
+        // toolbar twice in one pass makes the visible menus fight over the same popup
+        // state, so keep this guard even though the legacy shell has a single owner.
+        if !self.toolbar_render_guard.claim(ctx.cumulative_pass_nr()) {
+            return;
+        }
+
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -1731,5 +1755,20 @@ impl MameApp {
                 });
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PerPassRenderGuard;
+
+    #[test]
+    fn toolbar_render_guard_allows_only_one_render_per_egui_pass() {
+        let mut guard = PerPassRenderGuard::default();
+
+        assert!(guard.claim(41));
+        assert!(!guard.claim(41));
+        assert!(guard.claim(42));
+        assert!(!guard.claim(42));
     }
 }
