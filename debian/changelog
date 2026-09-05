@@ -1,3 +1,12 @@
+mameuix (0.1.8-1) unstable; urgency=medium
+
+  * Add persistent filtering for systems without required ROM/CHD media.
+  * Unify main-window styling with Settings and Preferences.
+  * Fix verification, filtered search, launch arguments, and installer behavior.
+  * Update dependencies and add advisory and installer regression checks.
+
+ -- edo hikmahtiar <edohikmahtiar@me.com>  Sat, 05 Sep 2026 14:00:00 +0700
+
 mameuix (0.1.7-1) unstable; urgency=medium
 
   * Fix unresponsive File, Game, Options, Tools, and Help menus in Classic mode.

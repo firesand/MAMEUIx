@@ -1,5 +1,5 @@
 Name:           mameuix
-Version:        0.1.7
+Version:        0.1.8
 Release:        1%{?dist}
 Summary:        Modern GUI frontend for MAME arcade emulator
 
@@ -38,7 +38,7 @@ search, and launch arcade games with features like:
 
 * Fast game scanning and filtering
 * Artwork display and management
-* Multiple theme support (10 themes)
+* Multiple theme support (11 themes)
 * ROM status detection
 * Game history tracking
 * Responsive and modern UI
@@ -86,6 +86,10 @@ install -D -m 644 debian/mameuix.1 %{buildroot}%{_mandir}/man1/mameuix.1
 %{_mandir}/man1/mameuix.1
 
 %changelog
+* Sat Sep 05 2026 edo hikmahtiar <edohikmahtiar@me.com> - 0.1.8-1
+- Add ROM-free system filtering and unify main-window styling with Preferences
+- Fix verification, filtered search, launch arguments, and installer behavior
+
 * Fri Jul 17 2026 edo hikmahtiar <edohikmahtiar@me.com> - 0.1.7-1
 - Fix unresponsive menus in Classic mode without requiring a configuration reset
 

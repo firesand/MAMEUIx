@@ -9,7 +9,12 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tantivy::schema::*;
-use tantivy::{Index, IndexWriter, TantivyDocument, collector::TopDocs, doc, query::QueryParser};
+use tantivy::{
+    Index, IndexWriter, TantivyDocument, Term,
+    collector::TopDocs,
+    doc,
+    query::{BooleanQuery, ConstScoreQuery, QueryParser, TermSetQuery},
+};
 
 // Global regex cache for performance
 lazy_static! {
@@ -35,7 +40,7 @@ impl Default for SearchConfig {
             max_fuzzy_results: 100,
             enable_fuzzy: true,
             enable_fulltext: true,
-            enable_regex: false, // Disabled by default for security
+            enable_regex: true, // Evaluated only when the user selects Regex mode
             fulltext_limit: 500,
         }
     }
@@ -155,13 +160,24 @@ impl EnhancedSearchEngine {
         query: &str,
         search_mode: &SearchMode,
     ) -> Vec<(usize, i64)> {
+        self.fuzzy_search_candidates(games, 0..games.len(), query, search_mode)
+    }
+
+    fn fuzzy_search_candidates(
+        &self,
+        games: &[Game],
+        candidates: impl IntoIterator<Item = usize>,
+        query: &str,
+        search_mode: &SearchMode,
+    ) -> Vec<(usize, i64)> {
         if !self.config.enable_fuzzy || query.is_empty() {
             return Vec::new();
         }
 
         let mut results = Vec::new();
 
-        for (idx, game) in games.iter().enumerate() {
+        for idx in candidates {
+            let Some(game) = games.get(idx) else { continue };
             let search_text = match search_mode {
                 SearchMode::GameTitle => &game.description,
                 SearchMode::Manufacturer => &game.manufacturer,
@@ -195,7 +211,19 @@ impl EnhancedSearchEngine {
 
     /// Perform full-text search
     pub fn fulltext_search(&self, query: &str) -> Result<Vec<usize>> {
-        if !self.config.enable_fulltext || query.is_empty() {
+        self.fulltext_search_candidates(query, None)
+    }
+
+    fn fulltext_search_candidates(
+        &self,
+        query: &str,
+        candidates: Option<&[usize]>,
+    ) -> Result<Vec<usize>> {
+        if !self.config.enable_fulltext
+            || query.is_empty()
+            || self.config.fulltext_limit == 0
+            || candidates.is_some_and(|ids| ids.is_empty())
+        {
             return Ok(Vec::new());
         }
 
@@ -214,10 +242,21 @@ impl EnhancedSearchEngine {
             None => return Ok(Vec::new()),
         };
 
-        let game_id_field = schema.get_field("game_id").unwrap();
+        let game_id_field = schema.get_field("game_id")?;
 
-        // Parse query and search
-        let query = query_parser.parse_query(query)?;
+        // Restrict indexed IDs before TopDocs applies its limit. Filtering a
+        // globally capped result afterwards can discard every valid candidate.
+        let mut query = query_parser.parse_query(query)?;
+        if let Some(candidates) = candidates {
+            let terms = candidates
+                .iter()
+                .map(|&idx| Term::from_field_u64(game_id_field, idx as u64));
+            let candidate_query = ConstScoreQuery::new(Box::new(TermSetQuery::new(terms)), 0.0);
+            query = Box::new(BooleanQuery::intersection(vec![
+                query,
+                Box::new(candidate_query),
+            ]));
+        }
         let reader = index.reader()?;
 
         let searcher = reader.searcher();
@@ -246,6 +285,16 @@ impl EnhancedSearchEngine {
         pattern: &str,
         search_mode: &SearchMode,
     ) -> Result<Vec<usize>> {
+        self.regex_search_candidates(games, 0..games.len(), pattern, search_mode)
+    }
+
+    fn regex_search_candidates(
+        &self,
+        games: &[Game],
+        candidates: impl IntoIterator<Item = usize>,
+        pattern: &str,
+        search_mode: &SearchMode,
+    ) -> Result<Vec<usize>> {
         if !self.config.enable_regex || pattern.is_empty() {
             return Ok(Vec::new());
         }
@@ -264,7 +313,8 @@ impl EnhancedSearchEngine {
 
         let mut results = Vec::new();
 
-        for (idx, game) in games.iter().enumerate() {
+        for idx in candidates {
+            let Some(game) = games.get(idx) else { continue };
             let search_text = match search_mode {
                 SearchMode::GameTitle => &game.description,
                 SearchMode::Manufacturer => &game.manufacturer,
@@ -288,68 +338,40 @@ impl EnhancedSearchEngine {
         Ok(results)
     }
 
-    /// Combined search using multiple strategies
+    /// Search all games using the explicitly selected enhanced mode.
     pub fn enhanced_search(
         &mut self,
         games: &[Game],
         query: &str,
         search_mode: &SearchMode,
     ) -> Result<Vec<usize>> {
+        let candidates: Vec<_> = (0..games.len()).collect();
+        self.enhanced_search_candidates(games, &candidates, query, search_mode)
+    }
+
+    /// Apply the selected search semantics to current filter candidates. Keep
+    /// original game IDs throughout; subset positions are never library IDs.
+    pub fn enhanced_search_candidates(
+        &mut self,
+        games: &[Game],
+        candidates: &[usize],
+        query: &str,
+        search_mode: &SearchMode,
+    ) -> Result<Vec<usize>> {
         self.search_count += 1;
         self.last_search_time = std::time::Instant::now();
-
-        let mut all_results = Vec::new();
-        let mut result_scores: HashMap<usize, f64> = HashMap::new();
-
-        // 1. Fuzzy search (gives scores)
-        if self.config.enable_fuzzy {
-            let fuzzy_results = self.fuzzy_search(games, query, search_mode);
-            for (idx, score) in fuzzy_results {
-                let normalized_score = (score as f64) / 100.0; // Normalize to 0-1
-                result_scores.insert(idx, normalized_score * 0.4); // 40% weight for fuzzy
-                if !all_results.contains(&idx) {
-                    all_results.push(idx);
-                }
+        match search_mode {
+            SearchMode::FuzzySearch => Ok(self
+                .fuzzy_search_candidates(games, candidates.iter().copied(), query, search_mode)
+                .into_iter()
+                .map(|(idx, _score)| idx)
+                .collect()),
+            SearchMode::FullText => self.fulltext_search_candidates(query, Some(candidates)),
+            SearchMode::Regex => {
+                self.regex_search_candidates(games, candidates.iter().copied(), query, search_mode)
             }
+            _ => anyhow::bail!("Expected an enhanced search mode"),
         }
-
-        // 2. Full-text search
-        if self.config.enable_fulltext
-            && let Ok(fulltext_results) = self.fulltext_search(query)
-        {
-            for idx in fulltext_results {
-                let current_score = result_scores.get(&idx).unwrap_or(&0.0);
-                result_scores.insert(idx, current_score + 0.6); // 60% weight for full-text
-                if !all_results.contains(&idx) {
-                    all_results.push(idx);
-                }
-            }
-        }
-
-        // 3. Regex search (if enabled)
-        if self.config.enable_regex
-            && (query.contains(".*") || query.contains("^") || query.contains("$"))
-            && let Ok(regex_results) = self.regex_search(games, query, search_mode)
-        {
-            for idx in regex_results {
-                let current_score = result_scores.get(&idx).unwrap_or(&0.0);
-                result_scores.insert(idx, current_score + 0.8); // High weight for regex matches
-                if !all_results.contains(&idx) {
-                    all_results.push(idx);
-                }
-            }
-        }
-
-        // Sort by combined score (highest first)
-        all_results.sort_by(|a, b| {
-            let score_a = result_scores.get(a).unwrap_or(&0.0);
-            let score_b = result_scores.get(b).unwrap_or(&0.0);
-            score_b
-                .partial_cmp(score_a)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        Ok(all_results)
     }
 
     /// Get search performance stats
@@ -433,5 +455,104 @@ mod tests {
             .unwrap();
         assert_eq!(engine.fulltext_search("Racing").unwrap(), vec![0]);
         assert!(engine.fulltext_search("Space").unwrap().is_empty());
+    }
+    #[test]
+    fn candidate_search_filters_before_limits_and_keeps_original_game_ids() {
+        let games = vec![
+            game("strong", "Racing"),
+            game("target", "A long Racing title with extra words"),
+        ];
+        let mut engine = EnhancedSearchEngine::new(SearchConfig {
+            max_fuzzy_results: 1,
+            fulltext_limit: 1,
+            ..SearchConfig::default()
+        });
+        engine.initialize_fulltext_index(&games).unwrap();
+        for mode in [SearchMode::FuzzySearch, SearchMode::FullText] {
+            assert_eq!(
+                engine.enhanced_search(&games, "Racing", &mode).unwrap(),
+                vec![0]
+            );
+            assert_eq!(
+                engine
+                    .enhanced_search_candidates(&games, &[1], "Racing", &mode)
+                    .unwrap(),
+                vec![1]
+            );
+            assert!(
+                engine
+                    .enhanced_search_candidates(&games, &[], "Racing", &mode)
+                    .unwrap()
+                    .is_empty()
+            );
+            assert!(
+                engine
+                    .enhanced_search_candidates(&games, &[99], "Racing", &mode)
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        engine.update_config(SearchConfig {
+            fulltext_limit: 0,
+            ..SearchConfig::default()
+        });
+        assert!(engine.fulltext_search("Racing").unwrap().is_empty());
+    }
+
+    #[test]
+    fn explicit_regex_supports_alternation_and_never_unions_other_search_modes() {
+        let mut games = vec![
+            game("sf", "Street Fighter"),
+            game("pac", "Pac Man"),
+            game("other", "Unrelated"),
+        ];
+        games[2].manufacturer = "Street Fighter".into();
+        let mut engine = EnhancedSearchEngine::new(SearchConfig::default());
+        engine.initialize_fulltext_index(&games).unwrap();
+        assert_eq!(
+            engine
+                .enhanced_search(&games, "Street|Pac", &SearchMode::Regex)
+                .unwrap(),
+            vec![0, 1]
+        );
+        assert_eq!(
+            engine
+                .enhanced_search(&games, "Street", &SearchMode::Regex)
+                .unwrap(),
+            vec![0]
+        );
+        assert_eq!(
+            engine
+                .enhanced_search_candidates(&games, &[1], "Street|Pac", &SearchMode::Regex)
+                .unwrap(),
+            vec![1]
+        );
+        assert!(
+            engine
+                .enhanced_search_candidates(&games, &[], "Street|Pac", &SearchMode::Regex)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            engine
+                .enhanced_search_candidates(&games, &[99], "Street|Pac", &SearchMode::Regex)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            engine
+                .enhanced_search(&games, "[", &SearchMode::Regex)
+                .is_err()
+        );
+        engine.update_config(SearchConfig {
+            enable_regex: false,
+            ..SearchConfig::default()
+        });
+        assert!(
+            engine
+                .enhanced_search(&games, "Street", &SearchMode::Regex)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

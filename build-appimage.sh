@@ -125,7 +125,7 @@ prepare_icon() {
 
 build_binary() {
     if ! command -v cargo >/dev/null 2>&1; then
-        print_error "cargo not found. Install Rust >= 1.85."
+        print_error "cargo not found. Install Rust >= 1.88."
         exit 1
     fi
 

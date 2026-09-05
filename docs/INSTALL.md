@@ -1,6 +1,6 @@
 # MAMEUIx Installation
 
-MAMEUIx v0.1.7 is supported on Linux. MAME is a separate runtime dependency and is not bundled with the application. FreeBSD amd64 is currently an experimental source-build target; see [Experimental FreeBSD](#experimental-freebsd).
+MAMEUIx v0.1.8 is supported on Linux. MAME is a separate runtime dependency and is not bundled with the application. FreeBSD amd64 is currently an experimental source-build target; see [Experimental FreeBSD](#experimental-freebsd).
 
 ## AppImage (recommended for Linux)
 
@@ -102,7 +102,7 @@ The `install*.sh` files are Linux-only convenience scripts. The AppImage, native
 
 ## Build native Linux packages
 
-Run package builders from the repository root. The Arch package has passed a clean Arch Linux build with Rust 1.97 and `namcap` validation. The Debian and RPM recipes are available for testing but have not yet passed equivalent clean-distribution builds.
+Run package builders from the repository root. The Arch `0.1.6-1` recipe previously passed a clean Arch Linux build with Rust 1.97 and `namcap` validation. That result does not validate the newer release on Arch. The Debian and RPM recipes are available for testing but have not yet passed equivalent clean-distribution builds.
 
 ### Debian package
 

@@ -43,12 +43,16 @@ tar --exclude='.git' --exclude='.cargo' --exclude='target' --exclude='pkg' \
 tar -C "$BUILD_TMP_DIR/source" -czf "$SOURCE_ARCHIVE" "$SOURCE_ROOT"
 SOURCE_SHA256=$(sha256sum "$SOURCE_ARCHIVE" | cut -d' ' -f1)
 
-# Keep the tracked PKGBUILD identical to AUR while packaging the current working tree.
-# makepkg finds the local archive first; only its temporary checksum needs changing.
+# Keep the tracked release recipe intact while packaging the current working tree.
+# Its version may lag Cargo until the new release archive checksum is published.
 ARCH_BUILD_DIR="$BUILD_TMP_DIR/arch"
 mkdir -p "$ARCH_BUILD_DIR"
 cp PKGBUILD "$SOURCE_ARCHIVE" "$ARCH_BUILD_DIR/"
-sed -i "s/^sha256sums=.*/sha256sums=('$SOURCE_SHA256')/" "$ARCH_BUILD_DIR/PKGBUILD"
+sed -i \
+    -e "s/^pkgver=.*/pkgver=$VERSION/" \
+    -e "s/^source=.*/source=('$SOURCE_ARCHIVE')/" \
+    -e "s/^sha256sums=.*/sha256sums=('$SOURCE_SHA256')/" \
+    "$ARCH_BUILD_DIR/PKGBUILD"
 
 # Build the package
 echo "Building Arch package..."

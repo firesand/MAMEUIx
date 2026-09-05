@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       build_tag:
-        description: "Tag to build exactly (for example v0.1.7)."
+        description: "Tag to build exactly (for example v0.1.8)."
         required: true
         type: string
       upload_to_release:

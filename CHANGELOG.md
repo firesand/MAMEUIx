@@ -4,7 +4,29 @@ Notable changes are recorded here. Dates for tagged releases follow the Git tag 
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-05
+
+### Added
+
+- Added **Hide systems that don't require ROMs**, enabled by default and saved between sessions. Required media in BIOS/device dependencies is considered; ROM-free parents do not hide variants that require media.
+- Added dependency advisory checks and isolated installer regression checks to CI.
+
 ### Changed
+
+- Unified Classic and Dock main windows with Settings/Preferences through the **Modern Spacious** theme, including typography, colors, toolbar controls, filters, tables, and game cards.
+- Improved narrow-panel scrolling, card text layout, and theme switching while preserving the Classic menu render guard from v0.1.7.
+- Updated the locked dependency graph and declared Rust 1.88 as the minimum. Tantivy uses an immutable upstream revision for its transitive `lru` fix; two maintenance-only advisory exceptions are documented in `docs/DEPENDENCY_REVIEW.md`.
+
+### Fixed
+
+- Required explicit successful MAME verification results; missing, corrupt, and failed sets no longer appear as passed, and CHD requirements follow mandatory disk metadata.
+- Aligned launch and verification paths with effective per-game settings and preserved custom launch arguments.
+- Kept full-text, fuzzy, and regex search working within filtered candidates, including the default ROM requirement filter.
+- Corrected context-menu game targets, loading retries, executable selection after removal, and search-mode changes.
+- Moved icon decoding off the UI frame with bounded work and stale-result rejection.
+- Corrected installer checkout names and Rust detection, avoided partial Arch upgrades, and made local Arch build recipes follow the source version.
+
+### Packaging
 
 - Synchronized the repository's Arch packaging with the tested AUR `0.1.6-1` recipe and documented standard AUR installation; Debian and RPM recipes remain pending clean-distribution validation.
 
@@ -106,7 +128,8 @@ Notable changes are recorded here. Dates for tagged releases follow the Git tag 
 
 - Initial MAME executable integration, game list, filtering, ROM detection, CHD support, artwork, and egui interface.
 
-[Unreleased]: https://github.com/firesand/MAMEUIx/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/firesand/MAMEUIx/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/firesand/MAMEUIx/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/firesand/MAMEUIx/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/firesand/MAMEUIx/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/firesand/MAMEUIx/compare/v0.1.4...v0.1.5

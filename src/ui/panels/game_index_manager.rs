@@ -294,40 +294,38 @@ impl GameIndexManager {
         search_mode: &SearchMode,
         hardware_filter: Option<&HardwareFilter>,
     ) {
-        // Ranked enhanced search has a result cap. Once another predicate has
-        // narrowed the candidates (for example manufacturer or decade), search
-        // those candidates directly so globally-ranked games cannot crowd out a
-        // valid result from the selected facet.
-        if self.filtered_games_cache.len() == games.len() {
-            match search_mode {
-                SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex => {
-                    if let Some(ref mut search_engine) = self.enhanced_search {
-                        match search_engine.enhanced_search(games, search_text, search_mode) {
-                            Ok(results) => {
-                                // Filter current cache to only include enhanced search results
-                                let result_set: HashSet<usize> = results.into_iter().collect();
-                                self.filtered_games_cache
-                                    .retain(|&idx| result_set.contains(&idx));
-                                return;
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "Enhanced search failed: {}, falling back to basic search",
-                                    e
-                                );
-                                // Fall through to basic search
-                            }
-                        }
+        // Keep enhanced search semantics even after ROM requirements or other
+        // facets narrow the library. Each engine filters before its result cap.
+        if matches!(
+            search_mode,
+            SearchMode::FuzzySearch | SearchMode::FullText | SearchMode::Regex
+        ) {
+            if let Some(ref mut search_engine) = self.enhanced_search {
+                match search_engine.enhanced_search_candidates(
+                    games,
+                    &self.filtered_games_cache,
+                    search_text,
+                    search_mode,
+                ) {
+                    Ok(results) => {
+                        let result_set: HashSet<usize> = results.into_iter().collect();
+                        self.filtered_games_cache
+                            .retain(|idx| result_set.contains(idx));
+                    }
+                    Err(error) => {
+                        // Invalid patterns/queries must not silently turn into
+                        // literal title searches with different matching rules.
+                        eprintln!("Enhanced search failed: {error}");
+                        self.filtered_games_cache.clear();
                     }
                 }
-                // Field-specific modes must stay within their selected field.
-                // Enhanced search unions full-text results from every field and
-                // has no access to the hardware mappings.
-                _ => {}
+            } else {
+                self.filtered_games_cache.clear();
             }
+            return;
         }
 
-        // Fallback: Original basic search implementation
+        // Field-specific modes retain exact substring matching within their field.
         let search_lower = search_text.to_lowercase();
 
         // Use parallel processing for large datasets (huge speedup!)
@@ -777,6 +775,123 @@ mod tests {
         update(&mut manager, &games, &filters);
 
         assert_eq!(manager.get_filtered_games(), &[target_index]);
+    }
+
+    #[test]
+    fn enhanced_modes_keep_their_semantics_with_romless_and_manufacturer_filters() {
+        let mut games = vec![
+            game("sf2", "Street Fighter II", "Capcom", "1991"),
+            game("console", "Street Fighter Console", "Capcom", "1991"),
+            game("other", "Street Fighter Special", "Other", "1991"),
+            game("pacman", "Pac Man", "Namco", "1980"),
+        ];
+        games[1].requires_roms = false;
+        let mut manager = GameIndexManager::new();
+        manager.build_game_index(&games, &HashSet::new());
+        for (mode, query, visible, all) in [
+            (SearchMode::FullText, "Capcom", vec![0], vec![0, 1]),
+            (
+                SearchMode::FuzzySearch,
+                "strt fgtr",
+                vec![0, 2],
+                vec![0, 1, 2],
+            ),
+            (
+                SearchMode::Regex,
+                "Street.*Fighter",
+                vec![0, 2],
+                vec![0, 1, 2],
+            ),
+        ] {
+            let mut filters = FilterSettings {
+                search_mode: mode.clone(),
+                search_text: query.into(),
+                ..FilterSettings::default()
+            };
+            assert!(filters.hide_romless_systems);
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), visible, "default {mode:?}");
+
+            filters.selected_manufacturers.insert("Capcom".into());
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), &[0], "manufacturer {mode:?}");
+
+            filters.hide_romless_systems = false;
+            update(&mut manager, &games, &filters);
+            assert_eq!(
+                manager.get_filtered_games(),
+                &[0, 1],
+                "include ROM-less {mode:?}"
+            );
+
+            filters.selected_manufacturers.clear();
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), all, "unfiltered {mode:?}");
+
+            // Revisit the same query/filter pair to check the cached result too.
+            filters.hide_romless_systems = true;
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), visible, "cached {mode:?}");
+        }
+    }
+
+    #[test]
+    fn enhanced_rank_limits_apply_after_manufacturer_and_romless_filters() {
+        let mut games: Vec<_> = (0..120)
+            .map(|idx| game(&format!("other{idx}"), "Racing", "Other", "1990"))
+            .collect();
+        let target = games.len();
+        games.push(game(
+            "target",
+            "A lengthy Racing title with several extra words",
+            "Capcom",
+            "1990",
+        ));
+        let mut romless = game("romless", "Racing", "Capcom", "1990");
+        romless.requires_roms = false;
+        games.push(romless);
+        let mut manager = GameIndexManager::new();
+        manager.configure_enhanced_search(SearchConfig {
+            max_fuzzy_results: 1,
+            fulltext_limit: 1,
+            ..SearchConfig::default()
+        });
+        manager.build_game_index(&games, &HashSet::new());
+        for mode in [
+            SearchMode::FuzzySearch,
+            SearchMode::FullText,
+            SearchMode::Regex,
+        ] {
+            let mut filters = FilterSettings {
+                search_mode: mode.clone(),
+                search_text: "Racing".into(),
+                ..FilterSettings::default()
+            };
+            filters.selected_manufacturers.insert("Capcom".into());
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), &[target], "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn invalid_enhanced_patterns_do_not_fall_back_to_literal_titles() {
+        let games = vec![game("bracket", "A title with [ bracket", "Maker", "1990")];
+        let mut manager = GameIndexManager::new();
+        manager.build_game_index(&games, &HashSet::new());
+        for mode in [SearchMode::Regex, SearchMode::FullText] {
+            let filters = FilterSettings {
+                search_mode: mode.clone(),
+                search_text: "[".into(),
+                ..FilterSettings::default()
+            };
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert!(manager.get_filtered_games().is_empty(), "{mode:?}");
+        }
     }
 
     #[test]

@@ -157,13 +157,18 @@ build_arch() {
     
     # Create source tarball
     create_source_tarball "$VERSION" "MAMEUIx-$VERSION"
-    SOURCE_SHA256=$(sha256sum "mameuix-$VERSION.tar.gz" | cut -d' ' -f1)
+    SOURCE_ARCHIVE="mameuix-$VERSION.tar.gz"
+    SOURCE_SHA256=$(sha256sum "$SOURCE_ARCHIVE" | cut -d' ' -f1)
 
-    # Keep the tracked PKGBUILD identical to AUR while packaging the current working tree.
-    # makepkg finds the local archive first; only its temporary checksum needs changing.
+    # Keep the tracked release recipe intact while packaging the current working tree.
+    # Its version may lag Cargo until the new release archive checksum is published.
     ARCH_BUILD_DIR=$(mktemp -d)
-    cp PKGBUILD "mameuix-$VERSION.tar.gz" "$ARCH_BUILD_DIR/"
-    sed -i "s/^sha256sums=.*/sha256sums=('$SOURCE_SHA256')/" "$ARCH_BUILD_DIR/PKGBUILD"
+    cp PKGBUILD "$SOURCE_ARCHIVE" "$ARCH_BUILD_DIR/"
+    sed -i \
+        -e "s/^pkgver=.*/pkgver=$VERSION/" \
+        -e "s/^source=.*/source=('$SOURCE_ARCHIVE')/" \
+        -e "s/^sha256sums=.*/sha256sums=('$SOURCE_SHA256')/" \
+        "$ARCH_BUILD_DIR/PKGBUILD"
 
     # Build the package
     if (cd "$ARCH_BUILD_DIR" && makepkg -f); then

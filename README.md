@@ -2,9 +2,16 @@
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
-**Current Version: 0.1.7** - Classic Menu Stability Fix
+**Current Version: 0.1.8** - ROM Filtering, Consistent Styling, and Reliability
 
-## Recent Improvements (v0.1.7)
+## Recent Improvements (v0.1.8)
+
+- Added **Hide systems that don't require ROMs**, enabled by default and saved between sessions
+- Matched Classic and Dock window styling to Settings/Preferences with **Modern Spacious**
+- Fixed verification results, per-game paths and launch arguments, filtered search, context-menu targets, and loading retries
+- Improved icon loading, installer behavior, and dependency checks
+
+## Improvements in v0.1.7
 
 - Fixed duplicate toolbar rendering that made the File, Game, Options, Tools, and Help menus unresponsive in Classic mode
 - Preserved existing Classic preferences so upgrading does not require deleting or resetting user configuration
@@ -12,8 +19,6 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 
 ## Improvements in v0.1.6
 
-- Unified the Classic and Dock main windows with Settings/Preferences through the **Modern Spacious** theme, including table rows, game cards, filters, and toolbar controls
-- Added **Hide systems that don't require ROMs** in both library sidebars, enabled by default and saved between sessions
 - Added an opt-in, experimental redesigned UI; the dock-panel UI remains the default
 - Added a Software Lists preview for browsing MAME hash XML and checking best-effort media-path presence
 - Made `Ctrl`/`Cmd`+`F` focus the redesign search field and separated Missing from Issues filtering
@@ -378,9 +383,9 @@ The application is optimized for performance:
 
 ## Development Status
 
-✅ **Current Release**: v0.1.7 fixes unresponsive Classic menus while preserving existing configuration
+✅ **Current Release**: v0.1.8 adds ROM requirement filtering, consistent main-window styling, and reliability fixes
 🔄 **Active Development**: Ongoing UI, performance, and packaging refinements
-📦 **Packaging**: Verified Arch AUR package; Debian and RPM recipes are available but still need clean-distribution validation
+📦 **Packaging**: Arch AUR `0.1.6-1` was validated previously; the new release and Debian/RPM recipes still need clean-distribution package validation
 🧪 **FreeBSD**: Experimental amd64 source-build path; native validation is still required
 🎯 **Roadmap**: Performance optimizations and feature enhancements
 🔧 **New Features**: Experimental redesign, Software Lists preview, ROM verification, BGFX launch configuration, and experimental GLSL tooling
@@ -460,7 +465,12 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Version History
 
-### v0.1.7 (Latest Release)
+### v0.1.8 (Latest Release)
+- Persistent ROM requirement filtering across both library sidebars
+- Shared Modern Spacious styling for main windows, Settings, and Preferences
+- Verification, search, launch, UI interaction, installer, and dependency fixes
+
+### v0.1.7
 - **Classic interface stability**:
   - Fixed File, Game, Options, Tools, and Help menus that did not respond in Classic mode
   - Existing Classic preferences continue to work without deleting or resetting configuration

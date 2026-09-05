@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise installer setup blocks with isolated commands; never install or build."""
+"""Exercise setup and package-recipe blocks with isolated commands; never install or build."""
 
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -40,6 +41,7 @@ class InstallerRegressions(unittest.TestCase):
     def run_block(self, code):
         return subprocess.run(
             ["/bin/bash", "-c", "set -e\nprint_status() { printf '%s\\n' \"$1\"; }\n"
+             "print_success() { printf '%s\\n' \"$1\"; }\n"
              "print_warning() { printf '%s\\n' \"$1\"; }\n"
              "print_error() { printf '%s\\n' \"$1\" >&2; }\n" + code],
             cwd=self.work, env=self.env, text=True, capture_output=True,
@@ -184,6 +186,53 @@ class InstallerRegressions(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("Could not check", result.stderr)
         self.assertEqual(self.commands(), "")
+
+    def test_local_arch_recipes_build_current_cargo_version_without_changing_release_recipe(self):
+        for name in ("cp", "cut", "gzip", "ls", "mkdir", "mktemp", "rm", "sed", "sha256sum", "tar"):
+            (self.bin / name).symlink_to(shutil.which(name))
+        self.env["EXPECTED_VERSION"] = "0.1.8"
+        # Deliberately retain an older, remotely sourced release recipe. The
+        # helper must use this checkout even before the next tag/hash exists.
+        historical_recipe = re.sub(
+            r"^pkgver=.*$", "pkgver=0.1.6", (ROOT / "PKGBUILD").read_text(), flags=re.MULTILINE
+        )
+        (self.work / "PKGBUILD").write_text(historical_recipe)
+        (self.work / "Cargo.toml").write_text('[package]\nname = "mameuix"\nversion = "0.1.8"\n')
+        self.stub("makepkg", r'''set -euo pipefail
+source ./PKGBUILD
+[[ "$pkgver" == "$EXPECTED_VERSION" ]]
+[[ "${#source[@]}" == 1 ]]
+[[ "${source[0]}" == "mameuix-$EXPECTED_VERSION.tar.gz" ]]
+printf '%s  %s\n' "${sha256sums[0]}" "${source[0]}" | sha256sum -c
+tar -xOzf "${source[0]}" "MAMEUIx-$EXPECTED_VERSION/Cargo.toml" |
+    grep -Fx "version = \"$EXPECTED_VERSION\""
+printf 'makepkg %s\n' "$pkgver" >> "$INSTALLER_TEST_LOG"
+printf 'stub package\n' > "$pkgname-$pkgver-$pkgrel-x86_64.pkg.tar.zst"
+''')
+        helpers = {
+            "build-arch.sh": (ROOT / "build-arch.sh").read_text(),
+            # Run only the package-assembly block, excluding distro setup and
+            # optional installation prompts. The real recipe edits are intact.
+            "build-arch-package.sh": (
+                block("build-arch-package.sh", "VERSION=$(grep", "# Clean previous builds")
+                + block("build-arch-package.sh", "BUILD_TMP_DIR=$(mktemp -d)", "# Find the built package")
+            ),
+            "build-packages.sh": (
+                block("build-packages.sh", "# RPM uses", "# Function to build Debian package")
+                + block("build-packages.sh", "# Function to build Arch package", "# Function to build AppImage")
+                + "\nbuild_arch\n"
+            ),
+        }
+        for script, code in helpers.items():
+            with self.subTest(script=script):
+                result = self.run_block(code)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(self.commands(), "makepkg 0.1.8\n")
+                self.assertEqual((self.work / "PKGBUILD").read_text(), historical_recipe)
+                package = self.work / "mameuix-0.1.8-1-x86_64.pkg.tar.zst"
+                self.assertTrue(package.is_file())
+                package.unlink()
+                self.log.unlink()
 
 
 if __name__ == "__main__":
