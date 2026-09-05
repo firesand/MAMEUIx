@@ -124,6 +124,8 @@ sudo dnf install ./mameuix-*.rpm
 
 For normal installation, prefer the published AUR workflow above. The repository-local Arch builder creates an isolated source tree so it does not conflict with the repository's own `src/` directory.
 
+The Arch recipe on `main` is updated after each tag so its checksum comes from the published source archive. Use that recipe to package the current release. When building a checked-out tag with the local helper below, its temporary package version comes from `Cargo.toml`. Updating the GitHub recipe does not automatically update the separate AUR repository.
+
 ```bash
 ./build-arch-package.sh
 sudo pacman -U ./mameuix-*.pkg.tar.zst

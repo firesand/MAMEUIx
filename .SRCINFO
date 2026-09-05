@@ -1,6 +1,6 @@
 pkgbase = mameuix
 	pkgdesc = Modern MAME frontend with enhanced features
-	pkgver = 0.1.6
+	pkgver = 0.1.8
 	pkgrel = 1
 	url = https://github.com/firesand/MAMEUIx
 	arch = x86_64
@@ -27,7 +27,7 @@ pkgbase = mameuix
 	optdepends = xdg-utils: Open links in the default web browser
 	options = !debug
 	options = !lto
-	source = mameuix-0.1.6.tar.gz::https://github.com/firesand/MAMEUIx/archive/refs/tags/v0.1.6.tar.gz
-	sha256sums = 08d1d39d71cbfb0102df320729ea964fc484ba19912ff581fff1751120005311
+	source = mameuix-0.1.8.tar.gz::https://github.com/firesand/MAMEUIx/archive/refs/tags/v0.1.8.tar.gz
+	sha256sums = fc53d7a9ffa36ffe0958d8f29159b4cc82007bec241727eb3bc4535ae3a7544b
 
 pkgname = mameuix

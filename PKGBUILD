@@ -1,6 +1,6 @@
 # Maintainer: edo hikmahtiar <edohikmahtiar@me.com>
 pkgname=mameuix
-pkgver=0.1.6
+pkgver=0.1.8
 pkgrel=1
 pkgdesc="Modern MAME frontend with enhanced features"
 arch=('x86_64')
@@ -30,7 +30,7 @@ optdepends=(
 )
 options=('!debug' '!lto')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/firesand/MAMEUIx/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('08d1d39d71cbfb0102df320729ea964fc484ba19912ff581fff1751120005311')
+sha256sums=('fc53d7a9ffa36ffe0958d8f29159b4cc82007bec241727eb3bc4535ae3a7544b')
 
 _cargo_env() {
     local remap_flag="--remap-path-prefix=$srcdir=/usr/src/debug/$pkgname-$pkgver"
