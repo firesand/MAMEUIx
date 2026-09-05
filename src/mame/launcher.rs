@@ -1,4 +1,6 @@
 use crate::models::AppConfig;
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::process::{Child, Command};
 
 pub fn launch_game(
@@ -8,18 +10,7 @@ pub fn launch_game(
     if let Some(mame) = config.mame_executables.get(config.selected_mame_index) {
         let mut cmd = Command::new(&mame.path);
 
-        // Add ROM paths. Software-list ROM sets are found through rompath too.
-        let rom_paths = config
-            .rom_paths
-            .iter()
-            .chain(config.extra_rom_dirs.iter())
-            .chain(config.software_rom_paths.iter())
-            .map(|p| p.to_string_lossy())
-            .collect::<Vec<_>>()
-            .join(";");
-        if !rom_paths.is_empty() {
-            cmd.arg("-rompath").arg(&rom_paths);
-        }
+        cmd.args(rom_search_args(config));
 
         // Add MAME internal directories
         if let Some(cfg_path) = &config.cfg_path {
@@ -162,39 +153,8 @@ pub fn launch_game(
                 .arg(hash_path.to_string_lossy().to_string());
         }
 
-        if let Some(ini_path) = &config.ini_path
-            && ini_path.exists()
-        {
-            cmd.arg("-inipath")
-                .arg(ini_path.to_string_lossy().to_string());
-        }
-
-        if let Some(home_path) = &config.home_path
-            && home_path.exists()
-        {
-            cmd.arg("-homepath")
-                .arg(home_path.to_string_lossy().to_string());
-        }
-
-        // Note: gameinit.dat support is handled automatically by MAME
-        // No additional command line arguments needed
-
-        // Custom arguments from default game properties
-        if !config
-            .default_game_properties
-            .miscellaneous
-            .custom_args
-            .is_empty()
-        {
-            for arg in config
-                .default_game_properties
-                .miscellaneous
-                .custom_args
-                .split_whitespace()
-            {
-                cmd.arg(arg);
-            }
-        }
+        // Use the same effective properties selected for the rest of this game.
+        cmd.args(game_properties.miscellaneous.custom_args.split_whitespace());
 
         // Finally, add the ROM name
         cmd.arg(rom_name);
@@ -210,6 +170,103 @@ pub fn launch_game(
     } else {
         Err("No MAME executable configured".into())
     }
+}
+
+/// Shared structured ROM/configuration overrides for launch and verification.
+/// Keep their order and existence rules identical so both commands select the
+/// same collection; unrelated custom launch arguments are deliberately separate.
+pub(crate) fn rom_search_args(config: &AppConfig) -> Vec<OsString> {
+    let mut args = Vec::new();
+    let rom_paths = config
+        .rom_paths
+        .iter()
+        .chain(config.extra_rom_dirs.iter())
+        .chain(config.software_rom_paths.iter())
+        .map(|path| path.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join(";");
+    if !rom_paths.is_empty() {
+        args.extend([OsString::from("-rompath"), OsString::from(rom_paths)]);
+    }
+    for (option, path) in [
+        ("-inipath", &config.ini_path),
+        ("-homepath", &config.home_path),
+    ] {
+        if let Some(path) = path
+            && path.exists()
+        {
+            args.extend([OsString::from(option), path.as_os_str().to_owned()]);
+        }
+    }
+    args
+}
+
+/// Immutable worker snapshot of the structured paths and the effective custom
+/// path/configuration overrides. Per-game properties replace defaults, including
+/// when their custom argument string is empty, just as they do in `launch_game`.
+pub(crate) struct VerificationSearchPaths {
+    configured: Vec<OsString>,
+    defaults: Vec<OsString>,
+    per_game: HashMap<String, Vec<OsString>>,
+}
+
+impl VerificationSearchPaths {
+    pub(crate) fn new(config: &AppConfig) -> Self {
+        Self {
+            configured: rom_search_args(config),
+            defaults: verification_custom_args(
+                &config.default_game_properties.miscellaneous.custom_args,
+            ),
+            per_game: config
+                .game_properties
+                .iter()
+                .map(|(name, properties)| {
+                    (
+                        name.clone(),
+                        verification_custom_args(&properties.miscellaneous.custom_args),
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    pub(crate) fn for_game(&self, game_name: &str) -> Vec<OsString> {
+        let mut args = self.configured.clone();
+        args.extend(
+            self.per_game
+                .get(game_name)
+                .unwrap_or(&self.defaults)
+                .iter()
+                .cloned(),
+        );
+        args
+    }
+}
+
+fn verification_custom_args(custom_args: &str) -> Vec<OsString> {
+    // Match launch_game's existing whitespace tokenization. Keep every relevant
+    // occurrence in original order: MAME resolves aliases and the last option
+    // wins. Custom paths, unlike structured INI/home paths, are not gated on
+    // existence because the launcher forwards them unconditionally too.
+    let mut args = Vec::new();
+    let mut tokens = custom_args.split_whitespace();
+    while let Some(option) = tokens.next() {
+        match option {
+            "-rompath" | "-rp" | "-biospath" | "-bp" | "-inipath" | "-homepath" => {
+                args.push(OsString::from(option));
+                if let Some(value) = tokens.next() {
+                    args.push(OsString::from(value));
+                }
+            }
+            "-readconfig" | "-rc" | "-noreadconfig" | "-norc" => {
+                args.push(OsString::from(option));
+            }
+            // Verification must never inherit actions such as -bench,
+            // -autoboot_script, -plugin, -http, or arbitrary launch options.
+            _ => {}
+        }
+    }
+    args
 }
 
 // Helper function to check if hiscore plugin is available
@@ -816,4 +873,222 @@ fn apply_game_properties(cmd: &mut Command, props: &crate::models::GamePropertie
 
     #[cfg(debug_assertions)]
     println!("Applied game properties for {}", props.game_name);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_args_preserve_root_order_and_configuration_overrides() {
+        let temp = tempfile::tempdir().unwrap();
+        let ini = temp.path().join("ini with spaces");
+        let home = temp.path().join("home");
+        std::fs::create_dir(&ini).unwrap();
+        std::fs::create_dir(&home).unwrap();
+        let config = AppConfig {
+            rom_paths: vec![
+                "/collection/arcade one".into(),
+                "/collection/arcade two".into(),
+            ],
+            extra_rom_dirs: vec!["/collection/extra".into()],
+            software_rom_paths: vec!["/collection/software".into()],
+            ini_path: Some(ini.clone()),
+            home_path: Some(home.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            rom_search_args(&config),
+            vec![
+                OsString::from("-rompath"),
+                OsString::from(
+                    "/collection/arcade one;/collection/arcade two;/collection/extra;/collection/software"
+                ),
+                OsString::from("-inipath"),
+                ini.into_os_string(),
+                OsString::from("-homepath"),
+                home.into_os_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn absent_search_overrides_preserve_mame_defaults() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig {
+            ini_path: Some(temp.path().join("missing")),
+            home_path: Some(temp.path().join("also-missing")),
+            ..Default::default()
+        };
+        assert!(rom_search_args(&config).is_empty());
+    }
+
+    #[test]
+    fn custom_search_overrides_preserve_aliases_order_and_exclude_launch_actions() {
+        let args = verification_custom_args(
+            "-bench 60 -rompath first -plugin hiscore -rp second -biospath third -bp final \
+             -inipath custom-ini -homepath custom-home -readconfig -norc -rc -noreadconfig \
+             -autoboot_script boot.lua -http",
+        );
+        let expected: Vec<OsString> = [
+            "-rompath",
+            "first",
+            "-rp",
+            "second",
+            "-biospath",
+            "third",
+            "-bp",
+            "final",
+            "-inipath",
+            "custom-ini",
+            "-homepath",
+            "custom-home",
+            "-readconfig",
+            "-norc",
+            "-rc",
+            "-noreadconfig",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+        assert_eq!(args, expected);
+    }
+
+    #[test]
+    fn search_snapshot_uses_per_game_custom_overrides_without_default_leakage() {
+        let mut config = AppConfig {
+            rom_paths: vec!["structured".into()],
+            ..Default::default()
+        };
+        config.default_game_properties.miscellaneous.custom_args = "-rp default -norc".into();
+        let mut per_game = config.default_game_properties.clone();
+        per_game.miscellaneous.custom_args = "-bp game-specific -readconfig -bench 60".into();
+        config.game_properties.insert("pacman".into(), per_game);
+        config
+            .game_properties
+            .insert("empty".into(), Default::default());
+        let snapshot = VerificationSearchPaths::new(&config);
+        // A worker must retain the settings from when it started.
+        config.default_game_properties.miscellaneous.custom_args = "-rp changed".into();
+        for (name, suffix) in [
+            ("pacman", vec!["-bp", "game-specific", "-readconfig"]),
+            ("puckman", vec!["-rp", "default", "-norc"]),
+            ("empty", vec![]),
+        ] {
+            let expected: Vec<OsString> = ["-rompath", "structured"]
+                .into_iter()
+                .chain(suffix)
+                .map(OsString::from)
+                .collect();
+            assert_eq!(snapshot.for_game(name), expected, "{name}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launch_uses_per_game_arguments_and_falls_back_to_defaults() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let executable = temp.path().join("mame-stub");
+        std::fs::write(
+            &executable,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/args\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut config = AppConfig {
+            mame_executables: vec![crate::models::MameExecutable {
+                name: "Test MAME".into(),
+                path: executable.to_string_lossy().into_owned(),
+                version: "test".into(),
+                total_games: 0,
+                working_games: 0,
+            }],
+            rom_paths: vec![temp.path().join("roms with spaces")],
+            ..Default::default()
+        };
+        config.default_game_properties.miscellaneous.custom_args = "-bench 10".into();
+        let mut per_game = config.default_game_properties.clone();
+        per_game.miscellaneous.custom_args = "-bench 60".into();
+        config.game_properties.insert("pacman".into(), per_game);
+
+        for (game, duration) in [("pacman", "60"), ("puckman", "10")] {
+            assert!(
+                launch_game(game, &config)
+                    .unwrap()
+                    .wait()
+                    .unwrap()
+                    .success()
+            );
+            let captured = std::fs::read_to_string(temp.path().join("args")).unwrap();
+            let args: Vec<_> = captured.lines().collect();
+            let bench = args.iter().position(|arg| *arg == "-bench").unwrap();
+            assert_eq!(args[bench + 1], duration);
+            assert_eq!(args.iter().filter(|arg| **arg == "-bench").count(), 1);
+            assert_eq!(args.last(), Some(&game));
+            let expected_paths: Vec<_> = rom_search_args(&config)
+                .into_iter()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect();
+            assert_eq!(&args[..expected_paths.len()], expected_paths.as_slice());
+        }
+    }
+
+    #[test]
+    #[ignore = "set MAMEUIX_TEST_MAME to an installed MAME executable"]
+    fn native_mame_launch_applies_per_game_benchmark_and_exits() {
+        let executable = std::env::var("MAMEUIX_TEST_MAME").expect("set MAMEUIX_TEST_MAME");
+        let temp = tempfile::tempdir().unwrap();
+        let mut config = AppConfig {
+            mame_executables: vec![crate::models::MameExecutable {
+                name: "Native test MAME".into(),
+                path: executable,
+                version: "native".into(),
+                total_games: 0,
+                working_games: 0,
+            }],
+            rom_paths: vec![temp.path().join("roms")],
+            ini_path: Some(temp.path().join("ini")),
+            cfg_path: Some(temp.path().join("cfg")),
+            nvram_path: Some(temp.path().join("nvram")),
+            input_path: Some(temp.path().join("input")),
+            state_path: Some(temp.path().join("state")),
+            diff_path: Some(temp.path().join("diff")),
+            comment_path: Some(temp.path().join("comment")),
+            home_path: Some(temp.path().join("home")),
+            ..Default::default()
+        };
+        for directory in [
+            "roms", "ini", "cfg", "nvram", "input", "state", "diff", "comment", "home",
+        ] {
+            std::fs::create_dir(temp.path().join(directory)).unwrap();
+        }
+        // Defaults deliberately lack -bench: applying the per-game setting is
+        // what makes this real invocation terminate after one emulated second.
+        let mut properties = config.default_game_properties.clone();
+        properties.miscellaneous.custom_args = "-noreadconfig -bench 1".into();
+        config.game_properties.insert("pong".into(), properties);
+        let mut child = launch_game("pong", &config).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    assert!(
+                        status.success(),
+                        "Native MAME benchmark exited with {status}"
+                    );
+                    break;
+                }
+                Ok(None) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+                result => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("Native MAME benchmark failed to finish within 20s: {result:?}");
+                }
+            }
+        }
+    }
 }

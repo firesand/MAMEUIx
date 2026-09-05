@@ -17,6 +17,8 @@ pub struct FilterSettings {
     pub device_filter: String, // Filter by Device type
     pub sound_filter: String,  // Filter by Sound type
     pub show_favorites_only: bool,
+    #[serde(default = "default_hide_romless_systems")]
+    pub hide_romless_systems: bool,
     pub status_filter: StatusFilter,
     pub apply_hidden_categories: bool, // Toggle untuk enable/disable hidden categories filter
     pub auto_expand_clones: bool,      // Auto expand clone games in parent view
@@ -29,6 +31,10 @@ pub struct FilterSettings {
     pub availability_filters: AvailabilityFilters,
     pub status_filters: StatusFilters,
     pub other_filters: OtherFilters,
+}
+
+fn default_hide_romless_systems() -> bool {
+    true
 }
 
 /// Filters for ROM availability status
@@ -209,6 +215,7 @@ impl Default for FilterSettings {
             device_filter: String::new(),
             sound_filter: String::new(),
             show_favorites_only: false,
+            hide_romless_systems: default_hide_romless_systems(),
             status_filter: StatusFilter::All,
             apply_hidden_categories: true, // Enable by default
             auto_expand_clones: false,     // Don't auto expand clones by default
@@ -287,7 +294,8 @@ impl FilterSettings {
             || self.other_filters.show_parents_only
             || self.other_filters.show_chd_games;
 
-        availability_active
+        self.hide_romless_systems
+            || availability_active
             || status_active
             || other_active
             || !self.search_text.is_empty()
@@ -302,7 +310,7 @@ impl FilterSettings {
 
     /// Count active filters
     pub fn count_active_filters(&self) -> usize {
-        let mut count = 0;
+        let mut count = usize::from(self.hide_romless_systems);
 
         // Only count if not all selected in a category
         if !(self.availability_filters.show_available && self.availability_filters.show_unavailable)
@@ -353,6 +361,11 @@ impl FilterSettings {
         count
     }
 
+    /// Hide ROM-less systems independently of the inclusive filter groups.
+    pub fn rom_requirement_matches(&self, requires_roms: bool) -> bool {
+        !self.hide_romless_systems || requires_roms
+    }
+
     /// Whether a game's manufacturer passes the manufacturer filter.
     pub fn manufacturer_matches(&self, manufacturer: &str) -> bool {
         self.selected_manufacturers.is_empty() || self.selected_manufacturers.contains(manufacturer)
@@ -388,6 +401,36 @@ impl FilterSettings {
 #[cfg(test)]
 mod tests {
     use super::FilterSettings;
+
+    #[test]
+    fn old_filter_settings_enable_romless_exclusion_without_losing_other_fields() {
+        let settings = FilterSettings {
+            search_text: "Pac-Man".into(),
+            ..FilterSettings::default()
+        };
+        let mut serialized = serde_json::to_value(&settings).unwrap();
+        serialized
+            .as_object_mut()
+            .unwrap()
+            .remove("hide_romless_systems");
+        let restored: FilterSettings = serde_json::from_value(serialized).unwrap();
+        assert!(restored.hide_romless_systems);
+        assert_eq!(restored.search_text, "Pac-Man");
+    }
+
+    #[test]
+    fn explicit_romless_opt_out_survives_serialization() {
+        let settings = FilterSettings {
+            hide_romless_systems: false,
+            ..FilterSettings::default()
+        };
+        let restored: FilterSettings =
+            serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
+        assert!(!restored.hide_romless_systems);
+        assert!(restored.rom_requirement_matches(false));
+        assert!(restored.rom_requirement_matches(true));
+        assert!(!FilterSettings::default().rom_requirement_matches(false));
+    }
 
     #[test]
     fn year_range_is_inclusive_and_rejects_unknown_years() {

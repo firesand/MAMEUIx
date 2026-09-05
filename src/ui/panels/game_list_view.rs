@@ -10,6 +10,10 @@ use egui::{Color32, FontId, RichText, Sense, Ui, Vec2};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
+const GAME_CARD_HEIGHT: f32 = 72.0;
+const CLONE_CARD_HEIGHT: f32 = 64.0;
+const CARD_GAP: f32 = 8.0;
+
 /// Animation state for smooth transitions
 pub struct AnimationState {
     start_time: Instant,
@@ -131,16 +135,14 @@ impl GameListView {
         hardware_filter: Option<&HardwareFilter>, // Placeholder for hardware filter
         _has_catver: bool,
         pre_filtered_indices: Option<&[usize]>,
-        _theme_colors: Option<&crate::models::GameListColors>,
-    ) -> (bool, Option<String>, bool) {
-        let mut double_clicked = false;
+        theme_colors: Option<&crate::models::GameListColors>,
+    ) -> (Option<usize>, Option<String>, Option<usize>) {
+        let mut play_requested = None;
         let mut favorite_toggled = None;
-        let mut properties_requested = false;
+        let mut properties_requested = None;
 
-        // Apply dark theme colors
-        ui.style_mut().visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(15, 15, 15);
-        ui.style_mut().visuals.widgets.inactive.bg_fill = Color32::from_rgb(26, 26, 26);
-        ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::from_rgb(34, 34, 34);
+        let default_colors = crate::models::GameListColors::default();
+        let colors = theme_colors.unwrap_or(&default_colors);
         ui.style_mut().animation_time = 0.15;
 
         // Check if filter changed
@@ -181,13 +183,13 @@ impl GameListView {
                         filtered_count, total_count
                     ))
                     .size(12.0)
-                    .color(Color32::from_rgb(136, 136, 136)),
+                    .color(ui.visuals().weak_text_color()),
                 );
             } else {
                 ui.label(
                     RichText::new(format!("Showing {} games", total_count))
                         .size(12.0)
-                        .color(Color32::from_rgb(136, 136, 136)),
+                        .color(ui.visuals().weak_text_color()),
                 );
             }
         });
@@ -205,8 +207,8 @@ impl GameListView {
         }
 
         // Virtual scrolling implementation
-        let item_height = 80.0; // Height of each item including spacing
-        let clone_item_height = 64.0; // Height of clone items
+        let item_height = GAME_CARD_HEIGHT + CARD_GAP;
+        let clone_item_height = CLONE_CARD_HEIGHT;
 
         // Calculate total height considering expanded items
         let mut total_height = 0.0;
@@ -224,7 +226,8 @@ impl GameListView {
                     && !game.is_clone
                     && let Some(index) = game_index
                 {
-                    let clone_count = index.get_clones(&game.name).len();
+                    let clone_count =
+                        Self::visible_clone_indices(games, index, &game.name, filters).len();
                     total_height += clone_count as f32 * clone_item_height;
                 }
             }
@@ -232,128 +235,156 @@ impl GameListView {
 
         // Main scroll area with virtual scrolling
         let mut scroll_target = self.scroll_to_row.take();
-        egui::ScrollArea::vertical()
-            .id_salt("game_list_view_scroll")
-            .auto_shrink([false, false])
-            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-            .show_rows(
-                ui,
-                item_height,
-                self.filtered_indices_cache.len(),
-                |ui, row_range| {
-                    if let Some(target_row) = scroll_target.take() {
-                        let y = target_row as f32 * item_height;
-                        ui.scroll_to_rect(
-                            egui::Rect::from_min_size(
-                                egui::pos2(0.0, y),
-                                egui::vec2(1.0, item_height),
-                            ),
-                            Some(egui::Align::Center),
-                        );
-                    }
-
-                    let available_width = ui.available_width();
-
-                    // Only render visible items
-                    for row in row_range {
-                        if let Some(&game_idx) = self.filtered_indices_cache.get(row)
-                            && let Some(game) = games.get(game_idx)
-                        {
-                            // Allocate space for the item
-                            let (rect, _response) = ui.allocate_exact_size(
-                                Vec2::new(available_width, item_height - 8.0),
-                                Sense::hover(),
+        ui.scope(|ui| {
+            // Card heights already include their explicit gap. The dialog's
+            // 10 px widget spacing must not also enter show_rows' row stride.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            egui::ScrollArea::vertical()
+                .id_salt("game_list_view_scroll")
+                .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .show_rows(
+                    ui,
+                    item_height,
+                    self.filtered_indices_cache.len(),
+                    |ui, row_range| {
+                        if let Some(target_row) = scroll_target.take() {
+                            let y = target_row as f32 * item_height;
+                            ui.scroll_to_rect(
+                                egui::Rect::from_min_size(
+                                    egui::pos2(0.0, y),
+                                    egui::vec2(1.0, item_height),
+                                ),
+                                Some(egui::Align::Center),
                             );
+                        }
 
-                            // Only render if visible
-                            if ui.is_rect_visible(rect) {
-                                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                                    let (clicked, fav_toggled, props_requested) = self
-                                        .render_game_item(
-                                            ui,
-                                            game,
-                                            game_idx,
-                                            games,
-                                            selected,
-                                            expanded_parents,
-                                            favorites,
-                                            icons,
-                                            show_icons,
-                                            game_index,
-                                            default_icon,
-                                            game_stats,
-                                        );
+                        let available_width = ui.available_width();
 
-                                    if clicked {
-                                        double_clicked = true;
-                                    }
-                                    if let Some(name) = fav_toggled {
-                                        favorite_toggled = Some(name);
-                                    }
-                                    if props_requested {
-                                        properties_requested = true;
-                                    }
-                                });
+                        // Only render visible items
+                        for row in row_range {
+                            if let Some(&game_idx) = self.filtered_indices_cache.get(row)
+                                && let Some(game) = games.get(game_idx)
+                            {
+                                // Allocate space for the item
+                                let (rect, _response) = ui.allocate_exact_size(
+                                    Vec2::new(available_width, GAME_CARD_HEIGHT),
+                                    Sense::hover(),
+                                );
 
-                                // Show clones if expanded (inline, not in virtual scroll)
-                                let is_expanded =
-                                    expanded_parents.get(&game.name).copied().unwrap_or(false)
-                                        || filters.auto_expand_clones;
-                                if is_expanded
-                                    && !game.is_clone
-                                    && let Some(index) = game_index
-                                {
-                                    for clone_idx in index.get_clones(&game.name) {
-                                        if let Some(clone_game) = games.get(clone_idx) {
-                                            // Allocate space for clone
-                                            let (clone_rect, _) = ui.allocate_exact_size(
-                                                Vec2::new(available_width, clone_item_height),
-                                                Sense::hover(),
+                                // Only render if visible
+                                if ui.is_rect_visible(rect) {
+                                    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                        let (clicked, fav_toggled, props_requested) = self
+                                            .render_game_item(
+                                                ui,
+                                                game,
+                                                game_idx,
+                                                games,
+                                                filters,
+                                                selected,
+                                                expanded_parents,
+                                                favorites,
+                                                icons,
+                                                show_icons,
+                                                game_index,
+                                                default_icon,
+                                                game_stats,
+                                                colors,
                                             );
 
-                                            if ui.is_rect_visible(clone_rect) {
-                                                ui.scope_builder(
-                                                    egui::UiBuilder::new().max_rect(clone_rect),
-                                                    |ui| {
-                                                        let (
-                                                            clone_clicked,
-                                                            clone_fav_toggled,
-                                                            clone_props_requested,
-                                                        ) = self.render_clone_item(
-                                                            ui,
-                                                            clone_game,
-                                                            clone_idx,
-                                                            selected,
-                                                            favorites,
-                                                            icons,
-                                                            show_icons,
-                                                            default_icon,
-                                                        );
+                                        if clicked.is_some() {
+                                            play_requested = clicked;
+                                        }
+                                        if let Some(name) = fav_toggled {
+                                            favorite_toggled = Some(name);
+                                        }
+                                        if props_requested.is_some() {
+                                            properties_requested = props_requested;
+                                        }
+                                    });
 
-                                                        if clone_clicked {
-                                                            double_clicked = true;
-                                                        }
-                                                        if let Some(name) = clone_fav_toggled {
-                                                            favorite_toggled = Some(name);
-                                                        }
-                                                        if clone_props_requested {
-                                                            properties_requested = true;
-                                                        }
-                                                    },
+                                    // Show clones if expanded (inline, not in virtual scroll)
+                                    let is_expanded =
+                                        expanded_parents.get(&game.name).copied().unwrap_or(false)
+                                            || filters.auto_expand_clones;
+                                    if is_expanded
+                                        && !game.is_clone
+                                        && let Some(index) = game_index
+                                    {
+                                        for clone_idx in Self::visible_clone_indices(
+                                            games, index, &game.name, filters,
+                                        ) {
+                                            if let Some(clone_game) = games.get(clone_idx) {
+                                                // Allocate space for clone
+                                                let (clone_rect, _) = ui.allocate_exact_size(
+                                                    Vec2::new(available_width, clone_item_height),
+                                                    Sense::hover(),
                                                 );
+
+                                                if ui.is_rect_visible(clone_rect) {
+                                                    ui.scope_builder(
+                                                        egui::UiBuilder::new().max_rect(clone_rect),
+                                                        |ui| {
+                                                            let (
+                                                                clone_clicked,
+                                                                clone_fav_toggled,
+                                                                clone_props_requested,
+                                                            ) = self.render_clone_item(
+                                                                ui,
+                                                                clone_game,
+                                                                clone_idx,
+                                                                selected,
+                                                                favorites,
+                                                                icons,
+                                                                show_icons,
+                                                                default_icon,
+                                                                colors,
+                                                            );
+
+                                                            if clone_clicked.is_some() {
+                                                                play_requested = clone_clicked;
+                                                            }
+                                                            if let Some(name) = clone_fav_toggled {
+                                                                favorite_toggled = Some(name);
+                                                            }
+                                                            if clone_props_requested.is_some() {
+                                                                properties_requested =
+                                                                    clone_props_requested;
+                                                            }
+                                                        },
+                                                    );
+                                                }
                                             }
                                         }
                                     }
                                 }
+
+                                ui.add_space(8.0);
                             }
-
-                            ui.add_space(8.0);
                         }
-                    }
-                },
-            );
+                    },
+                );
+        });
 
-        (double_clicked, favorite_toggled, properties_requested)
+        (play_requested, favorite_toggled, properties_requested)
+    }
+
+    fn visible_clone_indices(
+        games: &[Game],
+        index: &GameIndex,
+        parent: &str,
+        filters: &FilterSettings,
+    ) -> Vec<usize> {
+        index
+            .get_clones(parent)
+            .into_iter()
+            .filter(|&idx| {
+                games
+                    .get(idx)
+                    .is_some_and(|game| filters.rom_requirement_matches(game.requires_roms))
+            })
+            .collect()
     }
 
     /// Render a single game item
@@ -362,7 +393,8 @@ impl GameListView {
         ui: &mut Ui,
         game: &Game,
         game_idx: usize,
-        _games: &[Game],
+        games: &[Game],
+        filters: &FilterSettings,
         selected: &mut Option<usize>,
         expanded_parents: &mut HashMap<String, bool>,
         favorites: &HashSet<String>,
@@ -371,10 +403,11 @@ impl GameListView {
         game_index: Option<&GameIndex>,
         default_icon: Option<&egui::TextureHandle>,
         _game_stats: &HashMap<String, crate::models::GameStats>,
-    ) -> (bool, Option<String>, bool) {
-        let mut double_clicked = false;
+        colors: &crate::models::GameListColors,
+    ) -> (Option<usize>, Option<String>, Option<usize>) {
+        let mut play_requested = None;
         let mut favorite_toggled = None;
-        let mut properties_requested = false;
+        let mut properties_requested = None;
 
         let is_expanded = expanded_parents.get(&game.name).copied().unwrap_or(false);
         let is_hovered = self.state.hovered_item.as_ref() == Some(&game.name);
@@ -382,11 +415,10 @@ impl GameListView {
         let is_favorite = favorites.contains(&game.name);
 
         let available_width = ui.available_width();
-        let item_height = 72.0;
 
         // Calculate expansion height for clones
         let clone_count = if let Some(index) = game_index {
-            index.get_clones(&game.name).len()
+            Self::visible_clone_indices(games, index, &game.name, filters).len()
         } else {
             0
         };
@@ -394,18 +426,18 @@ impl GameListView {
         // Create frame for the game item
         let frame = egui::Frame::NONE
             .fill(if is_selected {
-                Color32::from_rgb(26, 63, 95)
+                colors.row_bg_selected
             } else if is_hovered {
-                Color32::from_rgb(34, 34, 34)
+                colors.row_bg_hover
             } else {
-                Color32::from_rgb(26, 26, 26)
+                colors.row_bg_even
             })
             .stroke(egui::Stroke::new(
                 1.0_f32,
                 if is_selected {
-                    Color32::from_rgb(74, 158, 255)
+                    ui.visuals().selection.stroke.color
                 } else {
-                    Color32::from_rgb(51, 51, 51)
+                    colors.row_separator
                 },
             ))
             .corner_radius(8.0)
@@ -414,229 +446,181 @@ impl GameListView {
                     offset: [0, 2],
                     blur: 4,
                     spread: 0,
-                    color: Color32::from_rgba_premultiplied(0, 0, 0, 80),
+                    color: ui.visuals().window_shadow.color,
                 }
             } else {
                 egui::epaint::Shadow::default()
             });
 
-        // Make the entire frame interactive
-        let _frame_response = frame.show(ui, |ui| {
-            // Create an invisible interactive area that covers the entire item
-            let item_response = ui.allocate_response(
-                Vec2::new(available_width - 16.0, item_height),
-                Sense::click(),
+        let (card_rect, item_response) =
+            ui.allocate_exact_size(Vec2::new(available_width, GAME_CARD_HEIGHT), Sense::click());
+        ui.painter().add(frame.paint(card_rect.shrink(1.0)));
+
+        // Reserve the action column before laying out text. A long title may
+        // truncate, but it must never move the badges or favorite button.
+        let mut content = ui.new_child(egui::UiBuilder::new().max_rect(card_rect));
+        content.set_clip_rect(ui.clip_rect().intersect(card_rect));
+        Self::compact_card_style(&mut content);
+        let inner = card_rect.shrink2(Vec2::new(8.0, 6.0));
+        let center_y = inner.center().y;
+        let arrow_rect = egui::Rect::from_center_size(
+            egui::pos2(inner.left() + 10.0, center_y),
+            Vec2::new(20.0, 24.0),
+        );
+        if clone_count > 0 && !game.is_clone {
+            let arrow = if is_expanded { "▼" } else { "▶" };
+            if content
+                .put(
+                    arrow_rect,
+                    egui::Button::new(
+                        RichText::new(arrow)
+                            .color(content.visuals().weak_text_color())
+                            .size(14.0),
+                    )
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(egui::Stroke::NONE),
+                )
+                .clicked()
+            {
+                expanded_parents.insert(game.name.clone(), !is_expanded);
+                self.invalidate_cache();
+            }
+        }
+        let preview_rect = egui::Rect::from_center_size(
+            egui::pos2(arrow_rect.right() + 6.0 + 32.0, center_y),
+            Vec2::new(64.0, 48.0),
+        );
+        Self::render_preview(
+            &mut content,
+            preview_rect,
+            icons.get(&game.name).or(default_icon),
+            show_icons,
+            "🎮",
+        );
+
+        let star_rect = egui::Rect::from_center_size(
+            egui::pos2(inner.right() - 14.0, center_y),
+            Vec2::splat(28.0),
+        );
+        let badges_right = star_rect.left() - 6.0;
+        let badges_left = badges_right - 96.0;
+        let has_clones = clone_count > 0 && !game.is_clone;
+        let status_y = if has_clones {
+            center_y - 23.0
+        } else {
+            center_y - 10.0
+        };
+        self.render_status_badge(
+            &mut content,
+            egui::Rect::from_min_size(egui::pos2(badges_left, status_y), Vec2::new(96.0, 20.0)),
+            game,
+            colors,
+        );
+        if has_clones {
+            self.render_clone_badge(
+                &mut content,
+                egui::Rect::from_min_size(
+                    egui::pos2(badges_left, center_y + 3.0),
+                    Vec2::new(96.0, 20.0),
+                ),
+                clone_count,
+                colors,
             );
+        }
 
-            // Draw content on top of the interactive area
-            ui.scope_builder(egui::UiBuilder::new().max_rect(item_response.rect), |ui| {
-                ui.horizontal(|ui| {
-                    ui.add_space(16.0);
+        let text_left = preview_rect.right() + 12.0;
+        let text_width = (badges_left - 10.0 - text_left).max(0.0);
+        Self::render_card_text(
+            &mut content,
+            egui::Rect::from_min_size(
+                egui::pos2(text_left, center_y - 22.0),
+                Vec2::new(text_width, 22.0),
+            ),
+            RichText::new(&game.description)
+                .size(16.0)
+                .color(ui.visuals().strong_text_color())
+                .strong(),
+            &game.description,
+        );
+        let metadata = if game.category.is_empty() {
+            format!("{} • {}", game.manufacturer, game.year)
+        } else {
+            format!("{} • {} • {}", game.manufacturer, game.year, game.category)
+        };
+        let mut metadata_left = text_left;
+        if has_clones {
+            Self::render_badge(
+                &mut content,
+                egui::Rect::from_min_size(
+                    egui::pos2(text_left, center_y + 4.0),
+                    Vec2::new(48.0, 18.0),
+                ),
+                "PARENT",
+                10.0,
+                colors.row_bg_selected,
+            );
+            metadata_left += 54.0;
+        }
+        Self::render_card_text(
+            &mut content,
+            egui::Rect::from_min_size(
+                egui::pos2(metadata_left, center_y + 3.0),
+                Vec2::new((text_left + text_width - metadata_left).max(0.0), 20.0),
+            ),
+            RichText::new(&metadata)
+                .size(13.0)
+                .color(ui.visuals().weak_text_color()),
+            &metadata,
+        );
+        if Self::render_favorite(&mut content, star_rect, is_favorite, colors).clicked() {
+            favorite_toggled = Some(game.name.clone());
+        }
 
-                    // Fixed width for expand arrow area (always allocate same space)
-                    let arrow_width = 24.0;
-                    let arrow_rect = ui.allocate_space(Vec2::new(arrow_width, 20.0)).1;
+        // Handle interactions
+        if item_response.clicked() {
+            *selected = Some(game_idx);
+        }
 
-                    // Only draw arrow if this is a parent with clones
-                    if clone_count > 0 && !game.is_clone {
-                        let arrow = if is_expanded { "▼" } else { "▶" };
-                        let arrow_response = ui
-                            .scope_builder(egui::UiBuilder::new().max_rect(arrow_rect), |ui| {
-                                ui.add(
-                                    egui::Button::new(
-                                        RichText::new(arrow)
-                                            .color(Color32::from_rgb(150, 150, 150))
-                                            .size(14.0),
-                                    )
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(egui::Stroke::NONE)
-                                    .small(),
-                                )
-                            })
-                            .inner;
+        if item_response.double_clicked() {
+            play_requested = Some(game_idx);
+        }
 
-                        if arrow_response.clicked() {
-                            expanded_parents.insert(game.name.clone(), !is_expanded);
-                            self.invalidate_cache();
-                        }
-                    }
+        if item_response.hovered() {
+            self.state.hovered_item = Some(game.name.clone());
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        } else if self.state.hovered_item == Some(game.name.clone()) {
+            self.state.hovered_item = None;
+        }
 
-                    ui.add_space(8.0);
+        // Context menu
+        item_response.context_menu(|ui| {
+            ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 4.0);
 
-                    // Fixed size game preview box
-                    let preview_size = Vec2::new(64.0, 48.0);
-                    let preview_rect = ui.allocate_space(preview_size).1;
-
-                    // Background for preview
-                    ui.painter()
-                        .rect_filled(preview_rect, 4.0, Color32::from_rgb(34, 34, 34));
-
-                    // Icon or placeholder
-                    if show_icons {
-                        if let Some(texture) = icons.get(&game.name).or(default_icon) {
-                            ui.scope_builder(egui::UiBuilder::new().max_rect(preview_rect), |ui| {
-                                ui.centered_and_justified(|ui| {
-                                    ui.add(
-                                        egui::Image::new(texture)
-                                            .fit_to_exact_size(Vec2::new(56.0, 40.0))
-                                            .corner_radius(4.0),
-                                    );
-                                });
-                            });
-                        } else {
-                            // Emoji placeholder
-                            ui.painter().text(
-                                preview_rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                "🎮",
-                                FontId::proportional(24.0),
-                                Color32::WHITE,
-                            );
-                        }
-                    } else {
-                        // Just emoji if no icons
-                        ui.painter().text(
-                            preview_rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            "🎮",
-                            FontId::proportional(24.0),
-                            Color32::WHITE,
-                        );
-                    }
-
-                    ui.add_space(16.0);
-
-                    // Game info
-                    ui.vertical(|ui| {
-                        ui.add_space(10.0);
-
-                        // Game name with parent badge
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(&game.description)
-                                    .size(16.0)
-                                    .color(Color32::from_rgb(224, 224, 224))
-                                    .strong(),
-                            );
-
-                            // Parent badge
-                            if clone_count > 0 && !game.is_clone {
-                                ui.add_space(8.0);
-                                egui::Frame::NONE
-                                    .fill(Color32::from_rgb(42, 63, 95))
-                                    .corner_radius(4.0)
-                                    .inner_margin(6.0)
-                                    .show(ui, |ui| {
-                                        ui.label(
-                                            RichText::new("PARENT")
-                                                .size(10.0)
-                                                .color(Color32::from_rgb(255, 255, 255))
-                                                .strong(),
-                                        );
-                                    });
-                            }
-                        });
-
-                        // Manufacturer, year, category info
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(format!("{} • {}", game.manufacturer, game.year))
-                                    .size(13.0)
-                                    .color(Color32::from_rgb(136, 136, 136)),
-                            );
-                            if !game.category.is_empty() {
-                                ui.label(
-                                    RichText::new(format!(" • {}", game.category))
-                                        .size(13.0)
-                                        .color(Color32::from_rgb(102, 102, 102)),
-                                );
-                            }
-                        });
-                    });
-
-                    // Right side badges and buttons
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(16.0);
-
-                        // Clone count badge
-                        if clone_count > 0 && !game.is_clone {
-                            self.render_clone_badge(ui, clone_count);
-                            ui.add_space(8.0);
-                        }
-
-                        // Status badge
-                        self.render_status_badge(ui, game);
-                        ui.add_space(8.0);
-
-                        // Favorite star
-                        let star = if is_favorite { "★" } else { "☆" };
-                        let star_color = if is_favorite {
-                            Color32::from_rgb(255, 200, 50)
-                        } else {
-                            Color32::from_rgb(100, 100, 110)
-                        };
-
-                        let star_response = ui.add(
-                            egui::Button::new(RichText::new(star).color(star_color).size(18.0))
-                                .fill(Color32::TRANSPARENT)
-                                .stroke(egui::Stroke::NONE),
-                        );
-
-                        if star_response.clicked() {
-                            favorite_toggled = Some(game.name.clone());
-                        }
-                    });
-                });
-            });
-
-            // Handle interactions
-            if item_response.clicked() {
-                *selected = Some(game_idx);
+            if ui.button("🎮 Play Game").clicked() {
+                play_requested = Some(game_idx);
+                ui.close();
             }
 
-            if item_response.double_clicked() {
-                double_clicked = true;
+            ui.separator();
+
+            if ui.button("⚙️ Properties...").clicked() {
+                properties_requested = Some(game_idx);
+                ui.close();
             }
 
-            if item_response.hovered() {
-                self.state.hovered_item = Some(game.name.clone());
-                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            } else if self.state.hovered_item == Some(game.name.clone()) {
-                self.state.hovered_item = None;
+            let star_text = if is_favorite {
+                "★ Remove from Favorites"
+            } else {
+                "☆ Add to Favorites"
+            };
+
+            if ui.button(star_text).clicked() {
+                favorite_toggled = Some(game.name.clone());
+                ui.close();
             }
-
-            // Context menu
-            item_response.context_menu(|ui| {
-                ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 4.0);
-
-                if ui.button("🎮 Play Game").clicked() {
-                    double_clicked = true;
-                    ui.close();
-                }
-
-                ui.separator();
-
-                if ui.button("⚙️ Properties...").clicked() {
-                    properties_requested = true;
-                    ui.close();
-                }
-
-                let star_text = if is_favorite {
-                    "★ Remove from Favorites"
-                } else {
-                    "☆ Add to Favorites"
-                };
-
-                if ui.button(star_text).clicked() {
-                    favorite_toggled = Some(game.name.clone());
-                    ui.close();
-                }
-            });
-
-            item_response
         });
 
-        (double_clicked, favorite_toggled, properties_requested)
+        (play_requested, favorite_toggled, properties_requested)
     }
 
     /// Render a clone item
@@ -650,208 +634,242 @@ impl GameListView {
         icons: &HashMap<String, egui::TextureHandle>,
         show_icons: bool,
         default_icon: Option<&egui::TextureHandle>,
-    ) -> (bool, Option<String>, bool) {
-        let mut double_clicked = false;
+        colors: &crate::models::GameListColors,
+    ) -> (Option<usize>, Option<String>, Option<usize>) {
+        let mut play_requested = None;
         let mut favorite_toggled = None;
-        let mut properties_requested = false;
+        let mut properties_requested = None;
 
         let is_hovered = self.state.hovered_item.as_ref() == Some(&clone.name);
         let is_selected = selected.is_some_and(|s| s == clone_idx);
         let is_favorite = favorites.contains(&clone.name);
 
-        // Clone item with indentation
-        ui.horizontal(|ui| {
-            ui.add_space(40.0); // Indent for clone
-
-            let frame = egui::Frame::NONE
-                .fill(if is_selected {
-                    Color32::from_rgb(26, 63, 95)
-                } else if is_hovered {
-                    Color32::from_rgb(30, 30, 30)
+        // Keep the clone's complete painted and interactive bounds inside the
+        // same 64 px row that the scrolling code reserves for it.
+        let (row_rect, _) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), CLONE_CARD_HEIGHT),
+            Sense::hover(),
+        );
+        let card_rect = egui::Rect::from_min_max(row_rect.min + Vec2::new(32.0, 0.0), row_rect.max);
+        let response = ui.interact(
+            card_rect,
+            ui.id().with(("clone_card", clone_idx)),
+            Sense::click(),
+        );
+        let frame = egui::Frame::NONE
+            .fill(if is_selected {
+                colors.row_bg_selected
+            } else if is_hovered {
+                colors.row_bg_hover
+            } else {
+                colors.row_bg_odd
+            })
+            .stroke(egui::Stroke::new(
+                1.0_f32,
+                if is_selected {
+                    ui.visuals().selection.stroke.color
                 } else {
-                    Color32::from_rgb(20, 20, 20)
-                })
-                .stroke(egui::Stroke::new(
-                    1.0_f32,
-                    if is_selected {
-                        Color32::from_rgb(74, 158, 255)
-                    } else {
-                        Color32::from_rgb(40, 40, 40)
-                    },
-                ))
-                .corner_radius(6.0)
-                .inner_margin(8.0);
+                    colors.row_separator
+                },
+            ))
+            .corner_radius(6.0);
+        ui.painter().add(frame.paint(card_rect.shrink(1.0)));
 
-            frame.show(ui, |ui| {
-                let response =
-                    ui.allocate_response(Vec2::new(ui.available_width(), 56.0), Sense::click());
+        let mut content = ui.new_child(egui::UiBuilder::new().max_rect(card_rect));
+        content.set_clip_rect(ui.clip_rect().intersect(card_rect));
+        Self::compact_card_style(&mut content);
+        let inner = card_rect.shrink2(Vec2::new(8.0, 6.0));
+        let center_y = inner.center().y;
+        let icon_rect = egui::Rect::from_center_size(
+            egui::pos2(inner.left() + 32.0, center_y),
+            Vec2::new(64.0, 48.0),
+        );
+        Self::render_preview(
+            &mut content,
+            icon_rect,
+            icons.get(&clone.name).or(default_icon),
+            show_icons,
+            "🎯",
+        );
+        let star_rect = egui::Rect::from_center_size(
+            egui::pos2(inner.right() - 14.0, center_y),
+            Vec2::splat(28.0),
+        );
+        let text_left = icon_rect.right() + 12.0;
+        let text_width = (star_rect.left() - 10.0 - text_left).max(0.0);
+        Self::render_card_text(
+            &mut content,
+            egui::Rect::from_min_size(
+                egui::pos2(text_left, center_y - 22.0),
+                Vec2::new(text_width, 22.0),
+            ),
+            RichText::new(&clone.description)
+                .size(14.0)
+                .color(colors.clone_text),
+            &clone.description,
+        );
+        let metadata = format!("Clone • {} • {}", clone.year, clone.name);
+        Self::render_card_text(
+            &mut content,
+            egui::Rect::from_min_size(
+                egui::pos2(text_left, center_y + 3.0),
+                Vec2::new(text_width, 20.0),
+            ),
+            RichText::new(&metadata)
+                .size(12.0)
+                .color(ui.visuals().weak_text_color()),
+            &metadata,
+        );
+        if Self::render_favorite(&mut content, star_rect, is_favorite, colors).clicked() {
+            favorite_toggled = Some(clone.name.clone());
+        }
 
-                if response.clicked() {
-                    *selected = Some(clone_idx);
-                }
-
-                if response.double_clicked() {
-                    double_clicked = true;
-                }
-
-                if response.hovered() {
-                    self.state.hovered_item = Some(clone.name.clone());
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                }
-
-                // Context menu
-                response.context_menu(|ui| {
-                    if ui.button("🎮 Play Clone").clicked() {
-                        double_clicked = true;
-                        ui.close();
-                    }
-
-                    ui.separator();
-
-                    if ui.button("⚙️ Properties...").clicked() {
-                        properties_requested = true;
-                        ui.close();
-                    }
-                });
-
-                ui.scope_builder(egui::UiBuilder::new().max_rect(response.rect), |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add_space(8.0);
-
-                        // Match parent's arrow space (24px) + spacing (8px) = 32px
-                        ui.add_space(32.0);
-
-                        // Clone icon with same size as parent preview
-                        let icon_size = Vec2::new(64.0, 48.0);
-                        let icon_rect = ui.allocate_space(icon_size).1;
-
-                        ui.painter()
-                            .rect_filled(icon_rect, 4.0, Color32::from_rgb(34, 34, 34));
-
-                        if show_icons {
-                            if let Some(texture) = icons.get(&clone.name).or(default_icon) {
-                                ui.scope_builder(
-                                    egui::UiBuilder::new().max_rect(icon_rect),
-                                    |ui| {
-                                        ui.centered_and_justified(|ui| {
-                                            ui.add(
-                                                egui::Image::new(texture)
-                                                    .fit_to_exact_size(Vec2::new(56.0, 40.0))
-                                                    .corner_radius(4.0),
-                                            );
-                                        });
-                                    },
-                                );
-                            } else {
-                                ui.painter().text(
-                                    icon_rect.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    "🎯",
-                                    FontId::proportional(20.0),
-                                    Color32::WHITE,
-                                );
-                            }
-                        } else {
-                            ui.painter().text(
-                                icon_rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                "🎯",
-                                FontId::proportional(20.0),
-                                Color32::WHITE,
-                            );
-                        }
-
-                        ui.add_space(16.0);
-
-                        // Clone info
-                        ui.vertical(|ui| {
-                            ui.add_space(4.0);
-                            ui.label(
-                                RichText::new(&clone.description)
-                                    .size(14.0)
-                                    .color(Color32::from_rgb(200, 200, 200)),
-                            );
-
-                            ui.label(
-                                RichText::new(format!("Clone • {} • {}", clone.year, clone.name))
-                                    .size(12.0)
-                                    .color(Color32::from_rgb(102, 102, 102)),
-                            );
-                        });
-
-                        // Right side
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(8.0);
-
-                            // Favorite star
-                            let star = if is_favorite { "★" } else { "☆" };
-                            let star_color = if is_favorite {
-                                Color32::from_rgb(255, 200, 50)
-                            } else {
-                                Color32::from_rgb(80, 80, 90)
-                            };
-
-                            let star_response = ui.add(
-                                egui::Button::new(RichText::new(star).color(star_color).size(16.0))
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(egui::Stroke::NONE),
-                            );
-
-                            if star_response.clicked() {
-                                favorite_toggled = Some(clone.name.clone());
-                            }
-                        });
-                    });
-                });
-            });
+        if response.clicked() {
+            *selected = Some(clone_idx);
+        }
+        if response.double_clicked() {
+            play_requested = Some(clone_idx);
+        }
+        if response.hovered() {
+            self.state.hovered_item = Some(clone.name.clone());
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        response.context_menu(|ui| {
+            if ui.button("🎮 Play Clone").clicked() {
+                play_requested = Some(clone_idx);
+                ui.close();
+            }
+            ui.separator();
+            if ui.button("⚙️ Properties...").clicked() {
+                properties_requested = Some(clone_idx);
+                ui.close();
+            }
         });
 
-        (double_clicked, favorite_toggled, properties_requested)
+        (play_requested, favorite_toggled, properties_requested)
     }
 
-    /// Render status badge
-    fn render_status_badge(&self, ui: &mut Ui, game: &Game) {
-        let (text, bg_color, text_color) = match game.driver_status.as_str() {
-            "good" => (
-                "WORKING",
-                Color32::from_rgba_premultiplied(39, 201, 63, 51),
-                Color32::from_rgb(255, 255, 255),
-            ),
-            "imperfect" => (
-                "ISSUES",
-                Color32::from_rgba_premultiplied(255, 189, 46, 51),
-                Color32::from_rgb(255, 255, 255),
-            ),
-            _ => (
-                "NOT WORKING",
-                Color32::from_rgba_premultiplied(255, 95, 86, 51),
-                Color32::from_rgb(255, 255, 255),
-            ),
+    fn compact_card_style(ui: &mut Ui) {
+        ui.style_mut().interaction.selectable_labels = false;
+        ui.spacing_mut().item_spacing = Vec2::new(6.0, 4.0);
+        ui.spacing_mut().button_padding = Vec2::new(3.0, 2.0);
+        ui.spacing_mut().interact_size.y = 20.0;
+    }
+
+    fn render_preview(
+        ui: &mut Ui,
+        rect: egui::Rect,
+        texture: Option<&egui::TextureHandle>,
+        show_icons: bool,
+        placeholder: &str,
+    ) {
+        ui.painter()
+            .rect_filled(rect, 4.0, ui.visuals().extreme_bg_color);
+        if let Some(texture) = texture.filter(|_| show_icons) {
+            ui.put(
+                rect.shrink(4.0),
+                egui::Image::new(texture)
+                    .fit_to_exact_size(Vec2::new(56.0, 40.0))
+                    .corner_radius(4.0),
+            );
+        } else {
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                placeholder,
+                FontId::proportional(24.0),
+                ui.visuals().strong_text_color(),
+            );
+        }
+    }
+
+    fn render_card_text(ui: &mut Ui, rect: egui::Rect, text: RichText, full_text: &str) {
+        if rect.width() <= 0.0 {
+            return;
+        }
+        let mut text_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        text_ui.set_clip_rect(ui.clip_rect().intersect(rect));
+        text_ui
+            .add(
+                egui::Label::new(text)
+                    .truncate()
+                    .halign(egui::Align::Min)
+                    .show_tooltip_when_elided(false),
+            )
+            .on_hover_text(full_text);
+    }
+
+    fn render_favorite(
+        ui: &mut Ui,
+        rect: egui::Rect,
+        is_favorite: bool,
+        colors: &crate::models::GameListColors,
+    ) -> egui::Response {
+        ui.put(
+            rect,
+            egui::Button::new(
+                RichText::new(if is_favorite { "★" } else { "☆" })
+                    .color(if is_favorite {
+                        colors.favorite_active
+                    } else {
+                        colors.favorite_inactive
+                    })
+                    .size(18.0),
+            )
+            .fill(Color32::TRANSPARENT)
+            .stroke(egui::Stroke::NONE),
+        )
+    }
+
+    fn render_badge(ui: &mut Ui, rect: egui::Rect, text: &str, size: f32, fill: Color32) {
+        // Fixed bounds and modest padding keep pills readable at dialog-scale
+        // text sizes, without inheriting the large default button padding.
+        ui.painter().rect_filled(rect, 4.0, fill);
+        ui.put(
+            rect.shrink2(Vec2::new(4.0, 1.0)),
+            egui::Label::new(
+                RichText::new(text)
+                    .size(size)
+                    .color(ui.visuals().strong_text_color())
+                    .strong(),
+            )
+            .truncate(),
+        );
+    }
+
+    fn render_status_badge(
+        &self,
+        ui: &mut Ui,
+        rect: egui::Rect,
+        game: &Game,
+        colors: &crate::models::GameListColors,
+    ) {
+        let (text, bg_color) = match game.driver_status.as_str() {
+            "good" => ("WORKING", colors.status_available.gamma_multiply(0.2)),
+            "imperfect" => ("ISSUES", ui.visuals().warn_fg_color.gamma_multiply(0.2)),
+            _ => ("NOT WORKING", colors.status_missing.gamma_multiply(0.2)),
         };
-
-        egui::Frame::NONE
-            .fill(bg_color)
-            .corner_radius(6.0)
-            .inner_margin(12.0)
-            .show(ui, |ui| {
-                ui.label(RichText::new(text).size(11.0).color(text_color).strong());
-            });
+        Self::render_badge(ui, rect, text, 11.0, bg_color);
     }
 
-    /// Render clone count badge
-    fn render_clone_badge(&self, ui: &mut Ui, count: usize) {
-        egui::Frame::NONE
-            .fill(Color32::from_rgba_premultiplied(74, 158, 255, 51))
-            .corner_radius(6.0)
-            .inner_margin(12.0)
-            .show(ui, |ui| {
-                ui.label(
-                    RichText::new(format!("{} versions", count))
-                        .size(12.0)
-                        .color(Color32::from_rgb(255, 255, 255))
-                        .strong(),
-                );
-            });
+    fn render_clone_badge(
+        &self,
+        ui: &mut Ui,
+        rect: egui::Rect,
+        count: usize,
+        colors: &crate::models::GameListColors,
+    ) {
+        Self::render_badge(
+            ui,
+            rect,
+            &format!("{} versions", count),
+            12.0,
+            colors.row_bg_selected,
+        );
     }
 
     /// Update cache with filtered games
@@ -885,6 +903,13 @@ impl GameListView {
                     .is_some_and(|game| filters.manufacturer_matches(&game.manufacturer))
             });
         }
+
+        // The manager/pre-filtered candidates may lag a toggle by one frame.
+        filtered_indices.retain(|&idx| {
+            games
+                .get(idx)
+                .is_some_and(|game| filters.rom_requirement_matches(game.requires_roms))
+        });
 
         // Step 1.5: Apply ROM set type specific filtering to prevent duplicates
         filtered_indices =
@@ -946,7 +971,8 @@ impl GameListView {
         if !filters.search_text.is_empty()
             && let Some(cached) = index.get_cached_search(&filters.search_text)
         {
-            return cached.to_vec();
+            // Cached text matches are candidates; exclusions still apply.
+            return self.apply_categorized_filters(games, filters, favorites, cached.to_vec());
         }
 
         // Start with all games
@@ -1127,7 +1153,8 @@ impl GameListView {
                     };
 
                     // AND logic between categories
-                    availability_match
+                    filters.rom_requirement_matches(game.requires_roms)
+                        && availability_match
                         && status_match
                         && others_match
                         && filters.manufacturer_matches(&game.manufacturer)
@@ -1146,6 +1173,27 @@ impl GameListView {
         filters: &FilterSettings,
         game_index: Option<&GameIndex>,
     ) -> Vec<usize> {
+        // A ROM-bearing child must remain reachable when this exclusion hides
+        // its ROM-less parent. Only promote children already in the filtered
+        // candidates, so search/manufacturer/other filters retain their meaning.
+        let hidden_romless_parents: HashSet<&str> = if filters.hide_romless_systems {
+            games
+                .iter()
+                .filter(|game| !game.requires_roms)
+                .map(|game| game.name.as_str())
+                .collect()
+        } else {
+            HashSet::new()
+        };
+        let standalone_child = |game: &Game| {
+            game.is_clone
+                && game.requires_roms
+                && game
+                    .parent
+                    .as_deref()
+                    .is_some_and(|parent| hidden_romless_parents.contains(parent))
+        };
+
         // Special handling for "All Games" filter with auto expand clones
         // When auto expand is enabled, we want to show parent games and their clones
         // but avoid showing standalone clones (clones without parents in the list)
@@ -1174,8 +1222,8 @@ impl GameListView {
             // Keep parent games and clones that have their parent in the list
             filtered_indices.retain(|&idx| {
                 if let Some(game) = games.get(idx) {
-                    if !game.is_clone {
-                        // Always keep parent games
+                    if !game.is_clone || standalone_child(game) {
+                        // Keep normal parents and children whose parent is hidden above.
                         true
                     } else {
                         // For clones, check if their parent is in the list
@@ -1203,7 +1251,7 @@ impl GameListView {
                     if !filters.show_clones_in_split {
                         filtered_indices.retain(|&idx| {
                             if let Some(game) = games.get(idx) {
-                                !game.is_clone
+                                !game.is_clone || standalone_child(game)
                             } else {
                                 false
                             }
@@ -1215,7 +1263,7 @@ impl GameListView {
                     if !filters.show_clones_in_split {
                         filtered_indices.retain(|&idx| {
                             if let Some(game) = games.get(idx) {
-                                !game.is_clone
+                                !game.is_clone || standalone_child(game)
                             } else {
                                 false
                             }
@@ -1226,7 +1274,7 @@ impl GameListView {
                     // For merged sets, show only parent games (clones are merged into parent)
                     filtered_indices.retain(|&idx| {
                         if let Some(game) = games.get(idx) {
-                            !game.is_clone
+                            !game.is_clone || standalone_child(game)
                         } else {
                             false
                         }
@@ -1256,7 +1304,7 @@ impl GameListView {
                     if clone_ratio > 0.3 && !filters.show_clones_in_split {
                         filtered_indices.retain(|&idx| {
                             if let Some(game) = games.get(idx) {
-                                !game.is_clone
+                                !game.is_clone || standalone_child(game)
                             } else {
                                 false
                             }
@@ -1386,6 +1434,7 @@ impl GameListView {
         // Hash all filter state
         category.hash(&mut hasher);
         filters.show_favorites_only.hash(&mut hasher);
+        filters.hide_romless_systems.hash(&mut hasher);
 
         // Hash AVAILABILITY filters
         filters
@@ -1437,5 +1486,179 @@ impl GameListView {
         }
 
         hasher.finish()
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    fn game(name: &str, description: &str) -> Game {
+        Game {
+            name: name.into(),
+            description: description.into(),
+            manufacturer: "A manufacturer with a very long company name".into(),
+            year: "1999".into(),
+            driver: "test.cpp".into(),
+            driver_status: "preliminary".into(),
+            status: RomStatus::Available,
+            parent: None,
+            category: "A long category that must not push the favorite button away".into(),
+            play_count: 0,
+            is_clone: false,
+            is_device: false,
+            is_bios: false,
+            controls: String::new(),
+            requires_roms: true,
+            requires_chd: false,
+            chd_name: None,
+            verification_status: None,
+        }
+    }
+
+    fn text_shapes(shapes: &[egui::epaint::ClippedShape]) -> Vec<&egui::epaint::TextShape> {
+        fn collect<'a>(shape: &'a egui::Shape, texts: &mut Vec<&'a egui::epaint::TextShape>) {
+            match shape {
+                egui::Shape::Text(text) => texts.push(text),
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        collect(shape, texts);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut texts = Vec::new();
+        for shape in shapes {
+            collect(&shape.shape, &mut texts);
+        }
+        texts
+    }
+
+    #[test]
+    fn narrow_cards_reserve_actions_and_truncate_titles_with_dialog_spacing() {
+        let context = egui::Context::default();
+        crate::ui::components::steam_ui::SteamUi::apply(&context);
+        let parent = game(
+            "parent",
+            "A very long parent game title that would previously cover the status and favorite controls",
+        );
+        let mut clone = game(
+            "clone",
+            "A very long clone title that would previously extend beyond the edge of the list panel",
+        );
+        clone.is_clone = true;
+        clone.parent = Some(parent.name.clone());
+        let games = vec![parent, clone];
+        let index = GameIndex::build(games.clone(), HashSet::new());
+        let colors = crate::models::GameListColors::default();
+        let mut list = GameListView::new();
+        let mut card_rects = Vec::new();
+        let output = context.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    Vec2::new(600.0, 400.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    // CentralPanel preallocates its entire min_rect. Use a
+                    // bounded child so both width and measured content height
+                    // describe the cards rather than the surrounding panel.
+                    let mut card_ui =
+                        ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
+                            ui.next_widget_position(),
+                            Vec2::new(480.0, 250.0),
+                        )));
+                    let ui = &mut card_ui;
+                    let origin = ui.next_widget_position();
+                    card_rects.push(egui::Rect::from_min_size(
+                        origin,
+                        Vec2::new(480.0, GAME_CARD_HEIGHT),
+                    ));
+                    list.render_game_item(
+                        ui,
+                        &games[0],
+                        0,
+                        &games,
+                        &FilterSettings::default(),
+                        &mut None,
+                        &mut HashMap::new(),
+                        &HashSet::new(),
+                        &HashMap::new(),
+                        false,
+                        Some(&index),
+                        None,
+                        &HashMap::new(),
+                        &colors,
+                    );
+                    assert!(
+                        (ui.min_rect().bottom() - origin.y - GAME_CARD_HEIGHT).abs() < 0.1,
+                        "origin={origin:?}; panel_min={:?}; cursor={:?}",
+                        ui.min_rect(),
+                        ui.next_widget_position()
+                    );
+                    let origin = ui.next_widget_position();
+                    card_rects.push(egui::Rect::from_min_size(
+                        origin + Vec2::new(32.0, 0.0),
+                        Vec2::new(448.0, CLONE_CARD_HEIGHT),
+                    ));
+                    list.render_clone_item(
+                        ui,
+                        &games[1],
+                        1,
+                        &mut None,
+                        &HashSet::new(),
+                        &HashMap::new(),
+                        false,
+                        None,
+                        &colors,
+                    );
+                    assert!((ui.min_rect().bottom() - origin.y - CLONE_CARD_HEIGHT).abs() < 0.1);
+                });
+            },
+        );
+        let texts = text_shapes(&output.shapes);
+        let parent_title = texts
+            .iter()
+            .find(|text| text.galley.job.text == games[0].description)
+            .unwrap();
+        let clone_title = texts
+            .iter()
+            .find(|text| text.galley.job.text == games[1].description)
+            .unwrap();
+        let status = texts
+            .iter()
+            .find(|text| text.galley.job.text == "NOT WORKING")
+            .unwrap();
+        let versions = texts
+            .iter()
+            .find(|text| text.galley.job.text == "1 versions")
+            .unwrap();
+        assert!(parent_title.galley.elided && clone_title.galley.elided);
+        assert!(!status.galley.elided && !versions.galley.elided);
+        assert!(parent_title.visual_bounding_rect().right() < status.visual_bounding_rect().left());
+        assert!(
+            parent_title.visual_bounding_rect().right() < versions.visual_bounding_rect().left()
+        );
+        let stars: Vec<_> = texts
+            .iter()
+            .filter(|text| text.galley.job.text == "☆")
+            .collect();
+        assert_eq!(stars.len(), 2);
+        assert!(
+            clone_title.visual_bounding_rect().right() < stars[1].visual_bounding_rect().left()
+        );
+        for text in texts {
+            assert!(
+                card_rects
+                    .iter()
+                    .any(|rect| rect.expand(1.0).contains_rect(text.visual_bounding_rect())),
+                "Text outside cards: {:?}",
+                text.galley.job.text
+            );
+        }
     }
 }

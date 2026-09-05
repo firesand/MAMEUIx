@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::{Reader, XmlVersion};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -290,7 +290,7 @@ impl SoftwareListLoader {
             let attr = attr?;
             if attr.key.as_ref() == key {
                 return Ok(Some(
-                    attr.decode_and_unescape_value(reader.decoder())?
+                    attr.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())?
                         .into_owned(),
                 ));
             }
@@ -303,7 +303,8 @@ impl SoftwareListLoader {
         end: quick_xml::name::QName<'_>,
     ) -> Result<String> {
         let text = reader.read_text(end)?;
-        Ok(quick_xml::escape::unescape(&text)?.into_owned())
+        let decoded = text.xml10_content()?;
+        Ok(quick_xml::escape::unescape(&decoded)?.into_owned())
     }
 }
 
@@ -316,7 +317,7 @@ mod tests {
     fn parses_mame_software_list_xml() {
         let xml = r#"
             <softwarelists>
-                <softwarelist name="a2600" description="Atari 2600 cartridges">
+                <softwarelist name="a2600" description="Atari 2600 &amp; compatibles">
                     <software name="combat">
                         <description>Combat</description>
                         <year>1977</year>
@@ -341,6 +342,7 @@ mod tests {
 
         assert_eq!(result.lists.len(), 1);
         assert_eq!(result.lists[0].name, "a2600");
+        assert_eq!(result.lists[0].description, "Atari 2600 & compatibles");
         assert_eq!(result.lists[0].software_count, 2);
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].description, "Combat");

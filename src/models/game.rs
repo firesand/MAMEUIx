@@ -5,24 +5,32 @@ use serde::{Deserialize, Serialize};
 /// Represents a single game/ROM in the MAME system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Game {
-    pub name: String,             // ROM filename without extension
-    pub description: String,      // Human-readable game name
-    pub manufacturer: String,     // Company that made the game
-    pub year: String,             // Year of release
-    pub driver: String,           // MAME driver used
-    pub driver_status: String,    // Driver status: good, imperfect, preliminary
-    pub status: RomStatus,        // Current status of this ROM
-    pub parent: Option<String>,   // Parent ROM name if this is a clone
-    pub category: String,         // Game category/genre
-    pub play_count: u32,          // How many times played
-    pub is_clone: bool,           // Whether this is a clone ROM
-    pub is_device: bool,          // Whether this is a device ROM
-    pub is_bios: bool,            // Whether this is a BIOS ROM
-    pub controls: String,         // Control scheme description
+    pub name: String,           // ROM filename without extension
+    pub description: String,    // Human-readable game name
+    pub manufacturer: String,   // Company that made the game
+    pub year: String,           // Year of release
+    pub driver: String,         // MAME driver used
+    pub driver_status: String,  // Driver status: good, imperfect, preliminary
+    pub status: RomStatus,      // Current status of this ROM
+    pub parent: Option<String>, // Parent ROM name if this is a clone
+    pub category: String,       // Game category/genre
+    pub play_count: u32,        // How many times played
+    pub is_clone: bool,         // Whether this is a clone ROM
+    pub is_device: bool,        // Whether this is a device ROM
+    pub is_bios: bool,          // Whether this is a BIOS ROM
+    pub controls: String,       // Control scheme description
+    /// Requires dumped, mandatory ROM/disk media, directly or through a dependency.
+    /// Older serialized metadata stays visible until a fresh MAME scan resolves it.
+    #[serde(default = "default_requires_roms")]
+    pub requires_roms: bool,
     pub requires_chd: bool,       // Whether this game requires a CHD file
     pub chd_name: Option<String>, // Name of the required CHD file (if any)
     // Verification status tracking
     pub verification_status: Option<VerificationStatus>,
+}
+
+fn default_requires_roms() -> bool {
+    true
 }
 
 /// Represents the status of a ROM file
@@ -147,5 +155,31 @@ impl Game {
     /// Update verification status
     pub fn update_verification_status(&mut self, status: VerificationStatus) {
         self.verification_status = Some(status);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Game;
+
+    #[test]
+    fn older_serialized_games_conservatively_require_roms() {
+        let mut saved = serde_json::json!({
+            "name": "legacy", "description": "Imported metadata", "manufacturer": "Unknown",
+            "year": "1980", "driver": "test", "driver_status": "good", "status": "Unknown",
+            "parent": null, "category": "Misc.", "play_count": 0, "is_clone": false,
+            "is_device": false, "is_bios": false, "controls": "", "requires_chd": false,
+            "chd_name": null, "verification_status": null
+        });
+        let legacy: Game = serde_json::from_value(saved.clone()).unwrap();
+        assert!(legacy.requires_roms);
+
+        saved["requires_roms"] = false.into();
+        let rescanned: Game = serde_json::from_value(saved).unwrap();
+        assert!(!rescanned.requires_roms);
+        assert_eq!(
+            serde_json::to_value(rescanned).unwrap()["requires_roms"],
+            false
+        );
     }
 }

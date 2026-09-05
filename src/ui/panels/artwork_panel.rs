@@ -29,10 +29,6 @@ impl ArtworkPanel {
         _asset_dirs: &[PathBuf],
         config: &crate::models::config::AppConfig,
     ) {
-        ui.heading("Artwork");
-
-        ui.separator();
-
         // Check if a game is selected
         if let Some(idx) = selected_game {
             // Use the index to get the game - this is the correct way
@@ -45,7 +41,7 @@ impl ArtworkPanel {
                 ui.separator();
 
                 // Artwork type selection
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(
                         &mut self.selected_artwork_type,
                         ArtworkType::Screenshot,
@@ -77,8 +73,9 @@ impl ArtworkPanel {
                 ui.separator();
 
                 // Try to load and display artwork
-                let artwork_frame =
-                    egui::Frame::dark_canvas(ui.style()).inner_margin(egui::Vec2::splat(10.0));
+                let artwork_frame = egui::Frame::group(ui.style())
+                    .fill(ui.visuals().extreme_bg_color)
+                    .inner_margin(egui::Margin::same(10));
 
                 artwork_frame.show(ui, |ui| {
                     // Try to load the artwork
@@ -89,7 +86,7 @@ impl ArtworkPanel {
                         config,
                     ) {
                         // Calculate size to fit the available space while maintaining aspect ratio
-                        let available_size = ui.available_size();
+                        let available_size = ui.available_size().max(egui::Vec2::ZERO);
                         let texture_size = texture.size_vec2();
 
                         let scale = (available_size.x / texture_size.x)

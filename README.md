@@ -6,6 +6,8 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 
 ## Recent Improvements (v0.1.6)
 
+- Unified the Classic and Dock main windows with Settings/Preferences through the **Modern Spacious** theme, including table rows, game cards, filters, and toolbar controls
+- Added **Hide systems that don't require ROMs** in both library sidebars, enabled by default and saved between sessions
 - Added an opt-in, experimental redesigned UI; the dock-panel UI remains the default
 - Added a Software Lists preview for browsing MAME hash XML and checking best-effort media-path presence
 - Made `Ctrl`/`Cmd`+`F` focus the redesign search field and separated Missing from Issues filtering
@@ -14,7 +16,16 @@ A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emu
 - Simplified the About dialog and reorganized public guides under `docs/`
 - Added initial, unverified FreeBSD amd64 source-build readiness
 
+Select **Options → Preferences → Display → Modern Spacious** for the same panel colors, typography, and controls as Settings/Preferences. Other themes remain available.
+
 Enable the redesign from **Preferences → UI shell → Redesign preview (experimental)** or launch MAMEUIx with `--redesign`. You can switch back to the default dock-panel UI at any time.
+
+The **Hide systems that don't require ROMs** filter uses MAME metadata, including
+required ROM/CHD media in referenced BIOSes and devices. It does not depend on
+whether your ROM files are installed. Turn it off to restore ROM-free games such
+as Pong and systems such as the Atari 2600. Variants that require media remain
+visible even when their ROM-free parent is hidden. This reduces the catalog; it does not
+classify every remaining entry as an arcade game.
 
 ## Previous Improvements (v0.1.5)
 
@@ -102,7 +113,7 @@ Enable the redesign from **Preferences → UI shell → Redesign preview (experi
 
 ### 🎨 User Interface
 - **Modern Design**: Clean, intuitive interface built with egui
-- **10 Beautiful Themes**: Choose from Dark Blue, Neon Green, Arcade Purple, Light Classic, and 6 more themes
+- **11 Themes**: Modern Spacious matches Settings/Preferences; Dark Blue, Neon Green, Arcade Purple, Light Classic, and other palettes remain available
 - **Responsive Layout**: Adapts to different screen sizes
 - **Fully Resizable Columns**: All table columns can be resized to any width with persistent settings
 - **Artwork Display**: Shows game artwork and screenshots
@@ -164,7 +175,7 @@ Enable the redesign from **Preferences → UI shell → Redesign preview (experi
 ## System Requirements
 
 - **OS**: Linux; FreeBSD amd64 is an experimental source-build target
-- **Rust**: 1.85.0 or later when building from source
+- **Rust**: 1.88.0 or later when building from source
 - **MAME**: Any recent version (0.200+ recommended)
 - **Memory**: 4GB RAM minimum, 8GB recommended for large ROM collections
 - **Storage**: 100MB for application, additional space for ROMs and artwork
@@ -254,7 +265,7 @@ forwarded by the active launcher. See [BGFX and GLSL Configuration](docs/BGFX_GL
 - **Double-click**: Launch a game (if ROMs are available)
 
 ### Advanced Features
-- **Theme Selection**: Choose from 10 beautiful themes via Options → Theme menu
+- **Theme Selection**: Choose from 11 themes via Options → Preferences → Display
 - **Column Resizing**: Drag column dividers to resize any column to any width
 - **Column Width Persistence**: Column widths are automatically saved every 5 seconds
 - **Favorites**: Click the star icon to mark favorite games
@@ -313,7 +324,7 @@ The game list table supports full column customization:
 - **Ctrl+P**: Open preferences
 - **F5**: Refresh game list
 - **Escape**: Clear search
-- **Options → Theme**: Quick theme switching
+- **Options → Preferences → Display**: Theme selection
 
 ## File Structure
 

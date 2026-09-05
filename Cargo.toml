@@ -2,6 +2,7 @@
 name = "mameuix"
 version = "0.1.6"
 edition = "2024"
+rust-version = "1.88"
 autoexamples = false
 
 [profile.release]
@@ -28,17 +29,14 @@ rayon = "1.10"
 num_cpus = "1.17"
 zip = "4.3"
 chrono = { version = "0.4.41", features = ["serde"] }
-quick-xml = "0.38"
-webbrowser = "0.8"
+quick-xml = "0.41"
+webbrowser = "1.2.2"
 fuzzy-matcher = "0.3.7"
-tantivy = "0.22"
+# Upstream lru >=0.18.2 security fix; replace with a release once available.
+tantivy = { git = "https://github.com/quickwit-oss/tantivy", rev = "5ca39332002c2c87fb5d2abc707cf527b3319d42" }
 regex = "1.11"
 lazy_static = "1.5"
 thiserror = "2.0"
-# Enhanced GLSL validation dependencies
-naga = { version = "26.0", features = ["glsl-in", "glsl-out", "spv-out", "wgsl-out"] }
-glsl-lang = { version = "0.8", features = ["serde"] }
-glslang = "0.6"
 
 [dev-dependencies]
 tempfile = "3.20"
@@ -55,5 +53,3 @@ tempfile = "3.20"
 # [[bin]]
 # name = "test_bgfx_glsl"
 # path = "src/test_bgfx_glsl.rs"
-
-

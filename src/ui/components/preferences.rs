@@ -25,7 +25,6 @@ impl PreferencesDialog {
         let mut close = false;
 
         let previous_style = (*ctx.style()).clone();
-        let initial_theme = theme.clone();
         SteamUi::apply(ctx);
 
         // Use persistent ID to maintain tab state
@@ -120,11 +119,9 @@ impl PreferencesDialog {
                 });
             });
 
-        if *theme != initial_theme {
-            theme.apply(ctx);
-        } else {
-            ctx.set_style(previous_style);
-        }
+        // The main shell applies the selected theme next frame. Keep the dialog
+        // style local even when its controls change the theme or shell.
+        ctx.set_style(previous_style);
 
         if close {
             *open = false;
@@ -305,6 +302,7 @@ impl PreferencesDialog {
             // Create a grid layout for theme selection
             ui.columns(2, |columns| {
                 let themes = [
+                    Theme::ModernSpacious,
                     Theme::DarkBlue,
                     Theme::DarkGrey,
                     Theme::ArcadePurple,
@@ -326,7 +324,6 @@ impl PreferencesDialog {
                             println!("Theme changed to: {}", theme_option.display_name());
                             *theme = theme_option.clone();
                             // Apply the theme immediately
-                            theme_option.apply(ctx);
                             // Force a repaint to see the changes
                             ctx.request_repaint();
                             println!("Theme applied and repaint requested");

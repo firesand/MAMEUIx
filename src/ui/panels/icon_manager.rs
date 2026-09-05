@@ -5,8 +5,7 @@
 use super::icon_performance_monitor::IconPerformanceMonitor;
 use crate::models::{AppConfig, IconInfo};
 use eframe::egui;
-use rayon::prelude::*;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
@@ -14,6 +13,7 @@ use std::time::{Duration, Instant};
 // Icon loading result from background thread
 #[derive(Debug)]
 pub struct IconLoadResult {
+    generation: u64,
     rom_name: String,
     icon_data: Option<Vec<u8>>,
     width: u32,
@@ -44,6 +44,9 @@ pub struct IconManager {
     // Thread pool state
     pub thread_pool_initialized: bool,
     thread_pool: Option<rayon::ThreadPool>,
+    in_flight: HashSet<(u64, String)>,
+    generation: u64,
+    load_settings: Option<(Option<PathBuf>, u32)>,
 
     // Performance monitoring
     pub performance_monitor: IconPerformanceMonitor,
@@ -66,6 +69,9 @@ impl IconManager {
             max_concurrent_loads: num_cpus::get().min(8), // Use CPU cores, max 8
             thread_pool_initialized: false,
             thread_pool: None,
+            in_flight: HashSet::new(),
+            generation: 0,
+            load_settings: None,
             performance_monitor: IconPerformanceMonitor::new(),
         }
     }
@@ -86,6 +92,9 @@ impl IconManager {
         if enable_lazy_icons
             && !self.rom_icons.contains_key(&rom_name)
             && !self.icon_info.contains_key(&rom_name)
+            && !self
+                .in_flight
+                .contains(&(self.generation, rom_name.clone()))
         {
             // Check if already in queue
             if let Ok(mut queue) = self.icon_load_queue.lock()
@@ -98,6 +107,7 @@ impl IconManager {
 
     /// Load icon from file system (thread-safe version)
     fn load_icon_from_file_threaded(
+        generation: u64,
         rom_name: String,
         icons_path: PathBuf,
         icon_size: u32,
@@ -135,6 +145,7 @@ impl IconManager {
 
                     let load_time = start_time.elapsed();
                     return IconLoadResult {
+                        generation,
                         rom_name,
                         icon_data: Some(pixels),
                         width,
@@ -149,6 +160,7 @@ impl IconManager {
         // Return empty result if loading failed
         let load_time = start_time.elapsed();
         IconLoadResult {
+            generation,
             rom_name,
             icon_data: None,
             width: 0,
@@ -165,7 +177,18 @@ impl IconManager {
         config: &AppConfig,
         current_fps: f32,
     ) {
-        if !config.show_rom_icons {
+        let settings = (config.icons_path.clone(), config.icon_size);
+        if self
+            .load_settings
+            .as_ref()
+            .is_some_and(|old| old != &settings)
+        {
+            self.clear_cache();
+        }
+        self.load_settings = Some(settings);
+        self.process_icon_results(ctx);
+
+        if !config.show_rom_icons || config.icons_path.is_none() {
             return;
         }
 
@@ -188,10 +211,18 @@ impl IconManager {
         // Collect icons to load from queue
         let mut icons_to_load = Vec::new();
         if let Ok(mut queue) = self.icon_load_queue.lock() {
-            for _ in 0..max_per_frame {
+            let capacity = self
+                .max_concurrent_loads
+                .saturating_sub(self.in_flight.len());
+            for _ in 0..max_per_frame.min(capacity) {
                 if let Some(rom_name) = queue.pop_front() {
                     // Skip if already loaded
-                    if !self.rom_icons.contains_key(&rom_name) {
+                    if !self.rom_icons.contains_key(&rom_name)
+                        && !self.icon_info.contains_key(&rom_name)
+                        && !self
+                            .in_flight
+                            .contains(&(self.generation, rom_name.clone()))
+                    {
                         icons_to_load.push(rom_name);
                     }
                 } else {
@@ -202,7 +233,7 @@ impl IconManager {
 
         // Process icons in parallel using rayon thread pool
         if !icons_to_load.is_empty() {
-            self.process_icons_parallel(icons_to_load, config);
+            self.process_icons_parallel(icons_to_load, config, ctx);
         }
 
         // Process results from background threads
@@ -232,7 +263,12 @@ impl IconManager {
     }
 
     /// Process icons in parallel using rayon
-    fn process_icons_parallel(&mut self, icons_to_load: Vec<String>, config: &AppConfig) {
+    fn process_icons_parallel(
+        &mut self,
+        icons_to_load: Vec<String>,
+        config: &AppConfig,
+        ctx: &egui::Context,
+    ) {
         // Get icons path
         let icons_path = if let Some(path) = &config.icons_path {
             path.clone()
@@ -247,18 +283,33 @@ impl IconManager {
             return;
         };
 
-        let load_icons = || {
-            icons_to_load.into_par_iter().for_each(|rom_name| {
+        for rom_name in icons_to_load {
+            let key = (self.generation, rom_name.clone());
+            if self.in_flight.len() >= self.max_concurrent_loads
+                || !self.in_flight.insert(key.clone())
+            {
+                continue;
+            }
+            let generation = self.generation;
+            let icons_path = icons_path.clone();
+            let tx = tx.clone();
+            let ctx = ctx.clone();
+            let load_icon = move || {
                 let result =
-                    Self::load_icon_from_file_threaded(rom_name, icons_path.clone(), icon_size);
-                let _ = tx.send(result); // Ignore send errors
-            });
-        };
-
-        if let Some(pool) = &self.thread_pool {
-            pool.install(load_icons);
-        } else {
-            load_icons();
+                    Self::load_icon_from_file_threaded(generation, rom_name, icons_path, icon_size);
+                if tx.send(result).is_ok() {
+                    ctx.request_repaint();
+                }
+            };
+            if let Some(pool) = &self.thread_pool {
+                pool.spawn(load_icon);
+            } else if let Err(err) = std::thread::Builder::new()
+                .name("icon-loader-fallback".to_string())
+                .spawn(load_icon)
+            {
+                self.in_flight.remove(&key);
+                eprintln!("Failed to start icon loader: {err}");
+            }
         }
     }
 
@@ -267,6 +318,11 @@ impl IconManager {
         if let Some(ref rx) = self.icon_results_rx {
             // Process all available results
             while let Ok(result) = rx.try_recv() {
+                self.in_flight
+                    .remove(&(result.generation, result.rom_name.clone()));
+                if result.generation != self.generation {
+                    continue;
+                }
                 // Record performance metrics
                 if let Some(load_time) = result.load_time {
                     self.performance_monitor
@@ -364,6 +420,9 @@ impl IconManager {
 
     /// Clear all cached icons
     pub fn clear_cache(&mut self) {
+        // Old workers still count toward the concurrency limit until they finish,
+        // but their results must not repopulate a cache for different settings.
+        self.generation = self.generation.wrapping_add(1);
         self.rom_icons.clear();
         self.icon_info.clear();
         if let Ok(mut queue) = self.icon_load_queue.lock() {
@@ -407,5 +466,85 @@ impl IconManager {
     /// Get performance monitor reference
     pub fn get_performance_monitor(&self) -> &IconPerformanceMonitor {
         &self.performance_monitor
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn slow_icon_read_does_not_block_ui_or_duplicate_work() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("slow.ico");
+        assert!(
+            std::process::Command::new("mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let (release_tx, release_rx) = mpsc::channel();
+        let writer = std::thread::spawn(move || {
+            // A synchronous UI loader cannot signal us until this timeout expires.
+            let released_by_ui = release_rx.recv_timeout(Duration::from_secs(3)).is_ok();
+            std::fs::write(fifo, b"invalid icon").unwrap();
+            released_by_ui
+        });
+        let config = AppConfig {
+            icons_path: Some(dir.path().to_path_buf()),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let mut manager = IconManager::new(&config);
+        manager.max_concurrent_loads = 1;
+        manager.queue_icon_load("slow".into(), true);
+        manager.queue_icon_load("next".into(), true);
+        manager.process_icon_queue(&ctx, &config, 60.0);
+        manager.queue_icon_load("slow".into(), true);
+        manager.process_icon_queue(&ctx, &config, 60.0);
+        let pending = manager.in_flight.len();
+        let queued = manager.icon_load_queue.lock().unwrap().len();
+        let _ = release_tx.send(());
+        assert!(
+            writer.join().unwrap(),
+            "UI waited for the blocking file read"
+        );
+        assert_eq!(pending, 1, "more than one load was scheduled");
+        assert_eq!(queued, 1, "in-flight icon was queued a second time");
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !manager.in_flight.is_empty() && Instant::now() < deadline {
+            manager.process_icon_results(&ctx);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(manager.in_flight.is_empty());
+        assert!(!manager.icon_info["slow"].loaded);
+    }
+
+    #[test]
+    fn clearing_cache_rejects_old_worker_results() {
+        let mut manager = IconManager::new(&AppConfig::default());
+        let generation = manager.generation;
+        manager.in_flight.insert((generation, "old".into()));
+        manager.clear_cache();
+        manager
+            .icon_results_tx
+            .as_ref()
+            .unwrap()
+            .send(IconLoadResult {
+                generation,
+                rom_name: "old".into(),
+                icon_data: Some(vec![255; 4]),
+                width: 1,
+                height: 1,
+                load_time: None,
+                success: true,
+            })
+            .unwrap();
+        manager.process_icon_results(&egui::Context::default());
+        assert!(manager.rom_icons.is_empty());
+        assert!(manager.icon_info.is_empty());
+        assert!(manager.in_flight.is_empty());
     }
 }

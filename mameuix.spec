@@ -8,8 +8,8 @@ URL:            https://github.com/firesand/MAMEUIx
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      x86_64
 
-BuildRequires:  rust >= 1.85
-BuildRequires:  cargo >= 1.85
+BuildRequires:  rust >= 1.88
+BuildRequires:  cargo >= 1.88
 BuildRequires:  gcc-c++
 BuildRequires:  pkgconfig
 BuildRequires:  libxcb-devel

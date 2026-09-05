@@ -162,7 +162,7 @@ impl HistoryPanel {
             // Add tab selector if a game is selected
             if self.current_game.is_some() && !self.is_loading {
                 ui.separator();
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.add_space(4.0); // Add left padding
                     if ui
                         .selectable_label(

@@ -4,7 +4,6 @@ use std::collections::HashSet;
 
 use crate::models::RomStatus;
 use crate::ui::panels::artwork_loader::ArtworkLoader;
-use eframe::egui;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RedesignScreen {
@@ -112,8 +111,6 @@ pub struct RedesignState {
     /// One-shot request consumed by whichever library search field is visible.
     pub search_focus_requested: bool,
     pub style_applied: bool,
-    /// Legacy style snapshot restored when leaving the redesign shell.
-    pub previous_style: Option<egui::Style>,
     /// Cached flattened row indices for the game table (rebuilt when filters change).
     pub table_rows: Vec<TableRow>,
     pub table_rows_dirty: bool,
@@ -150,6 +147,7 @@ pub struct SidebarStats {
     pub manufacturers: Vec<(String, usize)>,
     pub decades: Vec<YearDecade>,
     pub games_len: usize,
+    pub hide_romless_systems: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,7 +172,6 @@ impl Default for RedesignState {
             settings_section: SettingsSection::default(),
             search_focus_requested: false,
             style_applied: false,
-            previous_style: None,
             table_rows: Vec::new(),
             table_rows_dirty: true,
             sidebar_stats: SidebarStats::default(),

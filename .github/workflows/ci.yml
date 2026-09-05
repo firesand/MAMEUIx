@@ -47,13 +47,28 @@ jobs:
       - name: cargo test
         run: cargo test --bin mameuix --locked
 
+      - name: Installer regressions (isolated commands)
+        run: python3 tests/installer-regressions.py
+
       - name: cargo clippy
-        run: cargo clippy --locked -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+  advisories:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Check locked dependency graph
+        run: cargo deny --locked check advisories
 
   build-release:
     name: Release Build
     runs-on: ubuntu-latest
-    needs: check
+    needs: [check, advisories]
     steps:
       - uses: actions/checkout@v4
 

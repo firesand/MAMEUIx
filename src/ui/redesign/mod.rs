@@ -10,6 +10,11 @@ mod state;
 pub mod tokens;
 mod topbar;
 mod views;
+
+#[cfg(test)]
+pub(crate) use state::RedesignState;
+#[cfg(test)]
+pub(crate) use views::library as test_library;
 mod widgets;
 
 pub use shell::RedesignShell;

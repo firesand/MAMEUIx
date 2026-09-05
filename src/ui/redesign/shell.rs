@@ -17,7 +17,6 @@ pub struct RedesignShell {
 impl RedesignShell {
     pub fn show(&mut self, ctx: &egui::Context, app: &mut MameApp) {
         if !self.state.style_applied {
-            self.state.previous_style = Some((*ctx.style()).clone());
             RedesignTokens::apply(ctx);
             self.state.style_applied = true;
         }
@@ -30,14 +29,27 @@ impl RedesignShell {
             .get(app.config.selected_mame_index)
             .map(|m| m.version.as_str())
             .unwrap_or("—");
-        let total = app.games.len();
-        let available = if self.state.sidebar_stats.games_len == total {
-            self.state.sidebar_stats.available
+        let hide_romless = app.config.filter_settings.hide_romless_systems;
+        let stats = &self.state.sidebar_stats;
+        let (total, available) = if !self.state.sidebar_stats_dirty
+            && stats.games_len == app.games.len()
+            && stats.hide_romless_systems == hide_romless
+        {
+            (stats.all, stats.available)
         } else {
             app.games
                 .iter()
-                .filter(|g| matches!(g.status, crate::models::RomStatus::Available))
-                .count()
+                .filter(|g| !hide_romless || g.requires_roms)
+                .fold((0, 0), |(total, available), game| {
+                    (
+                        total + 1,
+                        available
+                            + usize::from(matches!(
+                                game.status,
+                                crate::models::RomStatus::Available
+                            )),
+                    )
+                })
         };
 
         egui::TopBottomPanel::top("redesign_topbar")
@@ -123,7 +135,6 @@ impl RedesignShell {
                             // Theme cards configure the legacy shell theme. Keep the
                             // redesign token palette active until the user leaves it.
                             RedesignTokens::apply(ctx);
-                            app.theme_applied = true;
                         }
                         if action.save_config {
                             self.state.artwork_loader.clear_cache();
@@ -134,13 +145,6 @@ impl RedesignShell {
                             self.state.mark_table_dirty();
                         } else if action.save_config {
                             app.save_config();
-                        }
-                        if app.config.preferences.ui_shell != UiShellMode::RedesignPreview {
-                            if let Some(previous_style) = self.state.previous_style.take() {
-                                ctx.set_style(previous_style);
-                            }
-                            app.config.theme.apply(ctx);
-                            self.state.style_applied = false;
                         }
                     });
             }

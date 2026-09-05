@@ -1,4 +1,5 @@
 // src/models/config.rs
+use crate::ui::components::steam_ui::SteamUi;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -112,6 +113,8 @@ impl Theme {
     }
 
     pub fn apply(&self, ctx: &egui::Context) {
+        // Share typography, spacing and controls with Settings and Preferences.
+        SteamUi::apply(ctx);
         let visuals = match self {
             Theme::DarkBlue => {
                 let mut v = egui::Visuals::dark();
@@ -315,30 +318,7 @@ impl Theme {
                 v.faint_bg_color = egui::Color32::from_rgb(55, 45, 25);
                 v
             }
-            Theme::ModernSpacious => {
-                let mut v = egui::Visuals::dark();
-                // Modern blue accent colors with better contrast
-                v.hyperlink_color = egui::Color32::from_rgb(64, 156, 255);
-                v.widgets.active.bg_fill = egui::Color32::from_rgb(64, 156, 255);
-                v.widgets.hovered.bg_fill = egui::Color32::from_rgb(52, 126, 205);
-                v.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(45, 45, 55);
-                v.widgets.inactive.bg_fill = egui::Color32::from_rgb(55, 55, 65);
-                v.widgets.open.bg_fill = egui::Color32::from_rgb(64, 156, 255);
-                // Selection colors - more visible and modern
-                v.selection.bg_fill = egui::Color32::from_rgb(70, 90, 120);
-                v.selection.stroke.color = egui::Color32::from_rgb(64, 156, 255);
-                v.selection.stroke.width = 2.0;
-                // Text colors for better visibility
-                v.override_text_color = Some(egui::Color32::from_rgb(240, 240, 250));
-                // Window and panel backgrounds - more spacious feeling
-                v.panel_fill = egui::Color32::from_rgb(40, 40, 50);
-                v.window_fill = egui::Color32::from_rgb(35, 35, 45);
-                v.faint_bg_color = egui::Color32::from_rgb(50, 50, 60);
-                // Improved spacing and borders - using available fields
-                v.window_shadow.blur = 8;
-                v.window_shadow.offset = [2, 2];
-                v
-            }
+            Theme::ModernSpacious => return,
         };
 
         // Apply the visuals
@@ -539,19 +519,19 @@ impl GameListColors {
                 header_text: egui::Color32::from_rgb(255, 230, 180),
             },
             Theme::ModernSpacious => Self {
-                row_bg_even: egui::Color32::from_rgb(40, 40, 50),
-                row_bg_odd: egui::Color32::from_rgb(45, 45, 55),
-                row_bg_selected: egui::Color32::from_rgb(70, 90, 120),
-                row_bg_hover: egui::Color32::from_rgba_premultiplied(64, 156, 255, 15),
-                row_separator: egui::Color32::from_rgba_premultiplied(64, 156, 255, 20),
-                favorite_active: egui::Color32::from_rgb(255, 200, 80),
-                favorite_inactive: egui::Color32::from_rgb(120, 120, 140),
-                status_available: egui::Color32::from_rgb(80, 220, 120),
-                status_missing: egui::Color32::from_rgb(220, 80, 80),
-                status_unknown: egui::Color32::from_rgb(160, 160, 180),
-                clone_text: egui::Color32::from_rgb(200, 200, 220),
-                header_bg: egui::Color32::from_rgb(50, 50, 60),
-                header_text: egui::Color32::from_rgb(240, 240, 250),
+                row_bg_even: SteamUi::PANEL,
+                row_bg_odd: SteamUi::PANEL_ALT,
+                row_bg_selected: SteamUi::ACCENT_DARK,
+                row_bg_hover: SteamUi::HOVER,
+                row_separator: SteamUi::BORDER,
+                favorite_active: SteamUi::WARNING,
+                favorite_inactive: SteamUi::TEXT_MUTED,
+                status_available: SteamUi::SUCCESS,
+                status_missing: SteamUi::DANGER,
+                status_unknown: SteamUi::TEXT_MUTED,
+                clone_text: SteamUi::TEXT_SECONDARY,
+                header_bg: SteamUi::PANEL_ALT,
+                header_text: SteamUi::TEXT_SECONDARY,
             },
         }
     }
@@ -1106,5 +1086,42 @@ impl Default for AppConfig {
 
             preferences: Preferences::default(), // Add this line
         }
+    }
+}
+
+#[cfg(test)]
+mod romless_filter_tests {
+    use super::*;
+
+    #[test]
+    fn romless_filter_roundtrips_and_old_configs_keep_other_settings() {
+        let mut config = AppConfig {
+            rom_paths: vec![PathBuf::from("/collection/arcade")],
+            ..Default::default()
+        };
+        config.filter_settings.search_text = "Pac-Man".into();
+        config.favorite_games.insert("pacman".into());
+        config.filter_settings.hide_romless_systems = false;
+
+        let saved = toml::to_string_pretty(&config).unwrap();
+        let restored: AppConfig = toml::from_str(&saved).unwrap();
+        assert!(!restored.filter_settings.hide_romless_systems);
+        assert_eq!(restored.rom_paths, config.rom_paths);
+        assert_eq!(restored.filter_settings.search_text, "Pac-Man");
+        assert!(restored.favorite_games.contains("pacman"));
+
+        // A pre-feature config must deserialize normally, without entering the
+        // salvage path that would discard unrelated preferences and favorites.
+        let mut old: toml::Table = toml::from_str(&saved).unwrap();
+        old.get_mut("filter_settings")
+            .unwrap()
+            .as_table_mut()
+            .unwrap()
+            .remove("hide_romless_systems");
+        let migrated: AppConfig = toml::from_str(&toml::to_string(&old).unwrap()).unwrap();
+        assert!(migrated.filter_settings.hide_romless_systems);
+        assert_eq!(migrated.rom_paths, config.rom_paths);
+        assert_eq!(migrated.filter_settings.search_text, "Pac-Man");
+        assert!(migrated.favorite_games.contains("pacman"));
     }
 }

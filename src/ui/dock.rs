@@ -60,5 +60,20 @@ impl TabViewer for MameTabViewer<'_> {
 }
 
 pub fn dock_style(ui: &egui::Ui) -> Style {
-    Style::from_egui(ui.style().as_ref())
+    let mut style = Style::from_egui(ui.style().as_ref());
+    let visuals = ui.visuals();
+    style.tab_bar.bg_fill = visuals.panel_fill;
+    style.tab_bar.height = 36.0;
+    style.tab_bar.hline_color = visuals.widgets.noninteractive.bg_stroke.color;
+    style.tab.active.bg_fill = visuals.faint_bg_color;
+    style.tab.active.text_color = visuals.hyperlink_color;
+    style.tab.focused.bg_fill = visuals.faint_bg_color;
+    style.tab.focused.text_color = visuals.hyperlink_color;
+    style.tab.inactive.bg_fill = visuals.panel_fill;
+    style.tab.inactive.text_color = visuals.weak_text_color();
+    style.tab.hovered.bg_fill = visuals.widgets.hovered.bg_fill;
+    style.tab.tab_body.bg_fill = visuals.faint_bg_color;
+    style.tab.tab_body.inner_margin = egui::Margin::same(12);
+    style.tab_bar.corner_radius = egui::CornerRadius::same(6);
+    style
 }

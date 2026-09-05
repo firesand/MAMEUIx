@@ -6,6 +6,7 @@ use super::super::widgets::{
 };
 use crate::app::MameApp;
 use crate::models::{FilterSettings, SearchMode, StatusFilter};
+use crate::ui::panels::sidebar::romless_filter_checkbox;
 use eframe::egui;
 use std::collections::HashMap;
 
@@ -25,8 +26,15 @@ pub fn show(ctx: &egui::Context, app: &mut MameApp, state: &mut RedesignState) -
         toggle_favorite: None,
         filters_changed: false,
     };
+    let old_hide_romless = app.config.filter_settings.hide_romless_systems;
 
     enforce_visible_filter_state(state);
+    // The option can change in the other shell while this view is inactive.
+    if state.sidebar_stats.hide_romless_systems != app.config.filter_settings.hide_romless_systems {
+        state.mark_sidebar_stats_dirty();
+        state.mark_table_dirty();
+        app.game_index_manager.mark_cache_dirty();
+    }
     state.ensure_search_buf(&app.config.filter_settings.search_text);
     apply_search_debounce(ctx, app, state, &mut action);
 
@@ -48,6 +56,17 @@ pub fn show(ctx: &egui::Context, app: &mut MameApp, state: &mut RedesignState) -
             .show(ctx, |ui| {
                 show_sidebar(ui, app, state, &mut action);
             });
+    }
+
+    if app.config.filter_settings.hide_romless_systems != old_hide_romless {
+        action.filters_changed = true;
+        app.game_index_manager.mark_cache_dirty();
+        app.game_list.invalidate_cache();
+        app.game_list_view.invalidate_cache();
+        state.mark_table_dirty();
+        state.mark_sidebar_stats_dirty();
+        app.save_config();
+        ctx.request_repaint();
     }
 
     sync_filters_to_config(app, state, &mut action);
@@ -399,7 +418,9 @@ fn show_sidebar(
                         ui.add_space(12.0);
                         ui.horizontal(|ui| {
                             section_header(ui, "FILTERS");
-                            let has_filters = state.year_decade.is_some() || state.chd_only;
+                            let has_filters = state.year_decade.is_some()
+                                || state.chd_only
+                                || app.config.filter_settings.hide_romless_systems;
                             if has_filters {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
@@ -415,12 +436,18 @@ fn show_sidebar(
                                             state.selected_manufacturer = None;
                                             state.year_decade = None;
                                             state.chd_only = false;
+                                            app.config.filter_settings.hide_romless_systems = false;
                                             action.filters_changed = true;
                                         }
                                     },
                                 );
                             }
                         });
+                        ui.add_space(4.0);
+
+                        if romless_filter_checkbox(ui, &mut app.config.filter_settings).changed() {
+                            action.filters_changed = true;
+                        }
                         ui.add_space(4.0);
 
                         let chd_count = sidebar.chd_count;
@@ -589,6 +616,13 @@ fn rebuild_sidebar_stats(app: &MameApp, state: &mut RedesignState) {
     let mut chd_count = 0usize;
 
     for g in &app.games {
+        if !app
+            .config
+            .filter_settings
+            .rom_requirement_matches(g.requires_roms)
+        {
+            continue;
+        }
         if g.requires_chd {
             chd_count += 1;
         }
@@ -612,35 +646,34 @@ fn rebuild_sidebar_stats(app: &MameApp, state: &mut RedesignState) {
         manufacturers,
         decades: YearDecade::FILTER_CHOICES.to_vec(),
         games_len: app.games.len(),
+        hide_romless_systems: app.config.filter_settings.hide_romless_systems,
     };
     state.sidebar_stats_dirty = false;
 }
 
 fn collection_counts(app: &MameApp) -> CollectionCounts {
-    let all = app.games.len();
-    let available = app
-        .games
-        .iter()
-        .filter(|g| RedesignCollection::Available.matches_status(g.status))
-        .count();
-    let favorites = app.config.favorite_games.len();
-    let missing = app
-        .games
-        .iter()
-        .filter(|g| RedesignCollection::Missing.matches_status(g.status))
-        .count();
-    let issues = app
-        .games
-        .iter()
-        .filter(|g| RedesignCollection::Issues.matches_status(g.status))
-        .count();
-    CollectionCounts {
-        all,
-        available,
-        favorites,
-        missing,
-        issues,
+    let mut counts = CollectionCounts {
+        all: 0,
+        available: 0,
+        favorites: 0,
+        missing: 0,
+        issues: 0,
+    };
+    for game in &app.games {
+        if !app
+            .config
+            .filter_settings
+            .rom_requirement_matches(game.requires_roms)
+        {
+            continue;
+        }
+        counts.all += 1;
+        counts.available += usize::from(RedesignCollection::Available.matches_status(game.status));
+        counts.favorites += usize::from(app.config.favorite_games.contains(&game.name));
+        counts.missing += usize::from(RedesignCollection::Missing.matches_status(game.status));
+        counts.issues += usize::from(RedesignCollection::Issues.matches_status(game.status));
     }
+    counts
 }
 
 #[cfg(test)]
@@ -697,14 +730,16 @@ mod tests {
 
     #[test]
     fn legacy_only_filters_are_cleared_before_redesign_filtering() {
-        let mut filters = FilterSettings::default();
-        filters.search_mode = SearchMode::Cpu;
-        filters.catver_category = Some("Fighter".to_string());
-        filters.cpu_filter = "Z80".to_string();
-        filters.device_filter = "screen".to_string();
-        filters.sound_filter = "YM2151".to_string();
-        filters.show_favorites_only = true;
-        filters.status_filter = StatusFilter::NotWorkingOnly;
+        let mut filters = FilterSettings {
+            search_mode: SearchMode::Cpu,
+            catver_category: Some("Fighter".to_string()),
+            cpu_filter: "Z80".to_string(),
+            device_filter: "screen".to_string(),
+            sound_filter: "YM2151".to_string(),
+            show_favorites_only: true,
+            status_filter: StatusFilter::NotWorkingOnly,
+            ..FilterSettings::default()
+        };
         filters.status_filters.show_working = false;
         filters.other_filters.show_parents_only = true;
 

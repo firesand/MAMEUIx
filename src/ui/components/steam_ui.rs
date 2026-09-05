@@ -23,7 +23,7 @@ impl SteamUi {
     pub const SECTION_GAP: f32 = 18.0;
 
     pub fn apply(ctx: &egui::Context) {
-        let mut style = (*ctx.style()).clone();
+        let mut style = egui::Style::default();
 
         style.spacing.item_spacing = egui::vec2(10.0, 10.0);
         style.spacing.button_padding = egui::vec2(14.0, 8.0);
@@ -61,6 +61,8 @@ impl SteamUi {
         visuals.extreme_bg_color = egui::Color32::from_rgb(14, 20, 28);
         visuals.faint_bg_color = Self::PANEL;
         visuals.hyperlink_color = Self::ACCENT;
+        visuals.warn_fg_color = Self::WARNING;
+        visuals.error_fg_color = Self::DANGER;
         visuals.override_text_color = Some(Self::TEXT);
         visuals.selection.bg_fill = Self::ACCENT_DARK;
         visuals.selection.stroke = egui::Stroke::new(1.0_f32, Self::ACCENT);
@@ -107,6 +109,16 @@ impl SteamUi {
             .stroke(egui::Stroke::new(1.0_f32, Self::BORDER))
             .corner_radius(egui::CornerRadius::same(8))
             .inner_margin(egui::Margin::symmetric(18, 16))
+    }
+
+    /// A main-window card that follows the selected palette. Modern Spacious
+    /// uses the same panel, border and corner treatment as the settings dialogs.
+    pub fn content_frame(style: &egui::Style) -> egui::Frame {
+        egui::Frame::new()
+            .fill(style.visuals.faint_bg_color)
+            .stroke(style.visuals.widgets.noninteractive.bg_stroke)
+            .corner_radius(egui::CornerRadius::same(7))
+            .inner_margin(egui::Margin::same(12))
     }
 
     pub fn panel<R>(

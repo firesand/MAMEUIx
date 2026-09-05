@@ -74,35 +74,58 @@ sudo apt install -y \
 print_status "Installing MAME..."
 sudo apt install -y mame
 
-# Check if Rust is already installed
-if command -v rustc &> /dev/null; then
-    print_status "Rust is already installed. Updating..."
-    rustup update
+# Rust installation: preserve existing distro or rustup toolchains.
+if command -v rustc >/dev/null 2>&1 || command -v cargo >/dev/null 2>&1; then
+    print_status "Using the existing Rust toolchain."
+elif command -v rustup >/dev/null 2>&1; then
+    print_error "rustup is installed, but Rust/Cargo are unavailable. Configure your rustup toolchain and PATH, then retry."
+    exit 1
 else
-    print_status "Installing Rust..."
+    print_status "Installing Rust and Cargo..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     source ~/.cargo/env
 fi
 
 # Verify Rust installation
-print_status "Verifying Rust installation..."
-rustc --version
-cargo --version
+MIN_RUST_VERSION="1.88.0"
+for RUST_TOOL in rustc cargo; do
+    if ! command -v "$RUST_TOOL" >/dev/null 2>&1; then
+        print_error "$RUST_TOOL is missing. Install both Rust and Cargo using the same toolchain manager."
+        exit 1
+    fi
+    RUST_TOOL_OUTPUT=$("$RUST_TOOL" --version)
+    RUST_TOOL_VERSION=${RUST_TOOL_OUTPUT#* }
+    RUST_TOOL_VERSION=${RUST_TOOL_VERSION%% *}
+    RUST_TOOL_VERSION=${RUST_TOOL_VERSION%%-*}
+    if [[ ! "$RUST_TOOL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+        [[ "$(printf '%s\n%s\n' "$MIN_RUST_VERSION" "$RUST_TOOL_VERSION" | sort -V | head -n1)" != "$MIN_RUST_VERSION" ]]; then
+        print_error "$RUST_TOOL $MIN_RUST_VERSION or newer is required (found: $RUST_TOOL_OUTPUT). Update it with your existing toolchain manager."
+        exit 1
+    fi
+    print_status "$RUST_TOOL_OUTPUT"
+done
 
-# Clone the repository if not already present
-if [ ! -d "mameuix" ]; then
-    print_status "Cloning MAMEUIx repository..."
-    git clone https://github.com/firesand/MAMEUIx.git
-    cd mameuix
+# Select the source checkout without changing an existing checkout's Git state.
+is_mameuix_checkout() {
+    [[ -f "$1/Cargo.toml" ]] && grep -Eq '^name[[:space:]]*=[[:space:]]*"mameuix"[[:space:]]*$' "$1/Cargo.toml"
+}
+if is_mameuix_checkout .; then
+    print_status "Using the current MAMEUIx checkout."
+elif is_mameuix_checkout MAMEUIx; then
+    print_status "Using the existing MAMEUIx checkout."
+    cd MAMEUIx
+elif [[ -e MAMEUIx ]]; then
+    print_error "MAMEUIx already exists but is not a MAMEUIx source checkout. Choose another working directory."
+    exit 1
 else
-    print_status "Repository already exists. Updating..."
-    cd mameuix
-    git pull origin main
+    print_status "Cloning MAMEUIx repository..."
+    git clone https://github.com/firesand/MAMEUIx.git MAMEUIx
+    cd MAMEUIx
 fi
 
 # Build the project
 print_status "Building MAMEUIx (this may take several minutes)..."
-cargo build --release
+cargo build --release --locked
 
 # Install application icons
 print_status "Installing application icons..."

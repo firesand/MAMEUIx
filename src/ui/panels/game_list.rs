@@ -107,7 +107,7 @@ impl GameList {
     }
 
     /// Main show function - entry point untuk rendering
-    /// Returns (double_clicked, favorite_toggled_game, properties_requested)
+    /// Returns (play_game_index, favorite_toggled_game, properties_game_index)
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -129,7 +129,7 @@ impl GameList {
         has_catver: bool,
         pre_filtered_indices: Option<&[usize]>,
         theme_colors: Option<&crate::models::GameListColors>, // Add theme colors parameter
-    ) -> (bool, Option<String>, bool) {
+    ) -> (Option<usize>, Option<String>, Option<usize>) {
         // Remove aggressive frame skipping - it's causing glitches
         // Let egui handle frame pacing instead
 
@@ -209,7 +209,7 @@ impl GameList {
                 });
             });
 
-            return (false, None, false);
+            return (None, None, None);
         }
 
         // Show stats untuk large collections
@@ -224,39 +224,47 @@ impl GameList {
             egui::Sense::hover(),
         );
 
-        let (double_clicked, favorite_toggled, properties_requested) = ui
+        let (play_requested, favorite_toggled, properties_requested) = ui
             .scope_builder(
                 egui::UiBuilder::new()
                     .max_rect(rect)
                     .layout(egui::Layout::top_down(egui::Align::LEFT)),
                 |ui| {
-                    self.render_virtual_table(
-                        ui,
-                        games,
-                        selected,
-                        expanded_parents,
-                        favorites,
-                        icons,
-                        show_icons,
-                        icon_size,
-                        game_index,
-                        body_scroll_height,
-                        column_widths,
-                        visible_columns,
-                        default_icon,
-                        game_stats,
-                        has_catver,
-                        theme_colors,
-                    )
+                    ui.set_clip_rect(rect.intersect(ui.clip_rect()));
+                    egui::ScrollArea::horizontal()
+                        .id_salt("game_list_columns")
+                        .auto_shrink([false, false])
+                        .max_width(rect.width())
+                        .show(ui, |ui| {
+                            self.render_virtual_table(
+                                ui,
+                                games,
+                                selected,
+                                expanded_parents,
+                                favorites,
+                                icons,
+                                show_icons,
+                                icon_size,
+                                game_index,
+                                (body_scroll_height - 16.0).max(64.0),
+                                column_widths,
+                                visible_columns,
+                                default_icon,
+                                game_stats,
+                                has_catver,
+                                theme_colors,
+                            )
+                        })
+                        .inner
                 },
             )
             .inner;
 
-        (double_clicked, favorite_toggled, properties_requested)
+        (play_requested, favorite_toggled, properties_requested)
     }
 
     /// Render table dengan TRUE virtual scrolling.
-    /// Returns (double_clicked, favorite_toggled_game, properties_requested).
+    /// Returns (play_game_index, favorite_toggled_game, properties_game_index).
     fn render_virtual_table(
         &mut self,
         ui: &mut egui::Ui,
@@ -275,23 +283,26 @@ impl GameList {
         game_stats: &HashMap<String, GameStats>,
         has_catver: bool,
         theme_colors: Option<&crate::models::GameListColors>, // Add theme_colors parameter
-    ) -> (bool, Option<String>, bool) {
-        let mut double_clicked = false;
+    ) -> (Option<usize>, Option<String>, Option<usize>) {
+        let mut play_requested = None;
         let mut favorite_toggled: Option<String> = None;
-        let mut properties_requested = false;
+        let mut properties_requested = None;
 
         let total_rows = self.expanded_rows_cache.len();
 
-        // Enhanced color scheme
-        let header_bg_color = egui::Color32::from_rgb(42, 42, 48);
-        let header_text_color = egui::Color32::from_rgb(180, 180, 200);
-        let _row_separator_color = egui::Color32::from_rgba_premultiplied(255, 255, 255, 15);
+        let default_colors = crate::models::GameListColors::default();
+        let colors = theme_colors.unwrap_or(&default_colors);
+        let header_bg_color = colors.header_bg;
+        let header_text_color = colors.header_text;
 
         // Track hovered row for visual feedback
         let _hovered_row: Option<usize> = None;
 
-        let previous_scroll_style = ui.spacing().scroll;
+        let previous_spacing = ui.spacing().clone();
         ui.spacing_mut().scroll = table_scroll_style();
+        // Dense table cells use compact controls within the shared dialog theme.
+        ui.spacing_mut().button_padding = egui::vec2(4.0, 2.0);
+        ui.spacing_mut().item_spacing.x = 6.0;
 
         // Match List mode: reserve scrollbar width and keep the thumb visible/draggable.
         let mut table = egui_extras::TableBuilder::new(ui)
@@ -490,7 +501,7 @@ impl GameList {
                     if let Some(row_data) = self.expanded_rows_cache.get(row_idx).cloned()
                         && let Some(game) = games.get(row_data.game_idx)
                     {
-                        let (row_double_clicked, row_favorite_toggled, row_properties_requested) =
+                        let (row_play_requested, row_favorite_toggled, row_properties_requested) =
                             self.render_single_row(
                                 &mut row,
                                 game,
@@ -508,26 +519,26 @@ impl GameList {
                                 theme_colors, // Pass theme_colors
                             );
 
-                        if row_double_clicked {
-                            double_clicked = true;
+                        if row_play_requested.is_some() {
+                            play_requested = row_play_requested;
                         }
                         if let Some(game_name) = row_favorite_toggled {
                             favorite_toggled = Some(game_name);
                         }
-                        if row_properties_requested {
-                            properties_requested = true;
+                        if row_properties_requested.is_some() {
+                            properties_requested = row_properties_requested;
                         }
                     }
                 });
             });
 
-        ui.spacing_mut().scroll = previous_scroll_style;
+        *ui.spacing_mut() = previous_spacing;
 
-        (double_clicked, favorite_toggled, properties_requested)
+        (play_requested, favorite_toggled, properties_requested)
     }
 
     /// Render single row - dipanggil HANYA untuk visible rows
-    /// Returns (double_clicked, favorite_toggled_game, properties_requested)
+    /// Returns (play_game_index, favorite_toggled_game, properties_game_index)
     fn render_single_row(
         &mut self,
         row: &mut egui_extras::TableRow,
@@ -544,12 +555,12 @@ impl GameList {
         default_icon: Option<&egui::TextureHandle>,
         game_stats: &HashMap<String, GameStats>,
         theme_colors: Option<&crate::models::GameListColors>,
-    ) -> (bool, Option<String>, bool) {
+    ) -> (Option<usize>, Option<String>, Option<usize>) {
         let is_selected = selected.is_some_and(|s| s == row_data.game_idx);
         let is_favorite = favorites.contains(&game.name);
-        let mut double_clicked = false;
+        let mut play_requested = None;
         let mut favorite_toggled = None;
-        let mut properties_requested = false;
+        let mut properties_requested = None;
 
         // Get row index for alternating colors
         let row_idx = row.index();
@@ -558,7 +569,7 @@ impl GameList {
         let mut is_hovered = false;
 
         // Get theme colors or use defaults
-        let _colors = if let Some(theme_colors) = theme_colors {
+        let colors = if let Some(theme_colors) = theme_colors {
             theme_colors
         } else {
             &crate::models::GameListColors::default()
@@ -574,13 +585,13 @@ impl GameList {
 
             // Use consistent background colors for all columns
             let bg_color = if is_selected {
-                egui::Color32::from_rgb(45, 65, 95)
+                colors.row_bg_selected
             } else if is_hovered {
-                egui::Color32::from_rgb(40, 40, 48)
+                colors.row_bg_hover
             } else if row_idx.is_multiple_of(2) {
-                egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                colors.row_bg_even // Darker for even rows
             } else {
-                egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                colors.row_bg_odd // Lighter for odd rows - more contrast
             };
 
             // Draw background
@@ -591,11 +602,8 @@ impl GameList {
                 // Left edge highlight for selected row
                 let highlight_rect =
                     egui::Rect::from_min_size(cell_rect.min, egui::vec2(4.0, cell_rect.height()));
-                ui.painter().rect_filled(
-                    highlight_rect,
-                    0.0,
-                    egui::Color32::from_rgb(100, 150, 255),
-                );
+                ui.painter()
+                    .rect_filled(highlight_rect, 0.0, ui.visuals().selection.stroke.color);
             } else if is_hovered {
                 // Subtle left edge highlight for hover
                 let highlight_rect =
@@ -603,7 +611,7 @@ impl GameList {
                 ui.painter().rect_filled(
                     highlight_rect,
                     0.0,
-                    egui::Color32::from_rgba_premultiplied(100, 150, 255, 60),
+                    ui.visuals().selection.stroke.color.gamma_multiply(0.35),
                 );
             }
 
@@ -618,7 +626,7 @@ impl GameList {
                         let arrow_response = ui.add(
                             egui::Button::new(
                                 egui::RichText::new(arrow)
-                                    .color(egui::Color32::from_rgb(150, 150, 150))
+                                    .color(colors.status_unknown)
                                     .size(12.0),
                             )
                             .fill(egui::Color32::TRANSPARENT)
@@ -650,21 +658,21 @@ impl GameList {
             }
 
             let bg_color = if is_selected {
-                egui::Color32::from_rgb(45, 65, 95)
+                colors.row_bg_selected
             } else if is_hovered {
-                egui::Color32::from_rgb(40, 40, 48)
+                colors.row_bg_hover
             } else if row_idx.is_multiple_of(2) {
-                egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                colors.row_bg_even // Darker for even rows
             } else {
-                egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                colors.row_bg_odd // Lighter for odd rows - more contrast
             };
 
             ui.painter().rect_filled(cell_rect, 0.0, bg_color);
             let star = if is_favorite { "★" } else { "☆" };
             let star_color = if is_favorite {
-                egui::Color32::from_rgb(255, 200, 50)
+                colors.favorite_active
             } else {
-                egui::Color32::from_rgb(100, 100, 110)
+                colors.favorite_inactive
             };
 
             ui.add_space(4.0);
@@ -683,7 +691,7 @@ impl GameList {
                 ui.painter().circle(
                     star_response.rect.center(),
                     12.0,
-                    egui::Color32::from_rgba_premultiplied(255, 200, 50, 30),
+                    colors.favorite_active.gamma_multiply(0.12),
                     egui::Stroke::NONE,
                 );
             }
@@ -699,13 +707,13 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
@@ -732,7 +740,7 @@ impl GameList {
                             .allocate_space(egui::Vec2::splat((icon_size - 4) as f32))
                             .1;
                         ui.painter()
-                            .rect_filled(rect, 4.0, egui::Color32::from_rgb(40, 40, 45));
+                            .rect_filled(rect, 4.0, ui.visuals().extreme_bg_color);
                         ui.add_space(2.0); // Bottom padding
                     });
                 }
@@ -750,25 +758,32 @@ impl GameList {
             }
 
             let bg_color = if is_selected {
-                egui::Color32::from_rgb(45, 65, 95)
+                colors.row_bg_selected
             } else if is_hovered {
-                egui::Color32::from_rgb(40, 40, 48)
+                colors.row_bg_hover
             } else if row_idx.is_multiple_of(2) {
-                egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                colors.row_bg_even // Darker for even rows
             } else {
-                egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                colors.row_bg_odd // Lighter for odd rows - more contrast
             };
 
             ui.painter().rect_filled(cell_rect, 0.0, bg_color);
-            let (icon, color) = if let Some(_verification_status) = &game.verification_status {
-                game.get_verification_display()
+            let (icon, color) = if let Some(status) = game.verification_status {
+                let color = match status {
+                    crate::models::VerificationStatus::Verified => colors.status_available,
+                    crate::models::VerificationStatus::Failed => colors.status_missing,
+                    crate::models::VerificationStatus::Warning => ui.visuals().warn_fg_color,
+                    crate::models::VerificationStatus::NotFound
+                    | crate::models::VerificationStatus::NotVerified => colors.status_unknown,
+                };
+                (status.to_icon(), color)
             } else {
                 (
                     game.status.to_icon(),
                     match game.status {
-                        RomStatus::Available => egui::Color32::from_rgb(50, 200, 100),
-                        RomStatus::Missing => egui::Color32::from_rgb(200, 50, 50),
-                        _ => egui::Color32::from_rgb(150, 150, 150),
+                        RomStatus::Available => colors.status_available,
+                        RomStatus::Missing => colors.status_missing,
+                        _ => colors.status_unknown,
                     },
                 )
             };
@@ -781,7 +796,7 @@ impl GameList {
                 ui.painter().circle(
                     status_label.rect.center(),
                     8.0,
-                    egui::Color32::from_rgba_premultiplied(50, 200, 100, 20),
+                    colors.status_available.gamma_multiply(0.08),
                     egui::Stroke::NONE,
                 );
             }
@@ -796,13 +811,13 @@ impl GameList {
             }
 
             let bg_color = if is_selected {
-                egui::Color32::from_rgb(45, 65, 95)
+                colors.row_bg_selected
             } else if is_hovered {
-                egui::Color32::from_rgb(40, 40, 48)
+                colors.row_bg_hover
             } else if row_idx.is_multiple_of(2) {
-                egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                colors.row_bg_even // Darker for even rows
             } else {
-                egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                colors.row_bg_odd // Lighter for odd rows - more contrast
             };
 
             ui.painter().rect_filled(cell_rect, 0.0, bg_color);
@@ -810,14 +825,14 @@ impl GameList {
             ui.add_space(8.0);
 
             let text_color = if is_selected {
-                egui::Color32::from_rgb(255, 255, 255)
+                ui.visuals().strong_text_color()
             } else if is_hovered {
                 // Brighter text on hover for better readability
-                egui::Color32::from_rgb(240, 240, 255)
+                ui.visuals().strong_text_color()
             } else if row_data.is_clone {
-                egui::Color32::from_rgb(180, 180, 200)
+                colors.clone_text
             } else {
-                egui::Color32::from_rgb(220, 220, 240)
+                ui.visuals().text_color()
             };
 
             let game_text = if row_data.is_clone {
@@ -836,7 +851,7 @@ impl GameList {
             }
 
             if response.double_clicked() {
-                double_clicked = true;
+                play_requested = Some(row_data.game_idx);
             }
 
             // Context menu
@@ -844,14 +859,14 @@ impl GameList {
                 ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 4.0);
 
                 if ui.button("🎮 Play Game").clicked() {
-                    double_clicked = true;
+                    play_requested = Some(row_data.game_idx);
                     ui.close();
                 }
 
                 ui.separator();
 
                 if ui.button("⚙️ Properties...").clicked() {
-                    properties_requested = true;
+                    properties_requested = Some(row_data.game_idx);
                     ui.close();
                 }
 
@@ -878,13 +893,13 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
@@ -899,7 +914,7 @@ impl GameList {
                     let galley = ui.painter().layout_no_wrap(
                         text.clone(),
                         egui::FontId::new(12.0, egui::FontFamily::Proportional),
-                        egui::Color32::from_rgb(140, 180, 255),
+                        ui.visuals().strong_text_color(),
                     );
 
                     let rect = egui::Rect::from_min_size(
@@ -907,16 +922,12 @@ impl GameList {
                         galley.size() + egui::vec2(16.0, 4.0),
                     );
 
-                    ui.painter().rect_filled(
-                        rect,
-                        12.0,
-                        egui::Color32::from_rgba_premultiplied(100, 149, 255, 30),
-                    );
+                    ui.painter().rect_filled(rect, 12.0, colors.row_bg_selected);
 
                     ui.painter().galley(
                         rect.center() - galley.size() / 2.0,
                         galley,
-                        egui::Color32::WHITE,
+                        ui.visuals().strong_text_color(),
                     );
                     ui.allocate_rect(rect, egui::Sense::hover());
                 } else {
@@ -935,20 +946,20 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
                 let text_color = if is_hovered || is_selected {
-                    egui::Color32::from_rgb(220, 220, 240)
+                    ui.visuals().text_color()
                 } else {
-                    egui::Color32::from_rgb(200, 200, 220)
+                    ui.visuals().weak_text_color()
                 };
                 ui.label(
                     egui::RichText::new(&game.manufacturer)
@@ -968,20 +979,20 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
                 let text_color = if is_hovered || is_selected {
-                    egui::Color32::from_rgb(220, 220, 240)
+                    ui.visuals().text_color()
                 } else {
-                    egui::Color32::from_rgb(200, 200, 220)
+                    ui.visuals().weak_text_color()
                 };
                 ui.label(egui::RichText::new(&game.year).color(text_color).size(13.0));
             });
@@ -997,20 +1008,20 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
                 let text_color = if is_hovered || is_selected {
-                    egui::Color32::from_rgb(220, 220, 240)
+                    ui.visuals().text_color()
                 } else {
-                    egui::Color32::from_rgb(200, 200, 220)
+                    ui.visuals().weak_text_color()
                 };
                 ui.label(
                     egui::RichText::new(&game.driver)
@@ -1030,18 +1041,22 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
                 let (icon, text) = game.get_driver_status_display();
-                let color = game.get_driver_status_color();
+                let color = match game.driver_status.as_str() {
+                    "good" => colors.status_available,
+                    "imperfect" => ui.visuals().warn_fg_color,
+                    _ => colors.status_missing,
+                };
                 let display = format!("{} {}", icon, text);
                 ui.colored_label(color, display);
             });
@@ -1057,20 +1072,20 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
                 let text_color = if is_hovered || is_selected {
-                    egui::Color32::from_rgb(220, 220, 240)
+                    ui.visuals().text_color()
                 } else {
-                    egui::Color32::from_rgb(200, 200, 220)
+                    ui.visuals().weak_text_color()
                 };
                 ui.label(
                     egui::RichText::new(&game.category)
@@ -1090,20 +1105,20 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
                 let text_color = if is_hovered || is_selected {
-                    egui::Color32::from_rgb(220, 220, 240)
+                    ui.visuals().text_color()
                 } else {
-                    egui::Color32::from_rgb(200, 200, 220)
+                    ui.visuals().weak_text_color()
                 };
                 ui.label(egui::RichText::new(&game.name).color(text_color).size(13.0));
             });
@@ -1119,13 +1134,13 @@ impl GameList {
                 }
 
                 let bg_color = if is_selected {
-                    egui::Color32::from_rgb(45, 65, 95)
+                    colors.row_bg_selected
                 } else if is_hovered {
-                    egui::Color32::from_rgb(40, 40, 48)
+                    colors.row_bg_hover
                 } else if row_idx.is_multiple_of(2) {
-                    egui::Color32::from_rgb(26, 26, 30) // Darker for even rows
+                    colors.row_bg_even // Darker for even rows
                 } else {
-                    egui::Color32::from_rgb(32, 32, 38) // Lighter for odd rows - more contrast
+                    colors.row_bg_odd // Lighter for odd rows - more contrast
                 };
 
                 ui.painter().rect_filled(cell_rect, 0.0, bg_color);
@@ -1140,16 +1155,16 @@ impl GameList {
                 };
 
                 let text_color = if is_hovered || is_selected {
-                    egui::Color32::from_rgb(220, 220, 240)
+                    ui.visuals().text_color()
                 } else {
-                    egui::Color32::from_rgb(200, 200, 220)
+                    ui.visuals().weak_text_color()
                 };
 
                 ui.label(egui::RichText::new(chd_text).color(text_color).size(13.0));
             });
         }
 
-        (double_clicked, favorite_toggled, properties_requested)
+        (play_requested, favorite_toggled, properties_requested)
     }
 
     /// Update cache dengan filtered dan expanded games
@@ -1182,6 +1197,13 @@ impl GameList {
                     .is_some_and(|game| filters.manufacturer_matches(&game.manufacturer))
             });
         }
+
+        // The manager/pre-filtered candidates may lag a toggle by one frame.
+        filtered_indices.retain(|&idx| {
+            games
+                .get(idx)
+                .is_some_and(|game| filters.rom_requirement_matches(game.requires_roms))
+        });
 
         // Step 1.5: Apply ROM set type specific filtering to prevent duplicates
         filtered_indices =
@@ -1216,6 +1238,11 @@ impl GameList {
                 {
                     // O(1) clone lookup thanks to GameIndex!
                     for clone_idx in index.get_clones(&game.name) {
+                        if !games.get(clone_idx).is_some_and(|clone| {
+                            filters.rom_requirement_matches(clone.requires_roms)
+                        }) {
+                            continue;
+                        }
                         self.expanded_rows_cache.push(RowData {
                             game_idx: clone_idx,
                             is_clone: true,
@@ -1278,7 +1305,8 @@ impl GameList {
         if !filters.search_text.is_empty()
             && let Some(cached) = index.get_cached_search(&filters.search_text)
         {
-            return cached.to_vec();
+            // Cached text matches are candidates; exclusions still apply.
+            return self.apply_categorized_filters(games, filters, favorites, cached.to_vec());
         }
 
         // Start with all games
@@ -1479,7 +1507,8 @@ impl GameList {
                     };
 
                     // AND logic between categories
-                    availability_match
+                    filters.rom_requirement_matches(game.requires_roms)
+                        && availability_match
                         && status_match
                         && others_match
                         && filters.manufacturer_matches(&game.manufacturer)
@@ -1498,6 +1527,27 @@ impl GameList {
         filters: &FilterSettings,
         game_index: Option<&GameIndex>,
     ) -> Vec<usize> {
+        // A ROM-bearing child must remain reachable when this exclusion hides
+        // its ROM-less parent. Only promote children already in the filtered
+        // candidates, so search/manufacturer/other filters retain their meaning.
+        let hidden_romless_parents: HashSet<&str> = if filters.hide_romless_systems {
+            games
+                .iter()
+                .filter(|game| !game.requires_roms)
+                .map(|game| game.name.as_str())
+                .collect()
+        } else {
+            HashSet::new()
+        };
+        let standalone_child = |game: &Game| {
+            game.is_clone
+                && game.requires_roms
+                && game
+                    .parent
+                    .as_deref()
+                    .is_some_and(|parent| hidden_romless_parents.contains(parent))
+        };
+
         // Special handling for "All Games" filter with auto expand clones
         // When auto expand is enabled, we want to show parent games and their clones
         // but avoid showing standalone clones (clones without parents in the list)
@@ -1526,8 +1576,8 @@ impl GameList {
             // Keep parent games and clones that have their parent in the list
             filtered_indices.retain(|&idx| {
                 if let Some(game) = games.get(idx) {
-                    if !game.is_clone {
-                        // Always keep parent games
+                    if !game.is_clone || standalone_child(game) {
+                        // Keep normal parents and children whose parent is hidden above.
                         true
                     } else {
                         // For clones, check if their parent is in the list
@@ -1555,7 +1605,7 @@ impl GameList {
                     if !filters.show_clones_in_split {
                         filtered_indices.retain(|&idx| {
                             if let Some(game) = games.get(idx) {
-                                !game.is_clone
+                                !game.is_clone || standalone_child(game)
                             } else {
                                 false
                             }
@@ -1567,7 +1617,7 @@ impl GameList {
                     if !filters.show_clones_in_split {
                         filtered_indices.retain(|&idx| {
                             if let Some(game) = games.get(idx) {
-                                !game.is_clone
+                                !game.is_clone || standalone_child(game)
                             } else {
                                 false
                             }
@@ -1578,7 +1628,7 @@ impl GameList {
                     // For merged sets, show only parent games (clones are merged into parent)
                     filtered_indices.retain(|&idx| {
                         if let Some(game) = games.get(idx) {
-                            !game.is_clone
+                            !game.is_clone || standalone_child(game)
                         } else {
                             false
                         }
@@ -1608,7 +1658,7 @@ impl GameList {
                     if clone_ratio > 0.3 && !filters.show_clones_in_split {
                         filtered_indices.retain(|&idx| {
                             if let Some(game) = games.get(idx) {
-                                !game.is_clone
+                                !game.is_clone || standalone_child(game)
                             } else {
                                 false
                             }
@@ -1747,15 +1797,6 @@ impl GameList {
                     self.expanded_rows_cache.len()
                 ));
             }
-
-            // Performance indicator
-            if total_games > 10000 {
-                ui.separator();
-                ui.colored_label(
-                    egui::Color32::from_rgb(100, 150, 255),
-                    "⚡ Virtual scrolling active",
-                );
-            }
         });
         ui.separator();
     }
@@ -1776,6 +1817,7 @@ impl GameList {
         // Hash semua filter state
         category.hash(&mut hasher);
         filters.show_favorites_only.hash(&mut hasher);
+        filters.hide_romless_systems.hash(&mut hasher);
         // Clone filtering removed from hash
 
         // Hash catver category filter - CRITICAL for cache invalidation
@@ -1845,6 +1887,437 @@ impl GameList {
         ui.separator();
         if ui.button("Reset All to Default").clicked() {
             column_widths.reset_to_defaults();
+        }
+    }
+}
+
+#[cfg(test)]
+mod interaction_tests {
+    use super::*;
+    use crate::models::AppConfig;
+    use crate::ui::panels::GameListView;
+
+    fn game(name: &str, title: &str) -> Game {
+        Game {
+            name: name.into(),
+            description: title.into(),
+            manufacturer: "Audit".into(),
+            year: "1990".into(),
+            driver: "fixture.cpp".into(),
+            driver_status: "good".into(),
+            status: RomStatus::Available,
+            parent: None,
+            category: String::new(),
+            play_count: 0,
+            is_clone: false,
+            is_device: false,
+            is_bios: false,
+            controls: String::new(),
+            requires_roms: true,
+            requires_chd: false,
+            chd_name: None,
+            verification_status: None,
+        }
+    }
+
+    fn text_position(shapes: &[egui::epaint::ClippedShape], label: &str) -> egui::Pos2 {
+        fn find(shape: &egui::Shape, label: &str) -> Option<egui::Pos2> {
+            match shape {
+                egui::Shape::Text(text) if text.galley.job.text.contains(label) => {
+                    Some(text.pos + text.galley.size() / 2.0)
+                }
+                egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, label)),
+                _ => None,
+            }
+        }
+        shapes
+            .iter()
+            .find_map(|shape| find(&shape.shape, label))
+            .unwrap_or_else(|| panic!("Missing rendered label {label:?}"))
+    }
+
+    fn pointer_event(
+        pos: egui::Pos2,
+        button: egui::PointerButton,
+        pressed: bool,
+    ) -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::PointerButton {
+                pos,
+                button,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ]
+    }
+
+    fn context_action_targets_clicked_row(use_list: bool, properties: bool, clone: bool) {
+        let context = egui::Context::default();
+        let mut games = vec![game("alpha", "Audit Alpha"), game("bravo", "Audit Bravo")];
+        if clone {
+            games[1].is_clone = true;
+            games[1].parent = Some("alpha".into());
+        }
+        let index = GameIndex::build(games.clone(), HashSet::new());
+        let mut config = AppConfig::default();
+        config.filter_settings.rom_set_type = RomSetType::Merged;
+        let mut table = GameList::new();
+        let mut list = GameListView::new();
+        // The menu target is Bravo, while Alpha remains selected throughout.
+        let mut selected = Some(0);
+        let mut expanded = HashMap::new();
+        if clone {
+            expanded.insert("alpha".into(), true);
+        }
+        let mut icons = HashMap::new();
+        let mut time = 0.0;
+        let mut frame = |events| {
+            time += 0.05;
+            let mut actions = (None, None, None);
+            let output = context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1200.0, 800.0),
+                    )),
+                    time: Some(time),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        actions = if use_list {
+                            list.show(
+                                ui,
+                                &games,
+                                &config.filter_settings,
+                                &mut selected,
+                                &mut expanded,
+                                &config.favorite_games,
+                                &mut icons,
+                                false,
+                                32,
+                                Some(&index),
+                                FilterCategory::All,
+                                &mut config.column_widths,
+                                &config.preferences.visible_columns,
+                                None,
+                                &config.game_stats,
+                                None,
+                                false,
+                                Some(&[0, 1]),
+                                None,
+                            )
+                        } else {
+                            table.show(
+                                ui,
+                                &games,
+                                &config.filter_settings,
+                                &mut selected,
+                                &mut expanded,
+                                &config.favorite_games,
+                                &mut icons,
+                                false,
+                                32,
+                                Some(&index),
+                                FilterCategory::All,
+                                &mut config.column_widths,
+                                &config.preferences.visible_columns,
+                                None,
+                                &config.game_stats,
+                                None,
+                                false,
+                                Some(&[0, 1]),
+                                None,
+                            )
+                        };
+                    });
+                },
+            );
+            (actions, output)
+        };
+
+        frame(Vec::new());
+        let (_, output) = frame(Vec::new());
+        let bravo = text_position(&output.shapes, "Audit Bravo");
+        frame(pointer_event(bravo, egui::PointerButton::Secondary, true));
+        frame(pointer_event(bravo, egui::PointerButton::Secondary, false));
+        let (_, output) = frame(Vec::new());
+        let command = if properties {
+            "Properties..."
+        } else if use_list && clone {
+            "Play Clone"
+        } else {
+            "Play Game"
+        };
+        let menu_item = text_position(&output.shapes, command);
+        frame(pointer_event(menu_item, egui::PointerButton::Primary, true));
+        let (actions, _) = frame(pointer_event(
+            menu_item,
+            egui::PointerButton::Primary,
+            false,
+        ));
+        assert_eq!(
+            selected,
+            Some(0),
+            "right-click must not depend on changing selection"
+        );
+        if properties {
+            assert_eq!(actions.2, Some(1));
+            assert_eq!(actions.0, None);
+        } else {
+            assert_eq!(actions.0, Some(1));
+            assert_eq!(actions.2, None);
+        }
+    }
+
+    fn rendered_game_titles(shapes: &[egui::epaint::ClippedShape]) -> HashSet<String> {
+        fn collect(shape: &egui::Shape, titles: &mut HashSet<String>) {
+            match shape {
+                egui::Shape::Text(text) => {
+                    titles.insert(text.galley.job.text.clone());
+                }
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        collect(shape, titles);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut titles = HashSet::new();
+        for shape in shapes {
+            collect(&shape.shape, &mut titles);
+        }
+        titles
+    }
+
+    fn romless_rows_stay_hidden_after_cache_and_clone_expansion(use_list: bool, source: &str) {
+        let context = egui::Context::default();
+        let mut games = vec![
+            game("parent", "Audit ROM Parent"),
+            game("romless", "Audit ROM-less System"),
+            game("emptyclone", "Audit ROM-less Clone"),
+            game("romclone", "Audit ROM Clone"),
+            game("emptyparent", "Audit ROM-less Parent"),
+            game("requiredchild", "Audit ROM Child of Empty Parent"),
+        ];
+        games[1].requires_roms = false;
+        games[2].requires_roms = false;
+        for game in &mut games[2..4] {
+            game.is_clone = true;
+            game.parent = Some("parent".into());
+        }
+        games[4].requires_roms = false;
+        games[5].is_clone = true;
+        games[5].parent = Some("emptyparent".into());
+        let mut index = GameIndex::build(games.clone(), HashSet::new());
+        // A legacy text cache may contain every matching row, including hidden systems.
+        index.cache_search("Audit".into(), vec![0, 1, 2, 3, 4, 5]);
+        let mut config = AppConfig::default();
+        config.filter_settings.search_text = "Audit".into();
+        config.filter_settings.rom_set_type = if source == "manual" {
+            RomSetType::NonMerged
+        } else {
+            RomSetType::Merged
+        };
+        config.filter_settings.show_clones_in_split = true;
+        let mut table = GameList::new();
+        let mut list = GameListView::new();
+        let mut selected = None;
+        let mut expanded = HashMap::from([("parent".into(), true)]);
+        let mut icons = HashMap::new();
+        let mut time = 0.0;
+        for hide in [true, false, true, false] {
+            config.filter_settings.hide_romless_systems = hide;
+            // Render twice for font/layout settling, keeping both widget and query caches.
+            for frame in 0..2 {
+                time += 0.1;
+                let output = context.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1400.0, 1000.0),
+                        )),
+                        time: Some(time),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let game_index = (source != "manual").then_some(&index);
+                            let prefiltered =
+                                (source == "prefiltered").then_some(&[0, 1, 2, 3, 4, 5][..]);
+                            if use_list {
+                                list.show(
+                                    ui,
+                                    &games,
+                                    &config.filter_settings,
+                                    &mut selected,
+                                    &mut expanded,
+                                    &config.favorite_games,
+                                    &mut icons,
+                                    false,
+                                    32,
+                                    game_index,
+                                    FilterCategory::All,
+                                    &mut config.column_widths,
+                                    &config.preferences.visible_columns,
+                                    None,
+                                    &config.game_stats,
+                                    None,
+                                    false,
+                                    prefiltered,
+                                    None,
+                                );
+                            } else {
+                                table.show(
+                                    ui,
+                                    &games,
+                                    &config.filter_settings,
+                                    &mut selected,
+                                    &mut expanded,
+                                    &config.favorite_games,
+                                    &mut icons,
+                                    false,
+                                    32,
+                                    game_index,
+                                    FilterCategory::All,
+                                    &mut config.column_widths,
+                                    &config.preferences.visible_columns,
+                                    None,
+                                    &config.game_stats,
+                                    None,
+                                    false,
+                                    prefiltered,
+                                    None,
+                                );
+                            }
+                        });
+                    },
+                );
+                if frame == 0 {
+                    continue;
+                }
+                let titles = rendered_game_titles(&output.shapes);
+                // Table clone labels include a tree prefix; inspect the title within it.
+                let rendered = |title: &str| titles.iter().any(|text| text.contains(title));
+                assert!(rendered("Audit ROM Parent"), "{source} list={use_list}");
+                assert!(rendered("Audit ROM Clone"), "{source} list={use_list}");
+                assert_eq!(
+                    rendered("Audit ROM-less System"),
+                    !hide,
+                    "{source} list={use_list}"
+                );
+                assert_eq!(
+                    rendered("Audit ROM-less Clone"),
+                    !hide,
+                    "{source} list={use_list}"
+                );
+                assert_eq!(
+                    rendered("Audit ROM-less Parent"),
+                    !hide,
+                    "{source} list={use_list}"
+                );
+                let child_visible = hide || source == "manual";
+                assert_eq!(
+                    rendered("Audit ROM Child of Empty Parent"),
+                    child_visible,
+                    "{source} list={use_list}"
+                );
+                // A visible child has its own selectable/actionable row index.
+                let child_row = if use_list {
+                    list.row_for_game_idx(5)
+                } else {
+                    table.row_for_game_idx(5)
+                };
+                assert_eq!(
+                    child_row.is_some(),
+                    child_visible,
+                    "{source} list={use_list}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn required_child_of_romless_parent_keeps_its_own_filter_contract() {
+        let mut games = vec![
+            game("emptyparent", "Empty Parent"),
+            game("child", "Required Child"),
+        ];
+        games[0].requires_roms = false;
+        games[0].manufacturer = "Parent Maker".into();
+        games[1].manufacturer = "Child Maker".into();
+        games[1].is_clone = true;
+        games[1].parent = Some("emptyparent".into());
+        let index = GameIndex::build(games.clone(), HashSet::new());
+        let table = GameList::new();
+        let mut filters = FilterSettings {
+            rom_set_type: RomSetType::Merged,
+            ..FilterSettings::default()
+        };
+        for auto_expand in [false, true] {
+            filters.auto_expand_clones = auto_expand;
+            filters.search_text = "Child".into();
+            filters.selected_manufacturers = HashSet::from(["Child Maker".into()]);
+            let candidates =
+                table.filter_manual(&games, &filters, &HashSet::new(), FilterCategory::All, None);
+            assert_eq!(
+                table.apply_rom_set_filtering(&games, candidates, &filters, Some(&index)),
+                vec![1]
+            );
+
+            filters.selected_manufacturers = HashSet::from(["Parent Maker".into()]);
+            let candidates =
+                table.filter_manual(&games, &filters, &HashSet::new(), FilterCategory::All, None);
+            assert!(
+                table
+                    .apply_rom_set_filtering(&games, candidates, &filters, Some(&index))
+                    .is_empty()
+            );
+
+            filters.selected_manufacturers.clear();
+            filters.search_text = "Parent".into();
+            let candidates =
+                table.filter_manual(&games, &filters, &HashSet::new(), FilterCategory::All, None);
+            assert!(
+                table
+                    .apply_rom_set_filtering(&games, candidates, &filters, Some(&index))
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn romless_exclusion_survives_legacy_cache_and_clone_expansion_in_both_widgets() {
+        for use_list in [false, true] {
+            for source in ["cached", "prefiltered", "manual"] {
+                romless_rows_stay_hidden_after_cache_and_clone_expansion(use_list, source);
+            }
+        }
+    }
+
+    #[test]
+    fn table_context_menu_targets_the_right_clicked_game() {
+        for properties in [false, true] {
+            context_action_targets_clicked_row(false, properties, false);
+        }
+    }
+
+    #[test]
+    fn list_context_menu_targets_the_right_clicked_game() {
+        for properties in [false, true] {
+            context_action_targets_clicked_row(true, properties, false);
+        }
+    }
+
+    #[test]
+    fn expanded_clone_context_menus_target_the_clone_in_both_views() {
+        for use_list in [false, true] {
+            for properties in [false, true] {
+                context_action_targets_clicked_row(use_list, properties, true);
+            }
         }
     }
 }

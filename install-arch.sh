@@ -37,9 +37,22 @@ fi
 
 print_status "Starting MAMEUIx installation for Arch Linux..."
 
-# Update package list
-print_status "Updating package list..."
-sudo pacman -Sy
+# Arch prerequisite: use a fully upgraded system and its existing package database.
+print_warning "Before installing, update your Arch system with: sudo pacman -Syu"
+print_status "Using the existing package database; no system upgrade is performed here."
+if PENDING_UPGRADES=$(pacman -Qu); then
+    if [[ -n "$PENDING_UPGRADES" ]]; then
+        print_error "Pending system upgrades detected. Run sudo pacman -Syu, then retry."
+        exit 1
+    fi
+else
+    PACMAN_STATUS=$?
+    # pacman returns 1 when the query has no matching packages.
+    if [[ $PACMAN_STATUS -ne 1 ]]; then
+        print_error "Could not check pending system upgrades."
+        exit "$PACMAN_STATUS"
+    fi
+fi
 
 # Install system dependencies
 print_status "Installing system dependencies..."
@@ -61,12 +74,14 @@ sudo pacman -S --needed --noconfirm \
     cmake \
     git
 
-# Rust installation
-if command -v rustc &> /dev/null; then
-    echo "[INFO] Rust is already installed. Skipping update."
-    # rustup update  # Skipped for system Rust
+# Rust installation: preserve existing distro or rustup toolchains.
+if command -v rustc >/dev/null 2>&1 || command -v cargo >/dev/null 2>&1; then
+    print_status "Using the existing Rust toolchain."
+elif command -v rustup >/dev/null 2>&1; then
+    print_error "rustup is installed, but Rust/Cargo are unavailable. Configure your rustup toolchain and PATH, then retry."
+    exit 1
 else
-    echo "[INFO] Installing Rust..."
+    print_status "Installing Rust and Cargo from the Arch repositories..."
     sudo pacman -S --needed --noconfirm rust
 fi
 
@@ -85,24 +100,45 @@ else
 fi
 
 # Verify Rust installation
-print_status "Verifying Rust installation..."
-rustc --version
-cargo --version
+MIN_RUST_VERSION="1.88.0"
+for RUST_TOOL in rustc cargo; do
+    if ! command -v "$RUST_TOOL" >/dev/null 2>&1; then
+        print_error "$RUST_TOOL is missing. Install both Rust and Cargo using the same toolchain manager."
+        exit 1
+    fi
+    RUST_TOOL_OUTPUT=$("$RUST_TOOL" --version)
+    RUST_TOOL_VERSION=${RUST_TOOL_OUTPUT#* }
+    RUST_TOOL_VERSION=${RUST_TOOL_VERSION%% *}
+    RUST_TOOL_VERSION=${RUST_TOOL_VERSION%%-*}
+    if [[ ! "$RUST_TOOL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+        [[ "$(printf '%s\n%s\n' "$MIN_RUST_VERSION" "$RUST_TOOL_VERSION" | sort -V | head -n1)" != "$MIN_RUST_VERSION" ]]; then
+        print_error "$RUST_TOOL $MIN_RUST_VERSION or newer is required (found: $RUST_TOOL_OUTPUT). Update it with your existing toolchain manager."
+        exit 1
+    fi
+    print_status "$RUST_TOOL_OUTPUT"
+done
 
-# Clone the repository if not already present
-if [ ! -d "MAMEUIx" ]; then
-    print_status "Cloning MAMEUIx repository..."
-    git clone https://github.com/firesand/MAMEUIx.git
+# Select the source checkout without changing an existing checkout's Git state.
+is_mameuix_checkout() {
+    [[ -f "$1/Cargo.toml" ]] && grep -Eq '^name[[:space:]]*=[[:space:]]*"mameuix"[[:space:]]*$' "$1/Cargo.toml"
+}
+if is_mameuix_checkout .; then
+    print_status "Using the current MAMEUIx checkout."
+elif is_mameuix_checkout MAMEUIx; then
+    print_status "Using the existing MAMEUIx checkout."
     cd MAMEUIx
+elif [[ -e MAMEUIx ]]; then
+    print_error "MAMEUIx already exists but is not a MAMEUIx source checkout. Choose another working directory."
+    exit 1
 else
-    print_status "Repository already exists. Updating..."
+    print_status "Cloning MAMEUIx repository..."
+    git clone https://github.com/firesand/MAMEUIx.git MAMEUIx
     cd MAMEUIx
-    git pull origin main
 fi
 
 # Build the project
 print_status "Building MAMEUIx (this may take several minutes)..."
-cargo build --release
+cargo build --release --locked
 
 # Install application icons
 print_status "Installing application icons..."

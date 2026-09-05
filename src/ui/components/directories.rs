@@ -43,6 +43,8 @@ impl DirectoryUpdates {
 pub struct DirectoriesDialog {
     original: Option<AppConfig>,
     draft: Option<AppConfig>,
+    // Each draft row retains its original index even when its path is edited.
+    executable_origins: Vec<Option<usize>>,
     dirty: bool,
 }
 
@@ -61,12 +63,14 @@ impl DirectoriesDialog {
     pub fn reset(&mut self) {
         self.original = None;
         self.draft = None;
+        self.executable_origins.clear();
         self.dirty = false;
     }
 
     fn begin_session(&mut self, config: &AppConfig) {
         self.original = Some(config.clone());
         self.draft = Some(config.clone());
+        self.executable_origins = (0..config.mame_executables.len()).map(Some).collect();
         self.dirty = false;
     }
 
@@ -127,7 +131,29 @@ impl DirectoriesDialog {
 
     /// Commit only settings owned by this dialog so unrelated configuration
     /// changes made while it is open cannot be overwritten by an old snapshot.
-    fn commit_draft(config: &mut AppConfig, draft: AppConfig) {
+    fn commit_draft(
+        config: &mut AppConfig,
+        draft: AppConfig,
+        executable_origins: &[Option<usize>],
+    ) {
+        if !Self::executable_paths_equal(&config.mame_executables, &draft.mame_executables) {
+            let remap = |old_index| {
+                executable_origins
+                    .iter()
+                    .position(|origin| *origin == Some(old_index))
+            };
+            // Keep the active executable by identity. If it was removed, use
+            // the first remaining entry (or the empty-list sentinel zero).
+            config.selected_mame_index = remap(config.selected_mame_index).unwrap_or(0);
+            config.game_preferred_mame.retain(|_, index| {
+                if let Some(new_index) = remap(*index) {
+                    *index = new_index;
+                    true
+                } else {
+                    false
+                }
+            });
+        }
         config.mame_executables = draft.mame_executables;
         config.rom_paths = draft.rom_paths;
         config.software_rom_paths = draft.software_rom_paths;
@@ -210,6 +236,7 @@ impl DirectoriesDialog {
         let mut directory_updates = DirectoryUpdates::default();
         let original = self.original.as_ref().expect("session was initialized");
         let draft = self.draft.as_mut().expect("session was initialized");
+        let executable_origins = &mut self.executable_origins;
 
         // Take snapshot of last_directories for read operations
         let last_directories_snapshot = draft.last_directories.clone();
@@ -278,6 +305,7 @@ impl DirectoriesDialog {
                                                 if Self::executable_list(
                                                     ui,
                                                     &mut draft.mame_executables,
+                                                    executable_origins,
                                                     "mame_exe",
                                                 ) {
                                                     edited_this_frame = true;
@@ -720,7 +748,7 @@ impl DirectoriesDialog {
                 let had_changes = self.dirty;
                 let draft = self.draft.take().expect("session was initialized");
                 if had_changes {
-                    Self::commit_draft(config, draft);
+                    Self::commit_draft(config, draft, &self.executable_origins);
                 }
                 self.original = None;
                 self.dirty = false;
@@ -743,6 +771,7 @@ impl DirectoriesDialog {
     fn executable_list(
         ui: &mut egui::Ui,
         executables: &mut Vec<MameExecutable>,
+        executable_origins: &mut Vec<Option<usize>>,
         _id: &str,
     ) -> bool {
         let mut modified = false;
@@ -878,6 +907,7 @@ impl DirectoriesDialog {
 
                 if let Some(idx) = to_remove {
                     executables.remove(idx);
+                    executable_origins.remove(idx);
                 }
 
                 ui.add_space(30.0);
@@ -885,6 +915,7 @@ impl DirectoriesDialog {
 
         // Add button
         if ui.button("➕ Add MAME Executable").clicked() {
+            executable_origins.push(None);
             executables.push(MameExecutable {
                 name: "New MAME".to_string(),
                 path: String::new(),
@@ -1309,7 +1340,7 @@ mod tests {
 
         let mut live = original;
         live.selected_mame_index = 7;
-        DirectoriesDialog::commit_draft(&mut live, draft);
+        DirectoriesDialog::commit_draft(&mut live, draft, &[]);
 
         assert_eq!(live.rom_paths, vec![PathBuf::from("/games/roms")]);
         assert_eq!(
@@ -1317,6 +1348,69 @@ mod tests {
             Some(&PathBuf::from("/games"))
         );
         assert_eq!(live.selected_mame_index, 7);
+    }
+
+    #[test]
+    fn removing_an_earlier_executable_preserves_active_and_preferred_identity() {
+        let mut live = AppConfig {
+            mame_executables: vec![executable("/a"), executable("/b"), executable("/c")],
+            selected_mame_index: 1,
+            ..AppConfig::default()
+        };
+        live.game_preferred_mame.insert("game_b".into(), 1);
+        live.game_preferred_mame.insert("game_c".into(), 2);
+        live.game_preferred_mame.insert("game_a".into(), 0);
+        let mut draft = live.clone();
+        draft.mame_executables.remove(0);
+        // Editing the surviving path in the same session must not lose its identity.
+        draft.mame_executables[0].path = "/b-updated".into();
+
+        DirectoriesDialog::commit_draft(&mut live, draft, &[Some(1), Some(2)]);
+
+        assert_eq!(live.selected_mame_index, 0);
+        assert_eq!(
+            live.mame_executables[live.selected_mame_index].path,
+            "/b-updated"
+        );
+        assert_eq!(live.game_preferred_mame.get("game_b"), Some(&0));
+        assert_eq!(live.game_preferred_mame.get("game_c"), Some(&1));
+        assert!(!live.game_preferred_mame.contains_key("game_a"));
+    }
+
+    #[test]
+    fn removing_active_or_all_executables_uses_a_valid_fallback() {
+        let mut live = AppConfig {
+            mame_executables: vec![executable("/a"), executable("/b")],
+            selected_mame_index: 1,
+            ..AppConfig::default()
+        };
+        let mut draft = live.clone();
+        draft.mame_executables.remove(1);
+        DirectoriesDialog::commit_draft(&mut live, draft, &[Some(0)]);
+        assert_eq!(live.selected_mame_index, 0);
+        assert_eq!(live.mame_executables[0].path, "/a");
+
+        let mut draft = live.clone();
+        draft.mame_executables.clear();
+        DirectoriesDialog::commit_draft(&mut live, draft, &[]);
+        assert_eq!(live.selected_mame_index, 0);
+        assert!(live.mame_executables.is_empty());
+    }
+
+    #[test]
+    fn committing_tracks_a_live_selection_change_during_the_dialog() {
+        let mut live = AppConfig {
+            mame_executables: vec![executable("/a"), executable("/b"), executable("/c")],
+            ..AppConfig::default()
+        };
+        let mut draft = live.clone();
+        draft.mame_executables.remove(0);
+        live.selected_mame_index = 2;
+
+        DirectoriesDialog::commit_draft(&mut live, draft, &[Some(1), Some(2)]);
+
+        assert_eq!(live.selected_mame_index, 1);
+        assert_eq!(live.mame_executables[1].path, "/c");
     }
 
     #[test]

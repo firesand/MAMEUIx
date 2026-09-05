@@ -518,6 +518,7 @@ pub fn rebuild_table_rows(app: &MameApp, state: &mut RedesignState) {
         filtered,
         &state.expanded_parents,
         state.collection,
+        app.config.filter_settings.hide_romless_systems,
     );
     state.table_rows_dirty = false;
 }
@@ -527,10 +528,17 @@ fn build_table_rows(
     filtered: &[usize],
     expanded_parents: &HashSet<String>,
     collection: RedesignCollection,
+    hide_romless_systems: bool,
 ) -> Vec<TableRow> {
+    let hidden_romless_parents: HashSet<&str> = games
+        .iter()
+        .filter(|game| hide_romless_systems && !game.requires_roms)
+        .map(|game| game.name.as_str())
+        .collect();
     let mut clone_map: HashMap<String, Vec<usize>> = HashMap::new();
     for (idx, game) in games.iter().enumerate() {
         if game.is_clone
+            && (!hide_romless_systems || game.requires_roms)
             && let Some(parent) = &game.parent
         {
             clone_map.entry(parent.clone()).or_default().push(idx);
@@ -542,7 +550,24 @@ fn build_table_rows(
         let Some(game) = games.get(idx) else {
             continue;
         };
-        if game.is_clone || !collection.matches_status(game.status) {
+        if !collection.matches_status(game.status) || (hide_romless_systems && !game.requires_roms)
+        {
+            continue;
+        }
+        if game.is_clone {
+            // Some systems with their own media (e.g. FDS) clone a ROM-free
+            // system. Keep a matching clone actionable when this filter hides
+            // its known parent, without promoting ordinary facet/search matches.
+            if game
+                .parent
+                .as_deref()
+                .is_some_and(|parent| hidden_romless_parents.contains(parent))
+            {
+                rows.push(TableRow::Parent {
+                    index: idx,
+                    clone_count: 0,
+                });
+            }
             continue;
         }
         let clone_count = clone_map.get(&game.name).map(|v| v.len()).unwrap_or(0);
@@ -874,6 +899,7 @@ mod tests {
             is_bios: false,
             controls: String::new(),
             requires_chd: false,
+            requires_roms: true,
             chd_name: None,
             verification_status: None,
         }
@@ -888,7 +914,7 @@ mod tests {
         let expanded = HashSet::from(["parent".to_string()]);
 
         assert_eq!(
-            build_table_rows(&games, &[0], &expanded, RedesignCollection::AllGames,),
+            build_table_rows(&games, &[0], &expanded, RedesignCollection::AllGames, true),
             vec![
                 TableRow::Parent {
                     index: 0,
@@ -898,7 +924,132 @@ mod tests {
             ]
         );
         assert!(
-            build_table_rows(&games, &[1], &expanded, RedesignCollection::AllGames,).is_empty()
+            build_table_rows(&games, &[1], &expanded, RedesignCollection::AllGames, true)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn expansion_never_reintroduces_romless_parents_or_clones() {
+        let mut games = vec![
+            hierarchy_game("media_parent", "Test", "1990", None),
+            hierarchy_game("romless_clone", "Test", "1990", Some("media_parent")),
+            hierarchy_game("media_clone", "Test", "1990", Some("media_parent")),
+            hierarchy_game("romless_parent", "Test", "1990", None),
+            hierarchy_game("dependent_clone", "Test", "1990", Some("romless_parent")),
+        ];
+        games[1].requires_roms = false;
+        games[3].requires_roms = false;
+        let expanded = HashSet::from(["media_parent".into(), "romless_parent".into()]);
+        // Defend even against a stale pre-filtered list containing every row.
+        let filtered = [0, 1, 2, 3, 4];
+        assert_eq!(
+            build_table_rows(
+                &games,
+                &filtered,
+                &expanded,
+                RedesignCollection::AllGames,
+                true
+            ),
+            vec![
+                TableRow::Parent {
+                    index: 0,
+                    clone_count: 1
+                },
+                TableRow::Clone { index: 2 },
+                TableRow::Parent {
+                    index: 4,
+                    clone_count: 0
+                },
+            ]
+        );
+        assert_eq!(
+            build_table_rows(
+                &games,
+                &filtered,
+                &expanded,
+                RedesignCollection::AllGames,
+                false
+            ),
+            vec![
+                TableRow::Parent {
+                    index: 0,
+                    clone_count: 2
+                },
+                TableRow::Clone { index: 1 },
+                TableRow::Clone { index: 2 },
+                TableRow::Parent {
+                    index: 3,
+                    clone_count: 1
+                },
+                TableRow::Clone { index: 4 },
+            ]
+        );
+    }
+
+    #[test]
+    fn required_clone_is_standalone_only_when_its_romless_parent_is_hidden() {
+        let mut games = vec![
+            hierarchy_game("famicom", "Nintendo", "1983", None),
+            hierarchy_game("fds", "Nintendo", "1986", Some("famicom")),
+            hierarchy_game("regular_parent", "Other", "1990", None),
+            hierarchy_game("regular_clone", "Nintendo", "1991", Some("regular_parent")),
+        ];
+        games[0].requires_roms = false;
+        let expanded = HashSet::from(["famicom".into()]);
+        // Both clones can match a query/manufacturer facet. Only the one whose
+        // parent is excluded by the ROM requirement gets a standalone row.
+        assert_eq!(
+            build_table_rows(
+                &games,
+                &[1, 3],
+                &expanded,
+                RedesignCollection::AllGames,
+                true
+            ),
+            vec![TableRow::Parent {
+                index: 1,
+                clone_count: 0
+            }]
+        );
+        assert!(
+            build_table_rows(
+                &games,
+                &[1, 3],
+                &expanded,
+                RedesignCollection::AllGames,
+                false
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            build_table_rows(
+                &games,
+                &[0, 1],
+                &expanded,
+                RedesignCollection::AllGames,
+                false
+            ),
+            vec![
+                TableRow::Parent {
+                    index: 0,
+                    clone_count: 1
+                },
+                TableRow::Clone { index: 1 },
+            ]
+        );
+        assert_eq!(
+            build_table_rows(
+                &games,
+                &[0, 1],
+                &expanded,
+                RedesignCollection::AllGames,
+                true
+            ),
+            vec![TableRow::Parent {
+                index: 1,
+                clone_count: 0
+            }]
         );
     }
 
@@ -938,6 +1089,7 @@ mod tests {
                 manager.get_filtered_games(),
                 &expanded,
                 RedesignCollection::AllGames,
+                true,
             ),
             vec![
                 TableRow::Parent {
@@ -968,6 +1120,7 @@ mod tests {
                 &filtered,
                 &HashSet::new(),
                 RedesignCollection::Missing,
+                true,
             ),
             vec![TableRow::Parent {
                 index: 0,
@@ -980,6 +1133,7 @@ mod tests {
                 &filtered,
                 &HashSet::new(),
                 RedesignCollection::Issues,
+                true,
             ),
             vec![
                 TableRow::Parent {

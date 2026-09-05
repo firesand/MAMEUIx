@@ -221,7 +221,10 @@ impl EnhancedSearchEngine {
         let reader = index.reader()?;
 
         let searcher = reader.searcher();
-        let top_docs = searcher.search(&query, &TopDocs::with_limit(self.config.fulltext_limit))?;
+        let top_docs = searcher.search(
+            &query,
+            &TopDocs::with_limit(self.config.fulltext_limit).order_by_score(),
+        )?;
 
         let mut results = Vec::new();
         for (_score, doc_address) in top_docs {
@@ -385,4 +388,50 @@ pub struct SearchStats {
     pub fuzzy_enabled: bool,
     pub regex_enabled: bool,
     pub regex_cache_size: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::RomStatus;
+
+    fn game(name: &str, title: &str) -> Game {
+        Game {
+            name: name.into(),
+            description: title.into(),
+            manufacturer: "Maker".into(),
+            year: "1990".into(),
+            driver: "test".into(),
+            driver_status: "good".into(),
+            status: RomStatus::Available,
+            parent: None,
+            category: "Arcade".into(),
+            play_count: 0,
+            is_clone: false,
+            is_device: false,
+            is_bios: false,
+            controls: "Joystick".into(),
+            requires_roms: true,
+            requires_chd: false,
+            chd_name: None,
+            verification_status: None,
+        }
+    }
+
+    #[test]
+    fn fulltext_search_returns_current_game_ids_after_reindexing() {
+        let mut engine = EnhancedSearchEngine::new(SearchConfig::default());
+        engine
+            .initialize_fulltext_index(&[
+                game("alpha", "Space Fighter"),
+                game("bravo", "Racing Driver"),
+            ])
+            .unwrap();
+        assert_eq!(engine.fulltext_search("Racing").unwrap(), vec![1]);
+        engine
+            .initialize_fulltext_index(&[game("charlie", "Racing Legend")])
+            .unwrap();
+        assert_eq!(engine.fulltext_search("Racing").unwrap(), vec![0]);
+        assert!(engine.fulltext_search("Space").unwrap().is_empty());
+    }
 }

@@ -13,6 +13,7 @@ pub struct GameIndexManager {
     pub game_index: Option<GameIndex>,
     pub filtered_games_cache: Vec<usize>,
     pub filter_cache_dirty: bool,
+    last_hide_romless_systems: bool,
     pub last_filter_update: Instant,
 
     // Search management
@@ -35,6 +36,7 @@ impl GameIndexManager {
             game_index: None,
             filtered_games_cache: Vec::new(),
             filter_cache_dirty: true,
+            last_hide_romless_systems: true,
             last_filter_update: Instant::now(),
             search_debounce_timer: None,
             pending_search: None,
@@ -81,7 +83,9 @@ impl GameIndexManager {
         _hidden_categories: &HashSet<String>,
         hardware_filter: Option<&HardwareFilter>,
     ) {
-        if !self.filter_cache_dirty {
+        if !self.filter_cache_dirty
+            && self.last_hide_romless_systems == filter_settings.hide_romless_systems
+        {
             return;
         }
 
@@ -140,6 +144,7 @@ impl GameIndexManager {
         }
 
         self.filter_cache_dirty = false;
+        self.last_hide_romless_systems = filter_settings.hide_romless_systems;
         self.last_filter_update = Instant::now();
 
         let elapsed = start.elapsed();
@@ -159,7 +164,7 @@ impl GameIndexManager {
         // Prefix keeps these final-result entries separate from the legacy list
         // widgets, which still cache plain text queries in the same GameIndex.
         format!(
-            "__manager_v2__|q={:?}|mode={:?}|availability={}:{}|status={}:{}|other={}:{}:{}|mfr={:?}|year={:?}:{:?}|hardware={:?}:{:?}:{:?}",
+            "__manager_v2__|q={:?}|mode={:?}|availability={}:{}|status={}:{}|other={}:{}:{}|mfr={:?}|year={:?}:{:?}|hardware={:?}:{:?}:{:?}|hide_romless={}",
             filters.search_text,
             filters.search_mode,
             filters.availability_filters.show_available,
@@ -175,6 +180,7 @@ impl GameIndexManager {
             filters.cpu_filter,
             filters.device_filter,
             filters.sound_filter,
+            filters.hide_romless_systems,
         )
     }
 
@@ -247,7 +253,8 @@ impl GameIndexManager {
                 };
 
                 // AND logic between categories
-                availability_match
+                filters.rom_requirement_matches(game.requires_roms)
+                    && availability_match
                     && status_match
                     && others_match
                     && hardware_match
@@ -313,22 +320,10 @@ impl GameIndexManager {
                         }
                     }
                 }
-                _ => {
-                    // For regular search modes, try enhanced search first as it's often better
-                    if let Some(ref mut search_engine) = self.enhanced_search {
-                        match search_engine.enhanced_search(games, search_text, search_mode) {
-                            Ok(results) => {
-                                let result_set: HashSet<usize> = results.into_iter().collect();
-                                self.filtered_games_cache
-                                    .retain(|&idx| result_set.contains(&idx));
-                                return;
-                            }
-                            Err(_) => {
-                                // Fall through to basic search if enhanced search fails
-                            }
-                        }
-                    }
-                }
+                // Field-specific modes must stay within their selected field.
+                // Enhanced search unions full-text results from every field and
+                // has no access to the hardware mappings.
+                _ => {}
             }
         }
 
@@ -616,6 +611,7 @@ mod tests {
             is_device: false,
             is_bios: false,
             controls: String::new(),
+            requires_roms: true,
             requires_chd: false,
             chd_name: None,
             verification_status: None,
@@ -637,6 +633,57 @@ mod tests {
             &HashSet::new(),
             None,
         );
+    }
+
+    #[test]
+    fn romless_toggle_invalidates_same_query_results_in_both_directions() {
+        let mut games = vec![
+            game("arcade", "ROM Arcade", "Maker", "1980"),
+            game("system", "ROM-less System", "Maker", "1980"),
+            game("bios", "ROM BIOS", "Maker", "1980"),
+        ];
+        games[1].requires_roms = false;
+        games[2].is_bios = true;
+        games[2].is_device = true;
+        let mut manager = manager_with_index(&games);
+        let mut filters = FilterSettings {
+            search_text: "ROM".into(),
+            ..FilterSettings::default()
+        };
+        for (hide, expected) in [
+            (true, vec![0, 2]),
+            (false, vec![0, 1, 2]),
+            (true, vec![0, 2]),
+        ] {
+            filters.hide_romless_systems = hide;
+            // Do not manually invalidate: the exclusion itself is part of cache state.
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), expected, "hide={hide}");
+        }
+    }
+
+    #[test]
+    fn favorites_and_parent_filter_cannot_restore_romless_systems() {
+        let mut games = vec![
+            game("arcade", "Arcade", "Maker", "1980"),
+            game("system", "System", "Maker", "1980"),
+        ];
+        games[1].requires_roms = false;
+        let mut manager = manager_with_index(&games);
+        manager
+            .game_index
+            .as_mut()
+            .unwrap()
+            .favorites
+            .insert("system".into());
+        let mut filters = FilterSettings::default();
+        filters.other_filters.show_favorites = true;
+        filters.other_filters.show_parents_only = true;
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[0]);
+        filters.hide_romless_systems = false;
+        update(&mut manager, &games, &filters);
+        assert_eq!(manager.get_filtered_games(), &[0, 1]);
     }
 
     #[test]
@@ -730,5 +777,100 @@ mod tests {
         update(&mut manager, &games, &filters);
 
         assert_eq!(manager.get_filtered_games(), &[target_index]);
+    }
+
+    #[test]
+    fn field_search_keeps_its_meaning_with_and_without_facets() {
+        let games = vec![
+            game("sega", "Capcom 1990", "Sega", "1987"),
+            game("capcom", "Fighter", "Capcom", "1990"),
+            game("namco", "Pacman", "Namco", "1980"),
+        ];
+        let mut manager = GameIndexManager::new();
+        // Keep the real enhanced engine enabled: the regression was hidden by
+        // older fixtures that disabled it before testing field-specific search.
+        manager.build_game_index(&games, &HashSet::new());
+        for (mode, query) in [
+            (SearchMode::Manufacturer, "Capcom"),
+            (SearchMode::Year, "1990"),
+            (SearchMode::RomFileName, "capcom"),
+        ] {
+            let mut filters = FilterSettings {
+                search_mode: mode.clone(),
+                search_text: query.into(),
+                ..FilterSettings::default()
+            };
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), &[1], "unrestricted {mode:?}");
+
+            filters.selected_manufacturers.insert("Sega".into());
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert!(
+                manager.get_filtered_games().is_empty(),
+                "Sega facet {mode:?}"
+            );
+
+            filters.selected_manufacturers.clear();
+            filters.selected_manufacturers.insert("Capcom".into());
+            manager.mark_cache_dirty();
+            update(&mut manager, &games, &filters);
+            assert_eq!(manager.get_filtered_games(), &[1], "Capcom facet {mode:?}");
+        }
+    }
+
+    #[test]
+    fn hardware_search_uses_ini_mappings_even_without_other_filters() {
+        let directory = tempfile::tempdir().unwrap();
+        let cpu = directory.path().join("cpu.ini");
+        let device = directory.path().join("device.ini");
+        let sound = directory.path().join("sound.ini");
+        std::fs::write(&cpu, "[Z80]\nhardware_game\n").unwrap();
+        std::fs::write(&device, "[V9938]\nhardware_game\n").unwrap();
+        std::fs::write(&sound, "[YM2151]\nhardware_game\n").unwrap();
+        let hardware =
+            HardwareFilter::load_from_ini_files(Some(&cpu), Some(&device), Some(&sound)).unwrap();
+        let mut misleading = game("wrong_fields", "Unrelated", "Sega", "1987");
+        misleading.driver = "Z80".into();
+        misleading.controls = "V9938".into();
+        misleading.category = "YM2151".into();
+        let games = vec![
+            game("hardware_game", "Hardware game", "Sega", "1987"),
+            misleading,
+            game("excluded", "Excluded", "Namco", "1980"),
+        ];
+        let mut manager = GameIndexManager::new();
+        manager.build_game_index(&games, &HashSet::new());
+
+        for (mode, query) in [
+            (SearchMode::Cpu, "Z80"),
+            (SearchMode::Device, "V9938"),
+            (SearchMode::Sound, "YM2151"),
+        ] {
+            let mut filters = FilterSettings {
+                search_mode: mode.clone(),
+                search_text: query.into(),
+                ..FilterSettings::default()
+            };
+            for with_facet in [false, true] {
+                if with_facet {
+                    filters.selected_manufacturers.insert("Sega".into());
+                }
+                manager.mark_cache_dirty();
+                manager.update_filtered_games_cache(
+                    &games,
+                    FilterCategory::All,
+                    &filters,
+                    &HashSet::new(),
+                    Some(&hardware),
+                );
+                assert_eq!(
+                    manager.get_filtered_games(),
+                    &[0],
+                    "{mode:?}, facet={with_facet}"
+                );
+            }
+        }
     }
 }

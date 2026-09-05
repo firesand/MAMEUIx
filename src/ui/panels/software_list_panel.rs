@@ -94,7 +94,7 @@ impl SoftwareListPanel {
             ui.label(
                 egui::RichText::new("Software Lists")
                     .heading()
-                    .color(egui::Color32::from_rgb(64, 156, 255)),
+                    .color(ui.visuals().hyperlink_color),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("Refresh").clicked() {

@@ -1,0 +1,12 @@
+[advisories]
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+unused-ignored-advisory = "deny"
+
+# Maintenance-only exceptions reviewed 2026-09-05; no security advisory is ignored.
+# See docs/DEPENDENCY_REVIEW.md for dependency paths and removal criteria.
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste is a build-time macro used by egui_dock 0.17 and image codecs. Track upstream migration; no patched paste version exists." },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is required by egui 0.32/ab_glyph and the window decoration stack. Font sources here are bundled; replacing the GUI font stack needs a separate compatibility migration." },
+]

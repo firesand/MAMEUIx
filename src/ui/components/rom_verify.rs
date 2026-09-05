@@ -2,6 +2,7 @@ use crate::models::{AppConfig, Game, RomStatus, VerificationStatus};
 use crate::ui::redesign::fonts;
 use eframe::egui;
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::process::Command;
 use std::sync::mpsc;
@@ -743,6 +744,7 @@ impl RomVerifyDialog {
             self.stop_sender = Some(stop_tx);
 
             let mame_path = mame.path.clone();
+            let search_paths = crate::mame::VerificationSearchPaths::new(config);
             let games_to_verify = games.to_vec();
             let specific_game = specific_game.map(|s| s.to_string());
             let verification_manager = self.verification_manager.clone();
@@ -751,7 +753,11 @@ impl RomVerifyDialog {
                 if let Some(game_name) = specific_game {
                     // Verify single game
                     if let Some(game) = games_to_verify.iter().find(|g| g.name == game_name) {
-                        let result = Self::verify_single_game(&mame_path, game);
+                        let result = Self::verify_single_game(
+                            &mame_path,
+                            &search_paths.for_game(&game.name),
+                            game,
+                        );
                         verification_manager.update_result(game_name.clone(), result.clone());
                         let _ = tx.send(VerifyMessage::Result(result));
                         let _ = tx.send(VerifyMessage::Progress(1.0, game_name));
@@ -785,7 +791,11 @@ impl RomVerifyDialog {
                         let progress = (idx + 1) as f32 / games_to_verify.len() as f32;
                         let _ = tx.send(VerifyMessage::Progress(progress, game.name.clone()));
 
-                        let result = Self::verify_single_game(&mame_path, game);
+                        let result = Self::verify_single_game(
+                            &mame_path,
+                            &search_paths.for_game(&game.name),
+                            game,
+                        );
                         verification_manager.update_result(game.name.clone(), result.clone());
                         let _ = tx.send(VerifyMessage::Result(result));
                     }
@@ -796,10 +806,17 @@ impl RomVerifyDialog {
         }
     }
 
-    fn verify_single_game(mame_path: &str, game: &Game) -> VerificationResult {
+    fn verify_single_game(
+        mame_path: &str,
+        search_args: &[OsString],
+        game: &Game,
+    ) -> VerificationResult {
         let output = Command::new(mame_path)
             .arg("-verifyroms")
             .arg(&game.name)
+            // Put overrides last so a malformed trailing path option cannot
+            // consume the verification verb as its value and start emulation.
+            .args(search_args)
             .output();
 
         match output {
@@ -808,7 +825,13 @@ impl RomVerifyDialog {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let combined_output = format!("{}\n{}", stdout, stderr);
 
-                Self::parse_verification_output(&game.name, &game.description, &combined_output)
+                Self::parse_verification_output(
+                    &game.name,
+                    &game.description,
+                    &combined_output,
+                    output.status.success(),
+                    game.chd_name.as_deref(),
+                )
             }
             Err(e) => VerificationResult {
                 game_name: game.name.clone(),
@@ -826,42 +849,112 @@ impl RomVerifyDialog {
         game_name: &str,
         description: &str,
         output: &str,
+        process_succeeded: bool,
+        expected_chd_name: Option<&str>,
     ) -> VerificationResult {
         let mut missing_files = Vec::new();
         let mut incorrect_files = Vec::new();
         let mut extra_files = Vec::new();
         let mut chd_status = None;
-        let mut status = VerifyStatus::Passed;
+        let mut explicit_result = false;
+        let mut failed = false;
+        let mut warning = false;
+        let mut not_found = false;
 
-        for line in output.lines() {
-            let line = line.trim();
-
-            if line.contains("NOT FOUND") {
-                if line.contains(".chd") {
-                    chd_status = Some("CHD file not found".to_string());
-                    status = VerifyStatus::Failed;
-                } else if let Some(file) = Self::extract_filename(line) {
-                    missing_files.push(file);
-                    status = VerifyStatus::Failed;
-                }
-            } else if line.contains("INCORRECT") || line.contains("BAD") {
-                if let Some(file) = Self::extract_filename(line) {
-                    incorrect_files.push(file);
-                    status = VerifyStatus::Failed;
-                }
-            } else if line.contains("NO GOOD DUMP") {
-                status = VerifyStatus::Warning;
-            } else if line.contains("found") && line.contains("extra") {
-                if let Some(file) = Self::extract_filename(line) {
-                    extra_files.push(file);
-                    if status == VerifyStatus::Passed {
-                        status = VerifyStatus::Warning;
+        for line in output.lines().map(str::trim) {
+            // MAME emits a per-set summary, optionally followed by its parent:
+            // `romset pacman [puckman] is good`. A total containing "OK" is
+            // not evidence that the requested set itself passed verification.
+            if let Some(summary) = line.strip_prefix("romset ") {
+                let mut fields = summary.split_whitespace();
+                if fields.next().map(|name| name.trim_matches('"')) == Some(game_name) {
+                    let mut outcome = fields.collect::<Vec<_>>();
+                    if outcome.first().is_some_and(|part| part.starts_with('[')) {
+                        outcome.remove(0);
+                    }
+                    match outcome.join(" ").trim_end_matches('!') {
+                        "is good" => explicit_result = true,
+                        "is best available" => {
+                            explicit_result = true;
+                            warning = true;
+                        }
+                        "is bad" => {
+                            explicit_result = true;
+                            failed = true;
+                        }
+                        "not found" => {
+                            explicit_result = true;
+                            not_found = true;
+                        }
+                        _ => {}
                     }
                 }
-            } else if line.contains("is good") || line.contains("OK") {
-                // ROM is verified OK
+                continue;
+            }
+
+            // Audit records are prefixed by the set name. Restrict parsing to
+            // this set, and handle optional/undumped media before NOT FOUND.
+            let Some((set_name, record)) = line.split_once(':') else {
+                continue;
+            };
+            if set_name.trim() != game_name {
+                continue;
+            }
+            let record_upper = record.to_ascii_uppercase();
+            if record_upper.contains("NO GOOD DUMP")
+                || record_upper.contains("NEEDS REDUMP")
+                || record_upper.contains("NOT FOUND BUT OPTIONAL")
+            {
+                warning = true;
+            } else if record_upper.contains("NOT FOUND") {
+                failed = true;
+                if let Some(file) = Self::extract_filename(line) {
+                    if file.to_ascii_lowercase().ends_with(".chd")
+                        || expected_chd_name.is_some_and(|name| file.eq_ignore_ascii_case(name))
+                    {
+                        chd_status = Some(format!("CHD file not found: {file}"));
+                    } else {
+                        missing_files.push(file);
+                    }
+                }
+            } else if record_upper.contains("INCORRECT") || record_upper.contains("BAD") {
+                failed = true;
+                if let Some(file) = Self::extract_filename(line) {
+                    incorrect_files.push(file);
+                }
+            } else if record_upper.contains("FOUND") && record_upper.contains("EXTRA") {
+                warning = true;
+                if let Some(file) = Self::extract_filename(line) {
+                    extra_files.push(file);
+                }
             }
         }
+
+        // Errors must never be downgraded by a later best-available/NO DUMP
+        // record. Missing whole sets have their own status, even when MAME
+        // reports them using a nonzero exit code.
+        let status = if failed {
+            VerifyStatus::Failed
+        } else if not_found {
+            VerifyStatus::NotFound
+        } else if !process_succeeded || !explicit_result {
+            let reason = if process_succeeded {
+                "MAME returned no explicit verification result for this set"
+            } else {
+                "MAME verification process exited unsuccessfully"
+            };
+            let details = output.trim();
+            missing_files.push(if details.is_empty() {
+                reason.to_string()
+            } else {
+                format!("{reason}: {details}")
+            });
+            VerifyStatus::Failed
+        } else if warning {
+            VerifyStatus::Warning
+        } else {
+            VerifyStatus::Passed
+        };
 
         VerificationResult {
             game_name: game_name.to_string(),
@@ -875,20 +968,12 @@ impl RomVerifyDialog {
     }
 
     fn extract_filename(line: &str) -> Option<String> {
-        // Try to extract filename from various MAME output formats
-        if let Some(start) = line.find('"')
-            && let Some(end) = line[start + 1..].find('"')
-        {
-            return Some(line[start + 1..start + 1 + end].to_string());
-        }
-
-        // Alternative format
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() > 1 {
-            Some(parts[0].to_string())
-        } else {
-            None
-        }
+        let (_, record) = line.split_once(':')?;
+        // MAME's audit format is `set : filename (length bytes) - reason`;
+        // disk records omit the length. Preserve spaces within the filename.
+        let record = record.trim();
+        let name = record.split(" - ").next()?.split(" (").next()?.trim();
+        (!name.is_empty()).then(|| name.trim_matches('"').to_string())
     }
 
     fn export_results(&self) {
@@ -1287,16 +1372,15 @@ impl RomVerifyDialog {
         let presentation = |result: &VerificationResult| {
             let (color, label) = match result.status {
                 VerifyStatus::Passed => (RedesignTokens::STATUS_OK, "Passed"),
-                VerifyStatus::Warning => (RedesignTokens::STATUS_WARN, "CHD missing"),
-                VerifyStatus::Failed => (RedesignTokens::STATUS_MISSING, "Missing ROM"),
+                VerifyStatus::Warning => (RedesignTokens::STATUS_WARN, "Warning"),
+                VerifyStatus::Failed => (RedesignTokens::STATUS_MISSING, "Failed"),
                 VerifyStatus::NotFound => (RedesignTokens::STATUS_NEUTRAL, "Not found"),
             };
             let note = match result.status {
                 VerifyStatus::Passed => "All CRCs match datfile".to_string(),
-                VerifyStatus::Warning => result
-                    .chd_status
-                    .clone()
-                    .unwrap_or_else(|| "CHD requires attention".to_string()),
+                VerifyStatus::Warning => result.chd_status.clone().unwrap_or_else(|| {
+                    "MAME reports best-available media or audit warnings".to_string()
+                }),
                 VerifyStatus::Failed => format!(
                     "{} missing · {} incorrect",
                     result.missing_files.len(),
@@ -1477,6 +1561,273 @@ impl RomVerifyDialog {
                     }
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game_fixture(name: &str) -> Game {
+        Game {
+            name: name.into(),
+            description: "Pac-Man".into(),
+            manufacturer: "Namco".into(),
+            year: "1980".into(),
+            driver: "pacman".into(),
+            driver_status: "good".into(),
+            status: RomStatus::Available,
+            parent: Some("puckman".into()),
+            category: "Maze".into(),
+            play_count: 0,
+            is_clone: true,
+            is_device: false,
+            is_bios: false,
+            controls: String::new(),
+            requires_roms: true,
+            requires_chd: false,
+            chd_name: None,
+            verification_status: None,
+        }
+    }
+
+    fn parse(output: &str, process_succeeded: bool) -> VerificationResult {
+        RomVerifyDialog::parse_verification_output(
+            "pacman",
+            "Pac-Man",
+            output,
+            process_succeeded,
+            None,
+        )
+    }
+
+    #[test]
+    fn verification_requires_success_and_an_explicit_result_for_the_requested_set() {
+        assert_eq!(
+            parse(
+                "romset pacman [puckman] is good\n1 romsets found, 1 were OK.\n",
+                true
+            )
+            .status,
+            VerifyStatus::Passed
+        );
+        for (output, success) in [
+            ("", false),
+            ("", true),
+            ("Fatal error: unable to initialize MAME", false),
+            ("1 romsets found, 1 were OK.", true),
+            ("romset puckman is good", true),
+            ("romset pacman is good", false),
+        ] {
+            let result = parse(output, success);
+            assert_eq!(result.status, VerifyStatus::Failed, "{output:?}");
+            assert!(!result.missing_files.is_empty(), "{output:?}");
+        }
+    }
+
+    #[test]
+    fn missing_whole_set_is_not_found() {
+        assert_eq!(
+            parse("romset \"pacman\" not found!\n", false).status,
+            VerifyStatus::NotFound
+        );
+        assert_eq!(
+            parse("romset pacman [puckman] not found\n", false).status,
+            VerifyStatus::NotFound
+        );
+    }
+
+    #[test]
+    fn warnings_never_downgrade_missing_or_bad_media() {
+        let missing = "pacman      : program.bin (4096 bytes) - NOT FOUND\n";
+        let warning = "pacman      : undumped.bin (1024 bytes) - NO GOOD DUMP KNOWN\n";
+        for output in [
+            format!("{missing}{warning}romset pacman [puckman] is bad\n"),
+            format!("{warning}{missing}romset pacman [puckman] is bad\n"),
+            format!("{missing}{warning}romset pacman is best available\n"),
+        ] {
+            let result = parse(&output, false);
+            assert_eq!(result.status, VerifyStatus::Failed);
+            assert_eq!(result.missing_files, vec!["program.bin"]);
+        }
+        let incorrect = parse(
+            "pacman : bad rom.bin (42 bytes) - INCORRECT CHECKSUM:\nEXPECTED: CRC(12345678)\n   FOUND: CRC(87654321)\nromset pacman is bad\n",
+            false,
+        );
+        assert_eq!(incorrect.status, VerifyStatus::Failed);
+        assert_eq!(incorrect.incorrect_files, vec!["bad rom.bin"]);
+        assert_eq!(
+            parse("romset pacman is bad", true).status,
+            VerifyStatus::Failed
+        );
+    }
+
+    #[test]
+    fn optional_and_undumped_media_are_best_available_warnings() {
+        for diagnostic in [
+            "NOT FOUND BUT OPTIONAL",
+            "NOT FOUND - NO GOOD DUMP KNOWN",
+            "NO GOOD DUMP KNOWN",
+            "NEEDS REDUMP",
+        ] {
+            let result = parse(
+                &format!(
+                    "pacman : optional.bin (42 bytes) - {diagnostic}\nromset pacman [puckman] is best available\n"
+                ),
+                true,
+            );
+            assert_eq!(result.status, VerifyStatus::Warning, "{diagnostic}");
+            assert!(result.missing_files.is_empty());
+            assert!(result.incorrect_files.is_empty());
+        }
+    }
+
+    #[test]
+    fn missing_chd_matches_xml_disk_name_without_a_file_extension() {
+        let result = RomVerifyDialog::parse_verification_output(
+            "area51",
+            "Area 51",
+            "area51      : area51 - NOT FOUND\nromset area51 is bad\n",
+            false,
+            Some("area51"),
+        );
+        assert_eq!(result.status, VerifyStatus::Failed);
+        assert_eq!(
+            result.chd_status.as_deref(),
+            Some("CHD file not found: area51")
+        );
+        assert!(result.missing_files.is_empty());
+        let manager = VerificationManager::new();
+        manager.update_result("area51".into(), result);
+        assert_eq!(manager.get_stats().missing_chd, 1);
+    }
+
+    #[test]
+    #[ignore = "set MAMEUIX_TEST_MAME to an installed MAME executable"]
+    fn native_mame_verification_checks_empty_and_overridden_collections() {
+        let executable = std::env::var("MAMEUIX_TEST_MAME").expect("set MAMEUIX_TEST_MAME");
+        let temp = tempfile::tempdir().unwrap();
+        let empty_roms = temp.path().join("empty");
+        fs::create_dir(&empty_roms).unwrap();
+        let mut config = AppConfig {
+            rom_paths: vec![empty_roms],
+            ..Default::default()
+        };
+        config.default_game_properties.miscellaneous.custom_args = "-noreadconfig".into();
+        let snapshot = crate::mame::VerificationSearchPaths::new(&config);
+        for (name, expected) in [
+            ("pong", VerifyStatus::Warning),
+            ("pacman", VerifyStatus::NotFound),
+        ] {
+            let result = RomVerifyDialog::verify_single_game(
+                &executable,
+                &snapshot.for_game(name),
+                &game_fixture(name),
+            );
+            assert_eq!(result.status, expected, "{name}: {result:?}");
+        }
+
+        // An incomplete set only in the custom root must be audited there:
+        // the structured empty root would instead produce NotFound.
+        let custom_roms = temp.path().join("custom");
+        fs::create_dir_all(custom_roms.join("pacman")).unwrap();
+        fs::write(
+            custom_roms.join("pacman/pacman.6e"),
+            b"deliberately invalid fixture",
+        )
+        .unwrap();
+        for alias in ["-rompath", "-rp", "-biospath", "-bp"] {
+            let mut properties = config.default_game_properties.clone();
+            properties.miscellaneous.custom_args = format!(
+                "-norc {alias} {} -bench 60 -plugin ignored -autoboot_script ignored.lua",
+                custom_roms.display()
+            );
+            config.game_properties.insert("pacman".into(), properties);
+            let result = RomVerifyDialog::verify_single_game(
+                &executable,
+                &crate::mame::VerificationSearchPaths::new(&config).for_game("pacman"),
+                &game_fixture("pacman"),
+            );
+            assert_eq!(result.status, VerifyStatus::Failed, "{alias}: {result:?}");
+            assert!(!result.incorrect_files.is_empty(), "{alias}: {result:?}");
+        }
+
+        // A missing option value must fail the audit, never consume -verifyroms
+        // as a directory and accidentally start the emulator.
+        config
+            .game_properties
+            .get_mut("pacman")
+            .unwrap()
+            .miscellaneous
+            .custom_args = "-norc -rp".into();
+        let result = RomVerifyDialog::verify_single_game(
+            &executable,
+            &crate::mame::VerificationSearchPaths::new(&config).for_game("pacman"),
+            &game_fixture("pacman"),
+        );
+        assert_eq!(result.status, VerifyStatus::Failed);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn subprocess_verification_uses_configured_paths_and_checks_exit_status() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let executable = temp.path().join("mame-stub");
+        let ini = temp.path().join("ini with spaces");
+        let home = temp.path().join("home");
+        fs::create_dir(&ini).unwrap();
+        fs::create_dir(&home).unwrap();
+        let mut config = AppConfig {
+            rom_paths: vec![temp.path().join("arcade roms")],
+            extra_rom_dirs: vec![temp.path().join("extra roms")],
+            software_rom_paths: vec![temp.path().join("software roms")],
+            ini_path: Some(ini),
+            home_path: Some(home),
+            ..Default::default()
+        };
+        let mut per_game = config.default_game_properties.clone();
+        per_game.miscellaneous.custom_args = "-rp custom -norc -bench 60 -plugin ignored".into();
+        config.game_properties.insert("pacman".into(), per_game);
+        let search_args = crate::mame::VerificationSearchPaths::new(&config).for_game("pacman");
+        let game = game_fixture("pacman");
+        for (body, expected) in [
+            (
+                "echo 'romset pacman [puckman] is good'\nexit 0\n",
+                VerifyStatus::Passed,
+            ),
+            ("exit 1\n", VerifyStatus::Failed),
+            (
+                "echo 'romset pacman is good'\nexit 2\n",
+                VerifyStatus::Failed,
+            ),
+            (
+                "echo 'romset \"pacman\" not found!' >&2\nexit 2\n",
+                VerifyStatus::NotFound,
+            ),
+        ] {
+            fs::write(
+                &executable,
+                format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/args\"\n{body}"),
+            )
+            .unwrap();
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+            let result = RomVerifyDialog::verify_single_game(
+                executable.to_str().unwrap(),
+                &search_args,
+                &game,
+            );
+            assert_eq!(result.status, expected, "{body}");
+            let mut expected_args = vec!["-verifyroms".to_string(), "pacman".to_string()];
+            expected_args.extend(
+                search_args
+                    .iter()
+                    .map(|arg| arg.to_string_lossy().into_owned()),
+            );
+            let captured = fs::read_to_string(temp.path().join("args")).unwrap();
+            assert_eq!(captured.lines().collect::<Vec<_>>(), expected_args);
         }
     }
 }

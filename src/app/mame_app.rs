@@ -5,6 +5,7 @@
 use crate::mame::GameScanner;
 use crate::models::*;
 use crate::ui::components::mame_finder::MameFinderDialog;
+use crate::ui::components::steam_ui::SteamUi;
 use crate::ui::dock::{DockTab, MameTabViewer, create_default_layout, dock_style};
 use crate::ui::notifications::NotificationManager;
 use crate::ui::panels::{
@@ -22,6 +23,14 @@ use std::mem;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+
+/// Only an in-flight scan should prevent a new load; errors are retryable.
+fn can_start_mame_load(stage: LoadingStage) -> bool {
+    matches!(
+        stage,
+        LoadingStage::Idle | LoadingStage::Complete | LoadingStage::Error
+    )
+}
 
 pub struct MameApp {
     // Core data
@@ -68,8 +77,6 @@ pub struct MameApp {
     pub dialog_manager: DialogManager,
 
     // Theme management
-    pub theme_applied: bool,
-
     pub dock_tree: DockState<DockTab>,
     pub hardware_filter: Option<HardwareFilter>,
     pub notifications: NotificationManager,
@@ -147,8 +154,6 @@ impl MameApp {
             dialog_manager: DialogManager::new(),
 
             // Theme management
-            theme_applied: false,
-
             dock_tree: create_default_layout(),
             hardware_filter: HardwareFilter::load_from_config(&config),
             notifications: NotificationManager::new(),
@@ -191,6 +196,9 @@ impl MameApp {
         self.game_index_manager
             .build_game_index(&self.games, &self.config.favorite_games);
         self.game_list.invalidate_cache();
+        self.game_list_view.invalidate_cache();
+        self.redesign_shell.state.mark_table_dirty();
+        self.redesign_shell.state.mark_sidebar_stats_dirty();
     }
 
     /// OPTIMIZED: Update filtered games cache dengan GameIndex
@@ -284,8 +292,7 @@ impl MameApp {
     }
 
     pub fn load_mame_data_threaded(&mut self) {
-        if self.loading_stage != LoadingStage::Idle && self.loading_stage != LoadingStage::Complete
-        {
+        if !can_start_mame_load(self.loading_stage) {
             println!("Load already in progress, skipping...");
             return;
         }
@@ -843,14 +850,6 @@ impl eframe::App for MameApp {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
 
-        if self.config.preferences.ui_shell == UiShellMode::RedesignPreview {
-            // Redesign uses its own token theme; don't apply legacy theme first.
-            self.theme_applied = true;
-        } else if !self.theme_applied {
-            self.config.theme.apply(ctx);
-            self.theme_applied = true;
-        }
-
         if self.icon_manager.default_icon_texture.is_none() && self.config.show_rom_icons {
             self.init_default_icon(ctx);
         }
@@ -865,28 +864,7 @@ impl eframe::App for MameApp {
 
         self.update_game_verification_statuses();
 
-        if self.config.preferences.ui_shell == UiShellMode::RedesignPreview {
-            let mut shell = mem::take(&mut self.redesign_shell);
-            shell.show(ctx, self);
-            self.redesign_shell = shell;
-        } else {
-            // Legacy layout
-            self.show_toolbar(ctx);
-
-            match self.config.preferences.ui_shell {
-                UiShellMode::LegacyClassic => self.show_classic_layout(ctx),
-                UiShellMode::LegacyDock | UiShellMode::RedesignPreview => {
-                    self.show_dock_layout(ctx);
-                }
-            }
-
-            // Legacy status bar
-            egui::TopBottomPanel::bottom("status_bar")
-                .exact_height(40.0)
-                .show(ctx, |ui| {
-                    self.show_legacy_status_bar(ui);
-                });
-        }
+        self.show_main_layout(ctx);
 
         // Dialogs + toasts run for both legacy and redesign shells
         let dialog_actions = self.dialog_manager.render_dialogs(
@@ -939,97 +917,84 @@ impl MameApp {
         }
     }
 
-    pub fn show_classic_layout(&mut self, ctx: &egui::Context) {
-        // Top toolbar with better spacing
-        self.show_toolbar(ctx);
+    fn show_main_layout(&mut self, ctx: &egui::Context) {
+        if self.config.preferences.ui_shell == UiShellMode::RedesignPreview {
+            let mut shell = mem::take(&mut self.redesign_shell);
+            shell.show(ctx, self);
+            self.redesign_shell = shell;
+        } else {
+            // Apply the selected full style before every legacy frame. Dialogs can
+            // change the theme or shell live, so a one-time flag can become stale.
+            self.redesign_shell.state.style_applied = false;
+            self.config.theme.apply(ctx);
+            // Both legacy layouts share one toolbar; each renders only its content.
+            self.show_toolbar(ctx);
 
-        // Left sidebar with improved styling - ENHANCED: More flexible resizing
+            // Reserve the footer before the content panels consume the remaining area.
+            egui::TopBottomPanel::bottom("status_bar")
+                .frame(
+                    egui::Frame::new()
+                        .fill(ctx.style().visuals.panel_fill)
+                        .stroke(ctx.style().visuals.widgets.noninteractive.bg_stroke)
+                        .inner_margin(egui::Margin::symmetric(16, 8)),
+                )
+                .exact_height(40.0)
+                .show(ctx, |ui| {
+                    self.show_legacy_status_bar(ui);
+                });
+
+            match self.config.preferences.ui_shell {
+                UiShellMode::LegacyClassic => self.show_classic_layout(ctx),
+                UiShellMode::LegacyDock | UiShellMode::RedesignPreview => {
+                    self.show_dock_layout(ctx);
+                }
+            }
+        }
+    }
+
+    pub fn show_classic_layout(&mut self, ctx: &egui::Context) {
+        let outer_frame = egui::Frame::new()
+            .fill(ctx.style().visuals.panel_fill)
+            .inner_margin(egui::Margin::same(12));
         egui::SidePanel::left("sidebar")
             .resizable(true)
-            .default_width(280.0)
+            .default_width(300.0)
             .min_width(100.0)
             .max_width(500.0)
-            .show(ctx, |ui| {
-                self.render_sidebar_panel(ui);
-            });
+            .frame(outer_frame)
+            .show(ctx, |ui| self.render_sidebar_panel(ui));
 
-        // Right panel with improved layout - ENHANCED: Much more flexible resizing
         egui::SidePanel::right("artwork")
             .resizable(true)
-            .default_width(350.0) // Default width
-            .min_width(100.0) // ENHANCED: Much smaller minimum for maximum flexibility
-            .max_width(1000.0) // ENHANCED: Much larger maximum for wide panels
+            .default_width(350.0)
+            .min_width(100.0)
+            .max_width(1000.0)
+            .frame(outer_frame)
             .show(ctx, |ui| {
-                ui.add_space(12.0); // Add top padding
-
-                // Split the panel vertically with better proportions
-                // ENHANCED: Give history panel more space for MAME info content
-                let available_height = ui.available_height();
-                let artwork_height = available_height * 0.45; // 45% for artwork (reduced from 60%)
-                let history_height = available_height * 0.55; // 55% for history (increased from 40%)
-
-                // Top section - Artwork panel
+                let artwork_height = (ui.available_height() - 12.0).max(0.0) * 0.45;
                 ui.allocate_ui_with_layout(
                     egui::vec2(ui.available_width(), artwork_height),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
-                        ui.label(
-                            egui::RichText::new("Game Artwork")
-                                .heading()
-                                .color(egui::Color32::from_rgb(64, 156, 255)),
-                        );
-                        ui.add_space(8.0);
-                        self.artwork_panel.show(
-                            ui,
-                            &self.selected_game,
-                            &self.games,
-                            &self.config.extra_asset_dirs,
-                            &self.config,
-                        );
+                        SteamUi::content_frame(ui.style()).show(ui, |ui| {
+                            self.render_artwork_panel(ui);
+                        });
                     },
                 );
-
-                ui.add_space(16.0);
-                ui.separator();
-                ui.add_space(16.0);
-
-                // Bottom section - History panel
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), history_height),
-                    egui::Layout::top_down(egui::Align::LEFT),
-                    |ui| {
-                        ui.label(
-                            egui::RichText::new("Game History")
-                                .heading()
-                                .color(egui::Color32::from_rgb(64, 156, 255)),
-                        );
-                        ui.add_space(8.0);
-
-                        // Update history panel with selected game
-                        if let Some(idx) = self.selected_game {
-                            if let Some(game) = self.games.get(idx) {
-                                self.history_panel.set_selected_game(
-                                    Some(game.name.clone()),
-                                    Some(game.name.clone()),
-                                    &self.config,
-                                );
-                            }
-                        } else {
-                            self.history_panel
-                                .set_selected_game(None, None, &self.config);
-                        }
-
-                        self.history_panel.show(ui, &self.config);
-                    },
-                );
-
-                ui.add_space(12.0); // Add bottom padding
+                ui.add_space(12.0);
+                SteamUi::content_frame(ui.style()).show(ui, |ui| {
+                    self.render_history_panel(ui);
+                });
             });
 
-        // Main content area with improved styling
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.render_game_list_panel(ui, ctx);
-        });
+        egui::CentralPanel::default()
+            .frame(outer_frame)
+            .show(ctx, |ui| {
+                SteamUi::content_frame(ui.style()).show(ui, |ui| {
+                    ui.set_min_size(ui.available_size());
+                    self.render_game_list_panel(ui, ctx);
+                });
+            });
     }
 
     pub fn show_dock_layout(&mut self, ctx: &egui::Context) {
@@ -1044,8 +1009,9 @@ impl MameApp {
     }
 
     pub fn render_sidebar_panel(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(12.0);
         let old_search = self.config.filter_settings.search_text.clone();
+        let old_search_mode = self.config.filter_settings.search_mode.clone();
+        let old_hide_romless = self.config.filter_settings.hide_romless_systems;
         let old_hidden_categories_len = self.config.hidden_categories.len();
         let old_apply_hidden_categories = self.config.filter_settings.apply_hidden_categories;
         let old_availability = self.config.filter_settings.availability_filters.clone();
@@ -1057,23 +1023,32 @@ impl MameApp {
         let old_manufacturer = self.config.filter_settings.manufacturer.clone();
         let old_selected_manufacturers = self.config.filter_settings.selected_manufacturers.clone();
 
-        self.sidebar.show(
-            ui,
-            &mut self.selected_filter,
-            &mut self.config.filter_settings,
-            None,
-            &mut self.config.hidden_categories,
-            &mut self.dialog_manager,
-            self.hardware_filter.as_ref(),
-            &self.all_manufacturers,
-        );
+        egui::ScrollArea::vertical()
+            .id_salt("main_sidebar_scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                self.sidebar.show(
+                    ui,
+                    &mut self.selected_filter,
+                    &mut self.config.filter_settings,
+                    None,
+                    &mut self.config.hidden_categories,
+                    &mut self.dialog_manager,
+                    self.hardware_filter.as_ref(),
+                    &self.all_manufacturers,
+                )
+            });
 
-        let filters_changed = self
-            .config
-            .filter_settings
-            .availability_filters
-            .show_available
-            != old_availability.show_available
+        let rom_requirement_changed =
+            self.config.filter_settings.hide_romless_systems != old_hide_romless;
+        let filters_changed = rom_requirement_changed
+            || self.config.filter_settings.search_mode != old_search_mode
+            || self
+                .config
+                .filter_settings
+                .availability_filters
+                .show_available
+                != old_availability.show_available
             || self
                 .config
                 .filter_settings
@@ -1111,14 +1086,22 @@ impl MameApp {
             }
         }
 
+        if rom_requirement_changed {
+            self.redesign_shell.state.mark_table_dirty();
+            self.redesign_shell.state.mark_sidebar_stats_dirty();
+            self.save_config();
+            ui.ctx().request_repaint();
+        }
+
         if self.config.preferences.show_fps {
             ui.add_space(16.0);
             ui.separator();
             ui.add_space(8.0);
             ui.label(
                 egui::RichText::new("Performance")
-                    .heading()
-                    .color(egui::Color32::from_rgb(64, 156, 255)),
+                    .size(14.5)
+                    .strong()
+                    .color(ui.visuals().hyperlink_color),
             );
             self.performance_manager.show_debug_info(ui);
         }
@@ -1126,11 +1109,11 @@ impl MameApp {
     }
 
     pub fn render_artwork_panel(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(12.0);
         ui.label(
             egui::RichText::new("Game Artwork")
-                .heading()
-                .color(egui::Color32::from_rgb(64, 156, 255)),
+                .size(14.5)
+                .strong()
+                .color(ui.visuals().hyperlink_color),
         );
         ui.add_space(8.0);
         self.artwork_panel.show(
@@ -1143,11 +1126,11 @@ impl MameApp {
     }
 
     pub fn render_history_panel(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(12.0);
         ui.label(
             egui::RichText::new("Game History")
-                .heading()
-                .color(egui::Color32::from_rgb(64, 156, 255)),
+                .size(14.5)
+                .strong()
+                .color(ui.visuals().hyperlink_color),
         );
         ui.add_space(8.0);
         if let Some(idx) = self.selected_game {
@@ -1241,7 +1224,7 @@ impl MameApp {
                         egui::RichText::new("⚠ Loading Error")
                             .heading()
                             .size(24.0)
-                            .color(egui::Color32::RED),
+                            .color(ui.visuals().error_fg_color),
                     );
                     ui.add_space(20.0);
                     ui.label(
@@ -1364,7 +1347,7 @@ impl MameApp {
                     // Show game list with improved styling - switch between table and list view
                     let theme_colors =
                         crate::models::GameListColors::for_theme(self.config.theme.clone());
-                    let (double_clicked, favorite_toggled, properties_requested) =
+                    let (play_requested, favorite_toggled, properties_requested) =
                         match self.config.view_mode {
                             crate::models::config::ViewMode::Table => {
                                 self.game_list.show(
@@ -1420,9 +1403,8 @@ impl MameApp {
                     }
 
                     // Handle properties request
-                    if properties_requested
-                        && let Some(selected_idx) = self.selected_game
-                        && let Some(game) = self.games.get(selected_idx)
+                    if let Some(target_idx) = properties_requested
+                        && let Some(game) = self.games.get(target_idx)
                     {
                         let dialog = crate::ui::components::game_properties::GamePropertiesDialog::new_with_config(
                                 Some(game),
@@ -1434,7 +1416,7 @@ impl MameApp {
                     }
 
                     // Handle double-click to launch game
-                    if double_clicked && let Some(idx) = self.selected_game {
+                    if let Some(idx) = play_requested {
                         self.launch_game_at_index(idx);
                     }
                 }
@@ -1498,7 +1480,7 @@ impl MameApp {
                         egui::Button::new(
                             egui::RichText::new(format!("🎮 MAME {mame_version}")).size(12.0),
                         )
-                        .fill(egui::Color32::from_rgb(76, 175, 80))
+                        .fill(ui.visuals().faint_bg_color)
                         .min_size(egui::Vec2::new(80.0, 24.0)),
                     );
                 });
@@ -1508,11 +1490,11 @@ impl MameApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let fps = self.performance_manager.get_average_fps();
                     let color = if fps < 20.0 {
-                        egui::Color32::RED
+                        SteamUi::DANGER
                     } else if fps < 30.0 {
-                        egui::Color32::YELLOW
+                        SteamUi::WARNING
                     } else {
-                        egui::Color32::GREEN
+                        SteamUi::SUCCESS
                     };
                     ui.colored_label(
                         color,
@@ -1525,211 +1507,740 @@ impl MameApp {
     }
 
     fn show_toolbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    ui.separator();
+        egui::TopBottomPanel::top("toolbar")
+            .frame(
+                egui::Frame::new()
+                    .fill(ctx.style().visuals.panel_fill)
+                    .stroke(ctx.style().visuals.widgets.noninteractive.bg_stroke)
+                    .inner_margin(egui::Margin::symmetric(16, 10)),
+            )
+            .show(ctx, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button("File", |ui| {
+                        ui.separator();
 
-                    // Add ROM verification option
-                    if ui.button("🔍 Verify ROMs...").clicked() {
-                        self.dialog_manager.rom_verify_dialog().open();
-                        ui.close();
-                    }
-
-                    ui.separator();
-
-                    if ui.button("Exit").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-                });
-
-                ui.menu_button("Game", |ui| {
-                    if ui.button("🎮 Play").clicked() {
-                        if let Some(idx) = self.selected_game {
-                            self.launch_game_at_index(idx);
+                        // Add ROM verification option
+                        if ui.button("🔍 Verify ROMs...").clicked() {
+                            self.dialog_manager.rom_verify_dialog().open();
+                            ui.close();
                         }
-                        ui.close();
-                    }
 
-                    ui.separator();
+                        ui.separator();
 
-                    if ui.button("ℹ ROM Info...").clicked() {
-                        self.dialog_manager.open_dialog(DialogType::RomInfo);
-                        ui.close();
-                    }
-                });
+                        if ui.button("Exit").clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    });
 
-                ui.menu_button("Options", |ui| {
-                    // New modern UI for Directories & Paths
-                    if ui.button("📁 Directories & Paths").clicked() {
-                        self.dialog_manager.open_dialog(DialogType::Directories);
-                        ui.close();
-                    }
+                    ui.menu_button("Game", |ui| {
+                        if ui.button("🎮 Play").clicked() {
+                            if let Some(idx) = self.selected_game {
+                                self.launch_game_at_index(idx);
+                            }
+                            ui.close();
+                        }
 
-                    if ui.button("Preferences").clicked() {
-                        self.dialog_manager.open_dialog(DialogType::Preferences);
-                        ui.close();
-                    }
+                        ui.separator();
 
-                    ui.menu_button("Advanced MAME Settings", |ui| {
-                        if ui.button("⚙️ Advanced MAME Settings").clicked() {
-                            self.dialog_manager.set_advanced_mame_settings_dialog(Some(
-                                crate::ui::components::AdvancedMameSettingsDialog::new(
-                                    &self.config,
-                                ),
-                            ));
-                            self.dialog_manager
-                                .open_dialog(DialogType::AdvancedMameSettings);
+                        if ui.button("ℹ ROM Info...").clicked() {
+                            self.dialog_manager.open_dialog(DialogType::RomInfo);
                             ui.close();
                         }
                     });
 
-                    ui.separator();
-
-                    if ui.button("🔍 Find MAME Executables").clicked() {
-                        let found_mames = MameFinderDialog::find_mame_executables();
-                        self.dialog_manager
-                            .set_found_mame_executables(found_mames.clone());
-                        if !found_mames.is_empty() {
-                            self.dialog_manager.open_dialog(DialogType::MameFinder);
-                        } else {
-                            self.dialog_manager.open_dialog(DialogType::ManualMame);
+                    ui.menu_button("Options", |ui| {
+                        // New modern UI for Directories & Paths
+                        if ui.button("📁 Directories & Paths").clicked() {
+                            self.dialog_manager.open_dialog(DialogType::Directories);
+                            ui.close();
                         }
-                        ui.close();
-                    }
 
-                    ui.separator();
+                        if ui.button("Preferences").clicked() {
+                            self.dialog_manager.open_dialog(DialogType::Preferences);
+                            ui.close();
+                        }
+
+                        ui.menu_button("Advanced MAME Settings", |ui| {
+                            if ui.button("⚙️ Advanced MAME Settings").clicked() {
+                                self.dialog_manager.set_advanced_mame_settings_dialog(Some(
+                                    crate::ui::components::AdvancedMameSettingsDialog::new(
+                                        &self.config,
+                                    ),
+                                ));
+                                self.dialog_manager
+                                    .open_dialog(DialogType::AdvancedMameSettings);
+                                ui.close();
+                            }
+                        });
+
+                        ui.separator();
+
+                        if ui.button("🔍 Find MAME Executables").clicked() {
+                            let found_mames = MameFinderDialog::find_mame_executables();
+                            self.dialog_manager
+                                .set_found_mame_executables(found_mames.clone());
+                            if !found_mames.is_empty() {
+                                self.dialog_manager.open_dialog(DialogType::MameFinder);
+                            } else {
+                                self.dialog_manager.open_dialog(DialogType::ManualMame);
+                            }
+                            ui.close();
+                        }
+
+                        ui.separator();
+                    });
+
+                    // Add Tools menu
+                    ui.menu_button("Tools", |ui| {
+                        if ui.button("🔍 ROM Verification").clicked() {
+                            self.dialog_manager.rom_verify_dialog().open();
+                            ui.close();
+                        }
+
+                        if ui.button("🎯 Verify Selected ROM").clicked()
+                            && self.selected_game.is_some()
+                        {
+                            self.dialog_manager.rom_verify_dialog().open();
+                            ui.close();
+                        }
+
+                        ui.separator();
+
+                        if ui.button("📊 Plugin Support Info").clicked() {
+                            self.show_plugin_info();
+                            ui.close();
+                        }
+                    });
+
+                    ui.menu_button("Help", |ui| {
+                        if ui.button("About").clicked() {
+                            self.dialog_manager.open_dialog(DialogType::About);
+                            ui.close();
+                        }
+                    });
                 });
 
-                // Add Tools menu
-                ui.menu_button("Tools", |ui| {
-                    if ui.button("🔍 ROM Verification").clicked() {
-                        self.dialog_manager.rom_verify_dialog().open();
-                        ui.close();
-                    }
-
-                    if ui.button("🎯 Verify Selected ROM").clicked() && self.selected_game.is_some()
-                    {
-                        self.dialog_manager.rom_verify_dialog().open();
-                        ui.close();
-                    }
-
-                    ui.separator();
-
-                    if ui.button("📊 Plugin Support Info").clicked() {
-                        self.show_plugin_info();
-                        ui.close();
-                    }
-                });
-
-                ui.menu_button("Help", |ui| {
-                    if ui.button("About").clicked() {
-                        self.dialog_manager.open_dialog(DialogType::About);
-                        ui.close();
-                    }
-                });
-            });
-
-            // Modern toolbar with grouped actions
-            ui.horizontal(|ui| {
-                let loading = self.loading_stage != LoadingStage::Idle
-                    && self.loading_stage != LoadingStage::Complete
-                    && self.loading_stage != LoadingStage::Error;
-
-                ui.add_enabled_ui(!loading, |ui| {
-                    // Play button group with modern styling
-                    ui.group(|ui| {
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    let loading = matches!(
+                        self.loading_stage,
+                        LoadingStage::LoadingMame | LoadingStage::ScanningRoms
+                    );
+                    ui.add_enabled_ui(!loading, |ui| {
                         if ui
                             .add(
-                                egui::Button::new(
-                                    egui::RichText::new("▶ Play").size(16.0).strong(),
-                                )
-                                .fill(egui::Color32::from_rgb(76, 175, 80))
-                                .min_size(egui::Vec2::new(100.0, 32.0)),
+                                egui::Button::new(egui::RichText::new("▶ Play").strong())
+                                    .fill(ui.visuals().selection.bg_fill)
+                                    .stroke(egui::Stroke::new(
+                                        1.0_f32,
+                                        ui.visuals().hyperlink_color,
+                                    ))
+                                    .min_size(egui::vec2(100.0, 36.0)),
                             )
                             .clicked()
                             && let Some(idx) = self.selected_game
                         {
                             self.launch_game_at_index(idx);
                         }
-
-                        ui.separator();
-
                         if ui
-                            .add(
-                                egui::Button::new(egui::RichText::new("ℹ Properties").size(14.0))
-                                    .fill(egui::Color32::from_rgb(33, 150, 243))
-                                    .min_size(egui::Vec2::new(90.0, 28.0)),
-                            )
+                            .add_sized([120.0, 36.0], egui::Button::new("ℹ Properties"))
                             .clicked()
                         {
                             self.dialog_manager.open_dialog(DialogType::RomInfo);
                         }
-                    });
-
-                    ui.add_space(16.0);
-
-                    ui.separator();
-
-                    // View mode toggle dengan animation
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("View:").size(14.0));
-
-                        let is_table = matches!(
-                            self.config.view_mode,
-                            crate::models::config::ViewMode::Table
+                        ui.separator();
+                        ui.label(
+                            egui::RichText::new("View:").color(ui.visuals().weak_text_color()),
                         );
-                        let is_list =
-                            matches!(self.config.view_mode, crate::models::config::ViewMode::List);
-
-                        if ui
-                            .add(
-                                egui::Button::selectable(is_table, "⊞ Table")
-                                    .min_size(egui::Vec2::new(80.0, 28.0)),
-                            )
-                            .on_hover_text("Table View")
-                            .clicked()
-                        {
-                            self.config.view_mode = crate::models::config::ViewMode::Table;
-                            self.save_config();
-                        }
-
-                        if ui
-                            .add(
-                                egui::Button::selectable(is_list, "☰ List")
-                                    .min_size(egui::Vec2::new(80.0, 28.0)),
-                            )
-                            .on_hover_text("List View")
-                            .clicked()
-                        {
-                            self.config.view_mode = crate::models::config::ViewMode::List;
-                            self.save_config();
+                        for (mode, label) in [
+                            (crate::models::config::ViewMode::Table, "⊞ Table"),
+                            (crate::models::config::ViewMode::List, "☰ List"),
+                        ] {
+                            if ui
+                                .add_sized(
+                                    [80.0, 36.0],
+                                    egui::Button::selectable(self.config.view_mode == mode, label),
+                                )
+                                .clicked()
+                            {
+                                self.config.view_mode = mode;
+                                self.save_config();
+                            }
                         }
                     });
-
                     ui.separator();
-
-                    // Action buttons
-
                     if loading {
-                        ui.add_enabled(
-                            false,
-                            egui::Button::new(egui::RichText::new("🔄 Loading...").size(14.0)),
-                        );
-                    } else {
-                        if ui
-                            .add(
-                                egui::Button::new(egui::RichText::new("🔄 Refresh").size(14.0))
-                                    .fill(egui::Color32::from_rgb(255, 152, 0))
-                                    .min_size(egui::Vec2::new(80.0, 28.0)),
-                            )
-                            .clicked()
-                        {
-                            self.on_refresh_clicked();
-                        }
+                        ui.add_enabled(false, egui::Button::new("🔄 Loading..."));
+                    } else if ui
+                        .add_sized([100.0, 36.0], egui::Button::new("🔄 Refresh"))
+                        .clicked()
+                    {
+                        self.on_refresh_clicked();
                     }
                 });
             });
-        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app_for_loading_test(config: AppConfig) -> MameApp {
+        MameApp {
+            icon_manager: IconManager::new(&config),
+            config,
+            games: Vec::new(),
+            game_metadata: HashMap::new(),
+            selected_filter: FilterCategory::All,
+            selected_game: None,
+            game_list: GameList::new(),
+            game_list_view: GameListView::new(),
+            sidebar: Sidebar::new(),
+            artwork_panel: ArtworkPanel::new(),
+            history_panel: HistoryPanel::new(),
+            software_list_panel: SoftwareListPanel::new(),
+            all_manufacturers: Vec::new(),
+            running_games: HashMap::new(),
+            expanded_parents: HashMap::new(),
+            loading_rx: None,
+            loading_stage: LoadingStage::Error,
+            loading_progress: (0, 0),
+            loading_start_time: None,
+            need_reload_after_dialog: false,
+            roms_loading: false,
+            roms_tx: None,
+            game_index_manager: GameIndexManager::new(),
+            performance_manager: PerformanceManager::new(),
+            dialog_manager: DialogManager::new(),
+            dock_tree: create_default_layout(),
+            hardware_filter: None,
+            notifications: NotificationManager::new(),
+            redesign_shell: RedesignShell::default(),
+        }
+    }
+
+    #[test]
+    fn main_style_tracks_theme_and_shell_changes_after_preferences() {
+        use crate::ui::components::preferences::PreferencesDialog;
+
+        let mut app = app_for_loading_test(AppConfig::default());
+        let context = egui::Context::default();
+        crate::ui::redesign::fonts::install(&context);
+        let mut time = 0.0;
+        for (mode, theme) in [
+            (UiShellMode::LegacyClassic, Theme::DarkBlue),
+            (UiShellMode::LegacyClassic, Theme::ModernSpacious),
+            (UiShellMode::LegacyDock, Theme::LightClassic),
+            (UiShellMode::RedesignPreview, Theme::ModernSpacious),
+            (UiShellMode::LegacyClassic, Theme::ModernSpacious),
+            (UiShellMode::RedesignPreview, Theme::ModernSpacious),
+            (UiShellMode::LegacyDock, Theme::ModernSpacious),
+        ] {
+            app.config.preferences.ui_shell = mode;
+            app.config.theme = theme.clone();
+            let expected = egui::Context::default();
+            if mode == UiShellMode::RedesignPreview {
+                RedesignTokens::apply(&expected);
+            } else if theme == Theme::ModernSpacious {
+                // Compare the main window with the reference dialog style,
+                // rather than merely checking Theme::apply against itself.
+                SteamUi::apply(&expected);
+            } else {
+                theme.apply(&expected);
+            }
+            time += 0.05;
+            let _ = context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1280.0, 1000.0),
+                    )),
+                    time: Some(time),
+                    ..Default::default()
+                },
+                |ctx| {
+                    app.show_main_layout(ctx);
+                    let main_style = ctx.style();
+                    assert_eq!(main_style.visuals, expected.style().visuals);
+                    assert_eq!(main_style.text_styles, expected.style().text_styles);
+                    assert_eq!(
+                        main_style.spacing.button_padding,
+                        expected.style().spacing.button_padding
+                    );
+                    assert_eq!(
+                        main_style.spacing.item_spacing,
+                        expected.style().spacing.item_spacing
+                    );
+                    let mut open = true;
+                    PreferencesDialog::show(
+                        ctx,
+                        &mut app.config.preferences,
+                        &mut app.config.theme,
+                        &mut open,
+                        false,
+                    );
+                    assert_eq!(ctx.style().as_ref(), main_style.as_ref());
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn shell_switching_renders_each_legacy_toolbar_control_once() {
+        fn count_label(shape: &egui::Shape, label: &str) -> usize {
+            match shape {
+                egui::Shape::Text(text) => usize::from(text.galley.job.text == label),
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().map(|shape| count_label(shape, label)).sum()
+                }
+                _ => 0,
+            }
+        }
+
+        for stage in [LoadingStage::Error, LoadingStage::Complete] {
+            let mut app = app_for_loading_test(AppConfig::default());
+            app.loading_stage = stage;
+            let context = egui::Context::default();
+            crate::ui::redesign::fonts::install(&context);
+            let mut time = 0.0;
+
+            for mode in [
+                UiShellMode::LegacyClassic,
+                UiShellMode::LegacyDock,
+                UiShellMode::LegacyClassic,
+                UiShellMode::RedesignPreview,
+                UiShellMode::LegacyClassic,
+            ] {
+                app.config.preferences.ui_shell = mode;
+                // Exercise the same shell dispatch as App::update. The initial
+                // frame measures toolbar groups before egui paints their contents.
+                for frame in 0..3 {
+                    time += 0.05;
+                    let output = context.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                egui::vec2(1280.0, 900.0),
+                            )),
+                            time: Some(time),
+                            ..Default::default()
+                        },
+                        |ctx| app.show_main_layout(ctx),
+                    );
+                    if frame == 0 {
+                        continue;
+                    }
+                    for label in [
+                        "File",
+                        "Game",
+                        "Options",
+                        "Tools",
+                        "Help",
+                        "▶ Play",
+                        "ℹ Properties",
+                        "⊞ Table",
+                        "☰ List",
+                        "🔄 Refresh",
+                    ] {
+                        let count: usize = output
+                            .shapes
+                            .iter()
+                            .map(|shape| count_label(&shape.shape, label))
+                            .sum();
+                        assert_eq!(
+                            count,
+                            usize::from(mode != UiShellMode::RedesignPreview),
+                            "unexpected count for {label:?} in {mode:?}, {stage:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn refresh_restarts_a_failed_initial_mame_load() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = AppConfig {
+            mame_executables: vec![MameExecutable {
+                name: "Retry fixture".into(),
+                path: directory.path().join("missing-mame").display().to_string(),
+                version: String::new(),
+                total_games: 0,
+                working_games: 0,
+            }],
+            ..AppConfig::default()
+        };
+        let mut app = app_for_loading_test(config);
+
+        app.on_refresh_clicked();
+
+        assert_eq!(app.loading_stage, LoadingStage::LoadingMame);
+        assert!(app.loading_rx.is_some());
+        assert!(app.loading_start_time.is_some());
+    }
+
+    #[test]
+    fn retry_guard_preserves_an_in_flight_scan_receiver() {
+        for stage in [LoadingStage::LoadingMame, LoadingStage::ScanningRoms] {
+            let mut app = app_for_loading_test(AppConfig::default());
+            let (sender, receiver) = mpsc::channel();
+            app.loading_stage = stage;
+            app.loading_rx = Some(receiver);
+
+            app.load_mame_data_threaded();
+
+            assert_eq!(app.loading_stage, stage);
+            sender.send(LoadingMessage::MameLoadStarted).unwrap();
+            assert!(matches!(
+                app.loading_rx.as_ref().unwrap().try_recv(),
+                Ok(LoadingMessage::MameLoadStarted)
+            ));
+        }
+    }
+
+    #[test]
+    fn changing_sidebar_search_mode_recomputes_an_unchanged_query() {
+        fn game(name: &str, title: &str, manufacturer: &str) -> Game {
+            Game {
+                name: name.into(),
+                description: title.into(),
+                manufacturer: manufacturer.into(),
+                year: "1990".into(),
+                driver: "fixture.cpp".into(),
+                driver_status: "good".into(),
+                status: RomStatus::Available,
+                parent: None,
+                category: String::new(),
+                play_count: 0,
+                is_clone: false,
+                is_device: false,
+                is_bios: false,
+                controls: String::new(),
+                requires_chd: false,
+                requires_roms: true,
+                chd_name: None,
+                verification_status: None,
+            }
+        }
+        fn label_position(output: &egui::FullOutput, label: &str) -> egui::Pos2 {
+            fn find(shape: &egui::Shape, label: &str) -> Option<egui::Pos2> {
+                match shape {
+                    egui::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.pos + text.galley.size() / 2.0)
+                    }
+                    egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, label)),
+                    _ => None,
+                }
+            }
+            // Popup labels are painted after the sidebar's identical section
+            // label; interact with the topmost matching text.
+            output
+                .shapes
+                .iter()
+                .rev()
+                .find_map(|shape| find(&shape.shape, label))
+                .unwrap()
+        }
+        fn click(pos: egui::Pos2, pressed: bool) -> Vec<egui::Event> {
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]
+        }
+
+        let mut app = app_for_loading_test(AppConfig::default());
+        app.games = vec![
+            game("sega", "Capcom Fighter", "Sega"),
+            game("capcom", "Fighter", "Capcom"),
+        ];
+        app.config.filter_settings.search_text = "Capcom".into();
+        app.build_game_index();
+        app.update_filtered_games_cache();
+        assert_eq!(app.game_index_manager.get_filtered_games(), &[0]);
+
+        let context = egui::Context::default();
+        let mut time = 0.0;
+        let mut frame = |events| {
+            time += 0.05;
+            context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(360.0, 900.0),
+                    )),
+                    time: Some(time),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| app.render_sidebar_panel(ui));
+                },
+            )
+        };
+        frame(Vec::new());
+        let output = frame(Vec::new());
+        let mode = label_position(&output, "🎯 Game Title");
+        frame(click(mode, true));
+        frame(click(mode, false));
+        let output = frame(Vec::new());
+        let manufacturer = label_position(&output, "🏭 Manufacturer");
+        frame(click(manufacturer, true));
+        frame(click(manufacturer, false));
+
+        assert_eq!(app.config.filter_settings.search_text, "Capcom");
+        assert_eq!(
+            app.config.filter_settings.search_mode,
+            SearchMode::Manufacturer
+        );
+        assert_eq!(app.game_index_manager.get_filtered_games(), &[1]);
+    }
+
+    #[test]
+    fn romless_filter_ui_persists_and_switches_shells_in_an_isolated_process() {
+        let directory = tempfile::tempdir().unwrap();
+        let result = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "app::mame_app::tests::romless_filter_ui_child",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("MAMEUIX_ROMLESS_UI_CHILD", "1")
+            .env("XDG_CONFIG_HOME", directory.path().join("config"))
+            .env("HOME", directory.path().join("home"))
+            .env("APPDATA", directory.path().join("appdata"))
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "child UI regression failed:\n{}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+
+    #[test]
+    #[ignore = "invoked by isolated UI regression with a temporary config home"]
+    fn romless_filter_ui_child() {
+        use crate::ui::panels::sidebar::ROMLESS_FILTER_LABEL;
+        use crate::ui::redesign::{RedesignState, test_library as library};
+        assert_eq!(
+            std::env::var("MAMEUIX_ROMLESS_UI_CHILD").as_deref(),
+            Ok("1")
+        );
+
+        fn text_position(output: &egui::FullOutput, text: &str) -> Option<egui::Pos2> {
+            fn find(shape: &egui::Shape, text: &str) -> Option<egui::Pos2> {
+                match shape {
+                    egui::Shape::Text(item) if item.galley.job.text.contains(text) => {
+                        Some(item.pos + item.galley.size() / 2.0)
+                    }
+                    egui::Shape::Vec(shapes) => {
+                        shapes.iter().rev().find_map(|shape| find(shape, text))
+                    }
+                    _ => None,
+                }
+            }
+            output
+                .shapes
+                .iter()
+                .rev()
+                .find_map(|shape| find(&shape.shape, text))
+        }
+        fn frame(
+            context: &egui::Context,
+            app: &mut MameApp,
+            state: &mut RedesignState,
+            redesign: bool,
+            time: &mut f64,
+            events: Vec<egui::Event>,
+        ) -> egui::FullOutput {
+            *time += 0.05;
+            context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1200.0, 900.0),
+                    )),
+                    time: Some(*time),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    if redesign {
+                        library::show(ctx, app, state);
+                    } else {
+                        egui::SidePanel::left("test_legacy_sidebar")
+                            .exact_width(300.0)
+                            .show(ctx, |ui| app.render_sidebar_panel(ui));
+                        egui::CentralPanel::default()
+                            .show(ctx, |ui| app.render_game_list_panel(ui, ctx));
+                    }
+                },
+            )
+        }
+        fn click(pos: egui::Pos2, pressed: bool) -> Vec<egui::Event> {
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]
+        }
+        fn assert_visible(
+            app: &MameApp,
+            state: &RedesignState,
+            output: &egui::FullOutput,
+            redesign: bool,
+        ) {
+            let hide = app.config.filter_settings.hide_romless_systems;
+            let expected: &[usize] = if hide { &[0] } else { &[0, 1] };
+            assert_eq!(app.game_index_manager.get_filtered_games(), expected);
+            assert!(text_position(output, "Audit Needs ROMs").is_some());
+            assert_eq!(text_position(output, "Audit ROM Free").is_some(), !hide);
+            if redesign {
+                assert_eq!(state.sidebar_stats.all, expected.len());
+                assert_eq!(state.sidebar_stats.available, expected.len());
+                assert_eq!(state.sidebar_stats.favorites, expected.len());
+                assert_eq!(state.table_rows.len(), expected.len());
+            }
+        }
+
+        let media_game = Game {
+            name: "media".into(),
+            description: "Audit Needs ROMs".into(),
+            manufacturer: "Audit".into(),
+            year: "1990".into(),
+            driver: "fixture.cpp".into(),
+            driver_status: "good".into(),
+            status: RomStatus::Available,
+            parent: None,
+            category: String::new(),
+            play_count: 0,
+            is_clone: false,
+            is_device: false,
+            is_bios: false,
+            controls: String::new(),
+            requires_chd: false,
+            requires_roms: true,
+            chd_name: None,
+            verification_status: None,
+        };
+        let mut romfree_game = media_game.clone();
+        romfree_game.name = "romfree".into();
+        romfree_game.description = "Audit ROM Free".into();
+        romfree_game.requires_roms = false;
+        let games = vec![media_game, romfree_game];
+        let config = AppConfig {
+            show_rom_icons: false,
+            favorite_games: std::collections::HashSet::from(["media".into(), "romfree".into()]),
+            ..AppConfig::default()
+        };
+        let mut app = app_for_loading_test(config);
+        app.games = games.clone();
+        app.loading_stage = LoadingStage::Complete;
+        app.build_game_index();
+        let context = egui::Context::default();
+        RedesignTokens::install_fonts(&context);
+        let mut state = RedesignState::default();
+        let mut time = 0.0;
+
+        for redesign in [false, true] {
+            if redesign {
+                RedesignTokens::apply(&context);
+            }
+            frame(
+                &context,
+                &mut app,
+                &mut state,
+                redesign,
+                &mut time,
+                Vec::new(),
+            );
+            let mut output = frame(
+                &context,
+                &mut app,
+                &mut state,
+                redesign,
+                &mut time,
+                Vec::new(),
+            );
+            assert_visible(&app, &state, &output, redesign);
+            // Exercise both directions in each real UI. The final off state in
+            // legacy must be read directly by the previously unused redesign.
+            let expected_values: &[bool] = if redesign {
+                &[true, false, true]
+            } else {
+                &[false, true, false]
+            };
+            for &expected_hide in expected_values {
+                let checkbox =
+                    text_position(&output, ROMLESS_FILTER_LABEL).expect("ROM requirement checkbox");
+                frame(
+                    &context,
+                    &mut app,
+                    &mut state,
+                    redesign,
+                    &mut time,
+                    click(checkbox, true),
+                );
+                frame(
+                    &context,
+                    &mut app,
+                    &mut state,
+                    redesign,
+                    &mut time,
+                    click(checkbox, false),
+                );
+                output = frame(
+                    &context,
+                    &mut app,
+                    &mut state,
+                    redesign,
+                    &mut time,
+                    Vec::new(),
+                );
+                assert_eq!(
+                    app.config.filter_settings.hide_romless_systems,
+                    expected_hide
+                );
+                assert_visible(&app, &state, &output, redesign);
+                assert_eq!(
+                    crate::config::load_config()
+                        .unwrap()
+                        .filter_settings
+                        .hide_romless_systems,
+                    expected_hide
+                );
+            }
+        }
+        // Returning to a cached legacy table must honor the redesign toggle.
+        let output = frame(&context, &mut app, &mut state, false, &mut time, Vec::new());
+        assert_visible(&app, &state, &output, false);
+
+        // A fresh app state loaded from disk retains the same option.
+        let mut restarted = app_for_loading_test(crate::config::load_config().unwrap());
+        restarted.games = games;
+        restarted.loading_stage = LoadingStage::Complete;
+        restarted.build_game_index();
+        let output = frame(
+            &context,
+            &mut restarted,
+            &mut state,
+            false,
+            &mut time,
+            Vec::new(),
+        );
+        assert_visible(&restarted, &state, &output, false);
     }
 }

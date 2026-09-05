@@ -104,12 +104,12 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(temp_file, "[FOLDER_SETTINGS]").unwrap();
         writeln!(temp_file, "RootFolderIcon mame").unwrap();
-        writeln!(temp_file, "").unwrap();
+        writeln!(temp_file).unwrap();
         writeln!(temp_file, "[Category]").unwrap();
         writeln!(temp_file, "1942=Shooter / Flying Vertical").unwrap();
         writeln!(temp_file, "pacman=Maze / Collect").unwrap();
         writeln!(temp_file, "sf2=Fighter / Versus").unwrap();
-        writeln!(temp_file, "").unwrap();
+        writeln!(temp_file).unwrap();
         writeln!(temp_file, "[ROOT_FOLDER]").unwrap();
         temp_file.flush().unwrap();
 

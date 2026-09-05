@@ -54,7 +54,7 @@ yay -S mameuix
 
 Requirements:
 
-- Rust 1.85 or newer and Cargo
+- Rust 1.88 or newer and Cargo
 - MAME 0.200 or newer
 - Git, CMake, `pkg-config`, and a C/C++ toolchain
 - X11/XCB development libraries; Wayland libraries are recommended
