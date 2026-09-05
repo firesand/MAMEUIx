@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-TAG="${1:-v0.1.6}"
+TAG="${1:-v0.1.7}"
 if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
     echo "Invalid release tag: ${TAG}" >&2
     echo "Usage: $0 [vMAJOR.MINOR.PATCH]" >&2

@@ -1,5 +1,5 @@
 Name:           mameuix
-Version:        0.1.6
+Version:        0.1.7
 Release:        1%{?dist}
 Summary:        Modern GUI frontend for MAME arcade emulator
 
@@ -86,6 +86,9 @@ install -D -m 644 debian/mameuix.1 %{buildroot}%{_mandir}/man1/mameuix.1
 %{_mandir}/man1/mameuix.1
 
 %changelog
+* Fri Jul 17 2026 edo hikmahtiar <edohikmahtiar@me.com> - 0.1.7-1
+- Fix unresponsive menus in Classic mode without requiring a configuration reset
+
 * Sat Jul 11 2026 edo hikmahtiar <edohikmahtiar@me.com> - 0.1.6-1
 - Add the opt-in redesigned UI and Software Lists preview
 - Refresh documentation, AppImage release metadata, and FreeBSD readiness

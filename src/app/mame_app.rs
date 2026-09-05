@@ -32,6 +32,21 @@ fn can_start_mame_load(stage: LoadingStage) -> bool {
     )
 }
 
+#[derive(Debug, Default)]
+struct PerPassRenderGuard {
+    last_rendered_pass: Option<u64>,
+}
+
+impl PerPassRenderGuard {
+    fn claim(&mut self, pass: u64) -> bool {
+        if self.last_rendered_pass == Some(pass) {
+            return false;
+        }
+        self.last_rendered_pass = Some(pass);
+        true
+    }
+}
+
 pub struct MameApp {
     // Core data
     pub config: AppConfig,
@@ -76,7 +91,9 @@ pub struct MameApp {
     // Dialog management
     pub dialog_manager: DialogManager,
 
-    // Theme management
+    // Protect globally identified chrome from duplicate rendering in one pass.
+    toolbar_render_guard: PerPassRenderGuard,
+
     pub dock_tree: DockState<DockTab>,
     pub hardware_filter: Option<HardwareFilter>,
     pub notifications: NotificationManager,
@@ -154,6 +171,7 @@ impl MameApp {
             dialog_manager: DialogManager::new(),
 
             // Theme management
+            toolbar_render_guard: PerPassRenderGuard::default(),
             dock_tree: create_default_layout(),
             hardware_filter: HardwareFilter::load_from_config(&config),
             notifications: NotificationManager::new(),
@@ -944,7 +962,7 @@ impl MameApp {
                 });
 
             match self.config.preferences.ui_shell {
-                UiShellMode::LegacyClassic => self.show_classic_layout(ctx),
+                UiShellMode::LegacyClassic => self.show_classic_content(ctx),
                 UiShellMode::LegacyDock | UiShellMode::RedesignPreview => {
                     self.show_dock_layout(ctx);
                 }
@@ -952,7 +970,7 @@ impl MameApp {
         }
     }
 
-    pub fn show_classic_layout(&mut self, ctx: &egui::Context) {
+    fn show_classic_content(&mut self, ctx: &egui::Context) {
         let outer_frame = egui::Frame::new()
             .fill(ctx.style().visuals.panel_fill)
             .inner_margin(egui::Margin::same(12));
@@ -1507,6 +1525,10 @@ impl MameApp {
     }
 
     fn show_toolbar(&mut self, ctx: &egui::Context) {
+        if !self.toolbar_render_guard.claim(ctx.cumulative_pass_nr()) {
+            return;
+        }
+
         egui::TopBottomPanel::top("toolbar")
             .frame(
                 egui::Frame::new()
@@ -1684,6 +1706,16 @@ impl MameApp {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn toolbar_render_guard_allows_only_one_render_per_egui_pass() {
+        let mut guard = PerPassRenderGuard::default();
+
+        assert!(guard.claim(41));
+        assert!(!guard.claim(41));
+        assert!(guard.claim(42));
+        assert!(!guard.claim(42));
+    }
+
     use super::*;
 
     fn app_for_loading_test(config: AppConfig) -> MameApp {
@@ -1713,6 +1745,7 @@ mod tests {
             game_index_manager: GameIndexManager::new(),
             performance_manager: PerformanceManager::new(),
             dialog_manager: DialogManager::new(),
+            toolbar_render_guard: PerPassRenderGuard::default(),
             dock_tree: create_default_layout(),
             hardware_filter: None,
             notifications: NotificationManager::new(),

@@ -1,3 +1,10 @@
+mameuix (0.1.7-1) unstable; urgency=medium
+
+  * Fix unresponsive File, Game, Options, Tools, and Help menus in Classic mode.
+  * Preserve existing Classic preferences without requiring a configuration reset.
+
+ -- edo hikmahtiar <edohikmahtiar@me.com>  Fri, 17 Jul 2026 22:00:00 +0700
+
 mameuix (0.1.6-1) unstable; urgency=medium
 
   * Add the opt-in experimental redesigned UI.

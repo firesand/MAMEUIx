@@ -1,6 +1,6 @@
 # MAMEUIx Installation
 
-MAMEUIx v0.1.6 is supported on Linux. MAME is a separate runtime dependency and is not bundled with the application. FreeBSD amd64 is currently an experimental source-build target; see [Experimental FreeBSD](#experimental-freebsd).
+MAMEUIx v0.1.7 is supported on Linux. MAME is a separate runtime dependency and is not bundled with the application. FreeBSD amd64 is currently an experimental source-build target; see [Experimental FreeBSD](#experimental-freebsd).
 
 ## AppImage (recommended for Linux)
 

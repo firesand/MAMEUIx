@@ -2,9 +2,15 @@
 
 A modern, fast, and user-friendly frontend for MAME (Multiple Arcade Machine Emulator) written in Rust using the egui framework.
 
-**Current Version: 0.1.6** - Experimental Redesign and Software Lists Preview
+**Current Version: 0.1.7** - Classic Menu Stability Fix
 
-## Recent Improvements (v0.1.6)
+## Recent Improvements (v0.1.7)
+
+- Fixed duplicate toolbar rendering that made the File, Game, Options, Tools, and Help menus unresponsive in Classic mode
+- Preserved existing Classic preferences so upgrading does not require deleting or resetting user configuration
+- Added a per-pass render guard to prevent duplicate legacy toolbar rendering from reintroducing the problem
+
+## Improvements in v0.1.6
 
 - Unified the Classic and Dock main windows with Settings/Preferences through the **Modern Spacious** theme, including table rows, game cards, filters, and toolbar controls
 - Added **Hide systems that don't require ROMs** in both library sidebars, enabled by default and saved between sessions
@@ -372,7 +378,7 @@ The application is optimized for performance:
 
 ## Development Status
 
-✅ **Current Release**: v0.1.6 keeps the dock-panel UI as the default and adds opt-in previews
+✅ **Current Release**: v0.1.7 fixes unresponsive Classic menus while preserving existing configuration
 🔄 **Active Development**: Ongoing UI, performance, and packaging refinements
 📦 **Packaging**: Verified Arch AUR package; Debian and RPM recipes are available but still need clean-distribution validation
 🧪 **FreeBSD**: Experimental amd64 source-build path; native validation is still required
@@ -454,7 +460,13 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Version History
 
-### v0.1.6 (Latest Release)
+### v0.1.7 (Latest Release)
+- **Classic interface stability**:
+  - Fixed File, Game, Options, Tools, and Help menus that did not respond in Classic mode
+  - Existing Classic preferences continue to work without deleting or resetting configuration
+  - Added a defensive per-pass guard against duplicate legacy toolbar rendering
+
+### v0.1.6
 - **Experimental redesign preview**:
   - Opt-in Steam-inspired Library, game detail, verification, and settings views
   - Public Sans typography, responsive layouts, and redesign-specific styling
